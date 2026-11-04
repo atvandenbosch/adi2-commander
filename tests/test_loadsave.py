@@ -6,14 +6,15 @@ import os
 import tempfile
 import time
 
-from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
+from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QUrl
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
-from PySide6.QtWidgets import QApplication, QDialog
+from PySide6.QtWidgets import QApplication, QDialog, QPushButton
 
 from commander.conversion import eqfile as E
 from commander.device import params as P
 from commander.ui import loaddialog as L
 from commander.ui import theme
+from commander.ui.widgets import INNER_GAP, SIDE
 from tests.gui import WindowTest
 from tests.support import TEN_FILTERS
 
@@ -83,6 +84,26 @@ class LoadSave(LoadTest):
         dialog.setWindowState(Qt.WindowNoState)
         dialog.done(0)
         self.assertFalse(L.LoadDialog.maximized)
+
+    def test_low_its_tables_scroll_and_ok_stays_in_sight_below_them(self):
+        dialog = self.open(self.file("ten.txt", TEN_FILTERS))
+        dialog.setWindowState(Qt.WindowNoState)
+        dialog.show()                                            # laid out as on the screen
+
+        def at(w):
+            p = w.mapTo(dialog, QPoint(0, 0))
+            return p.y(), p.y() + w.height(), dialog.width() - p.x() - w.width()
+        for height in (780, 500):
+            dialog.resize(1500, height)
+            self.spin(100)
+            self.assertEqual(dialog.height(), height)
+            self.assertEqual(dialog.tables.verticalScrollBar().isVisible(), height == 500)
+            ok = at(dialog.ok)
+            self.assertEqual(ok[0] - at(dialog.tables)[1], INNER_GAP)
+            self.assertLess(ok[1], at(dialog.status)[0])                         # above the status line
+            cancel = next(w for w in dialog.findChildren(QPushButton) if w.text() == "Cancel")
+            self.assertEqual([at(cancel)[2], at(dialog.band_views[0])[2]], [SIDE, SIDE])     # on one line
+            self.assertEqual(at(dialog.tables)[2], 0)                             # its scroll bar against the edge
 
     def test_save_and_load_back_exactly(self):
         before = self.eq_of((LEFT, RIGHT))

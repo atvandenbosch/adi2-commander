@@ -34,8 +34,8 @@ import pyqtgraph as pg
 from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPalette, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import (QApplication, QCheckBox, QDialog, QFrame, QGraphicsTextItem, QGridLayout, QHBoxLayout,
-                               QLabel, QListWidget, QListWidgetItem, QProgressBar, QSplitter, QStackedWidget, QStyle,
-                               QStyledItemDelegate, QStyleOptionButton, QVBoxLayout, QWidget)
+                               QLabel, QListWidget, QListWidgetItem, QProgressBar, QScrollArea, QSplitter,
+                               QStackedWidget, QStyle, QStyledItemDelegate, QStyleOptionButton, QVBoxLayout, QWidget)
 
 from ..conversion import curvefile as C
 from ..conversion import eqfile as E
@@ -50,7 +50,7 @@ from .graph import (BAND_ALPHA, BAND_W, COMPARE_W, DIMMED, INPUT_ALPHA, INPUT_W,
 from .legend import GROUP_GAP, _Item as LegendItem
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, CellDelegate, Marks, ParamModel, ParamView,
                      band_rows, bt_rows)
-from .widgets import (ATTACHED_GAP, INNER_GAP, SECTION_GAP, TITLE_STYLE, Action, Choice, Segmented,
+from .widgets import (ATTACHED_GAP, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE, Action, Choice, Segmented,
                       dropped_file, head, placement)
 
 MAP, FIT = 0, 1
@@ -854,14 +854,11 @@ class LoadDialog(QDialog):
         cancel.setText("Cancel")
         self.ok.clicked.connect(self.accept)
         cancel.clicked.connect(self.reject)
-        buttons = QHBoxLayout()
-        buttons.setSpacing(ATTACHED_GAP)
-        buttons.addStretch(1)
-        buttons.addWidget(self.ok)
-        buttons.addWidget(cancel)
-        right = QWidget()
-        lay = QVBoxLayout(right)
-        lay.setContentsMargins(0, 0, 0, BODY_MARGIN)
+        # the tables scroll when the dialog is low, as the main window's column; their scroll bar goes in the right
+        # margin, against the edge. OK and Cancel stay below them, in sight, as far from them as a channel from the next
+        tables = QWidget()
+        lay = QVBoxLayout(tables)
+        lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
         lay.addWidget(self.title("PRESET", "%d  %s" % self.preset) if self.preset else self.title("OUTPUT", self.name))
         lay.addSpacing(ATTACHED_GAP)
@@ -871,11 +868,31 @@ class LoadDialog(QDialog):
         lay.addSpacing(SECTION_GAP)
         lay.addWidget(self.bt_view)
         lay.addStretch(1)
+        width = self.band_views[0].width()
+        tables.setFixedWidth(width)
+        self.tables = QScrollArea()
+        self.tables.setWidget(tables)
+        self.tables.setWidgetResizable(True)
+        self.tables.setFrameShape(QFrame.NoFrame)
+        self.tables.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        margin = max(SIDE, self.tables.verticalScrollBar().sizeHint().width())
+        self.tables.setFixedWidth(width + margin)
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, margin, 0)
+        buttons.setSpacing(ATTACHED_GAP)
+        buttons.addStretch(1)
+        buttons.addWidget(self.ok)
+        buttons.addWidget(cancel)
+        right = QWidget()
+        lay = QVBoxLayout(right)
+        lay.setContentsMargins(0, 0, 0, BODY_MARGIN)
+        lay.setSpacing(0)
+        lay.addWidget(self.tables, 1)
+        lay.addSpacing(INNER_GAP)
         lay.addLayout(buttons)
-        right.setFixedWidth(self.band_views[0].width())
 
         body = QHBoxLayout()
-        body.setContentsMargins(16, BODY_MARGIN, 16, 0)        # the graph's zone down to the status bar
+        body.setContentsMargins(SIDE, BODY_MARGIN, 0, 0)        # the graph's zone down to the status bar
         body.setSpacing(INNER_GAP)                       # as the main window: the tables right beside the graph's zone
         body.addWidget(split, 1)
         body.addWidget(right)
@@ -883,7 +900,7 @@ class LoadDialog(QDialog):
         bar = QWidget()
         bar.setStyleSheet("background: %s;" % theme.PANEL.name())
         blay = QHBoxLayout(bar)
-        blay.setContentsMargins(16, 4, 16, 4)
+        blay.setContentsMargins(SIDE, 4, SIDE, 4)
         blay.setSpacing(12)
         self.progress = QProgressBar()
         self.progress.setRange(0, 1000)
