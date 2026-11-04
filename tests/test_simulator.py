@@ -136,6 +136,29 @@ class Simulator(unittest.TestCase):
         self.dev.send(raw((4, 5, 390)), pause=0)                    # at 390 Hz it counts
         self.assertEqual(self.dev.dump()[(3, 2)], 1)
 
+    def ref_level(self, *params):
+        self.dev.send(raw(*params), pause=0)
+        return self.dev.dump()[(3, 2)]
+
+    def test_auto_ref_level_counts_a_band_only_with_the_eq_on(self):
+        self.dev.send(raw((3, 11, 0)), pause=0)                                 # Dual EQ off: one EQ Enable
+        self.dev.send(raw((3, 12, -160), (4, 5, 100)), pause=0)                 # Line Out is active
+        self.assertEqual(self.ref_level((4, 2, 0), (4, 4, 12)), 1)              # +6 dB at 100 Hz, EQ off: -16 dB
+        self.assertEqual(self.ref_level((4, 2, 1)), 2)                          # EQ on: -10 dB
+        self.assertEqual(self.ref_level((4, 2, 0)), 1)
+
+    def test_auto_ref_level_counts_bass_and_treble_while_bt_is_on(self):
+        self.dev.send(raw((3, 12, -160), (4, 2, 0), (4, 20, 1)), pause=0)       # the EQ off: not needed
+        self.assertEqual(self.ref_level((4, 21, 12)), 2)                        # Bass +6 dB at 85 Hz
+        self.assertEqual(self.ref_level((4, 20, 0)), 1)                         # B/T Enable off
+        self.assertEqual(self.ref_level((4, 20, 1), (4, 21, 0), (4, 24, 12)), 2)   # Treble +6 dB at 6500 Hz
+
+    def test_auto_ref_level_adds_a_band_and_bass_at_the_low_end(self):
+        self.dev.send(raw((3, 12, -160), (4, 2, 1), (4, 20, 1), (4, 5, 100)), pause=0)
+        self.dev.send(raw(*[(a, g, 0) for a in (4, 5) for g in (4, 7, 10, 13, 17)]), pause=0)
+        self.assertEqual(self.ref_level((4, 4, 12), (4, 21, 12)), 3)            # 6 + 6 dB: -4 dB
+        self.assertEqual(self.ref_level((4, 21, 8)), 2)                         # 6 + 4 dB: -6 dB
+
     def test_lock_volume_refuses_a_volume_write(self):
         self.dev.write([(3, 13, 1, False)])
         self.dev.collect()

@@ -394,8 +394,9 @@ class SimulatedAdi2:
         # B/T Enable and a value that was already there leave it
         if v != before and (i in BAND_INDICES or (i in BT_INDICES and self.state.get((left, 27)) == 1)):
             self._source_edited(left, (written, i))
-        if (i in BAND_INDICES or i in (21, 24)) and LEFT_EQ[left] == self.active:
-            # also when a band frequency moves; a band of an output that is not active does not start it
+        if (i in BAND_INDICES or i in (2, 20, 21, 22, 24, 25)) and LEFT_EQ[left] == self.active:
+            # also when a band frequency moves, and EQ Enable and B/T Enable, which decide what counts; a band of an
+            # output that is not active does not start it
             self._follow_ref_level(LEFT_EQ[left], volume=True)
 
     def _source_edited(self, left, key=None):
@@ -556,31 +557,40 @@ class SimulatedAdi2:
         self.state[(a, 2)] = v
 
     def _auto_ref_level(self, a):
-        """With Auto Ref Level on, the device picks Ref Level from Volume plus the highest positive band gain, left
-        or right; True when it moved. Line Out: 0 up to -18 dB, 1 up to -12 dB, 2 up to -6 dB, else 3. Phones:
-        Lo-Power up to -15 dB, else Hi-Power. A band gain only counts when the band sits below 400 Hz (390 counts,
-        400 not) or from 5000 Hz (4000 not); peak and shelf alike. Between 4000 and 5000 Hz it is not modelled.
-        A Volume write and switching Auto Ref Level on start it on any output, a band change and a source choice
-        only on the active output, and an output becoming active starts it there; one becoming inactive keeps its
-        Ref Level."""
+        """With Auto Ref Level on, the device picks Ref Level from Volume plus the positive gain at the low or the
+        high end, whichever is more, per channel; True when it moved. Line Out: 0 up to -18 dB, 1 up to -12 dB, 2 up
+        to -6 dB, else 3. Phones: Lo-Power up to -15 dB, else Hi-Power. Counted: a band below 400 Hz (390 counts,
+        400 not) or from 5000 Hz (4000 not), peak and shelf alike, while the EQ of its channel is on; Bass and
+        Treble by the same rule on their frequency, while B/T Enable is on, the EQ on or off. At either end the
+        positive gains add up: a band and Bass together, measured; two bands together, assumed. Between 4000 and
+        5000 Hz it is not modelled. A Volume write and switching Auto Ref Level on start it on any output; a band,
+        Bass/Treble, EQ Enable or B/T Enable change and a source choice only on the active output, and an output
+        becoming active starts it there; one becoming inactive keeps its Ref Level."""
         if a not in REF_STEP or self.state.get((a, 3)) != 1:
             return False
         left, right = EQ_PAIRS[a]
-        gains = []
-        for x in (left, right):
-            for g in GAIN_INDICES:
-                gain, freq = self.state.get((x, g), 0), self.state.get((x, g + 1), 0)
+
+        def ends(pairs):
+            low = high = 0
+            for gain, freq in pairs:
                 if gain <= 0:
                     continue
                 if 4000 < freq < 5000:
                     self._note("Auto Ref Level with +gain at %d Hz, between 4000 and 5000 Hz" % freq)
-                if freq < 400 or freq >= 5000:
-                    gains.append(gain)
-        if self.state.get((left, 2)) == 0 and gains:
-            self._note("Auto Ref Level with EQ Enable off")
-        if self.state.get((left, 20)) == 1 and max(self.state.get((left, 21), 0), self.state.get((left, 24), 0)) > 0:
-            self._note("Auto Ref Level with positive Bass/Treble gain")
-        level = self.state[(a, 12)] / 10 + max([0] + gains) / 2
+                if freq < 400:
+                    low += gain
+                elif freq >= 5000:
+                    high += gain
+            return low, high
+
+        tone = [(self.state.get((left, g), 0), self.state.get((left, g + 1), 0)) for g in (21, 24)
+                if self.state.get((left, 20)) == 1]
+        gain = 0
+        for x in [left] + ([right] if self._dual(left) else []):    # Dual EQ off: right is the left
+            bands = [(self.state.get((x, g), 0), self.state.get((x, g + 1), 0)) for g in GAIN_INDICES
+                     if self.state.get((x, 2)) == 1]
+            gain = max([gain, *ends(bands + tone)])
+        level = self.state[(a, 12)] / 10 + gain / 2
         if a == 3:
             ref = 0 if level <= -18 else 1 if level <= -12 else 2 if level <= -6 else 3
         else:
