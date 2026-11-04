@@ -18,7 +18,7 @@ from commander.ui import about
 from commander.ui import loudness as L
 from commander.ui import theme
 from commander.ui.tables import FLASH_TIME, KEY_ROLE
-from commander.ui.widgets import FRAME, label_color, placement
+from commander.ui.widgets import FRAME, SIDE, label_color, placement
 from tests.gui import WindowTest, tooltip_color
 
 
@@ -45,6 +45,19 @@ class Window(WindowTest):
         with mock.patch.object(about, "show_url", shown.append):
             dialog.repository.click()
         self.assertEqual(shown, ["https://github.com/atvandenbosch/adi2-commander"])
+
+    def test_as_far_from_the_right_edge_as_from_the_left(self):
+        def edges(w):
+            p = w.mapTo(self.win, QPoint(0, 0))
+            return p.x(), self.win.width() - p.x() - w.width()
+        for height in (900, 500):                                     # low: the column scrolls
+            self.win.resize(1400, height)
+            self.spin(100)
+            self.assertEqual(self.win.sound.verticalScrollBar().isVisible(), height == 500)
+            self.assertEqual(edges(self.win.input_tab)[0], SIDE)
+            self.assertEqual([edges(w)[1] for w in (self.win.band_views[0], self.win.load_action, self.win.info)],
+                             [SIDE] * 3)
+            self.assertEqual(edges(self.win.sound)[1], 0)              # its scroll bar against the edge
 
     def test_about_opens_the_license(self):
         shown = []

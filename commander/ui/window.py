@@ -50,7 +50,7 @@ from .preview import PresetPreview
 from .scrim import RISE, Scrim
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, LOUDNESS_COLUMNS, CellDelegate, Marks,
                      ParamModel, ParamView, band_address, band_rows, bt_rows, loudness_rows)
-from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, INNER_GAP, SECTION_GAP, TITLE_STYLE, Action, InfoButton, Option,
+from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE, Action, InfoButton, Option,
                       Switch, Choice, dot_icon, dot_pixmap, dropped_file, head, label_color, pulse, switch_tip)
 
 FS_TIP = "Sample rate the curves are computed at"
@@ -471,11 +471,12 @@ class MainWindow(QMainWindow):
         self.display = display
         main.addLayout(right)
 
+        # as far from the right edge as from the left: the tables, Load… and the ring; the scroll bar of a low window
+        # goes in that margin, against the edge
         body = QVBoxLayout()
-        body.setContentsMargins(18, 8, 18, 0)
+        body.setContentsMargins(SIDE, 8, 0, 0)
         body.setSpacing(0)
-        # the ring ends where the tables do, not where the room for their scroll bar does
-        top.addSpacing(self.sound.verticalScrollBar().sizeHint().width())
+        top.addSpacing(SIDE)
         body.addLayout(top)
         body.addLayout(main, 1)
         root = QWidget()
@@ -503,9 +504,10 @@ class MainWindow(QMainWindow):
             v.fit(BAND_WIDTHS)
         self.bt_view.fit(BT_WIDTHS)
         self.loudness_view.fit(self.LOUDNESS_WIDTHS)
-        # the column is as wide as a band table, so all of it ends on one line; the scroll bar comes beside it
-        self.sound.widget().setFixedWidth(self.band_views[0].width())
-        self.sound.setFixedWidth(self.band_views[0].width() + self.sound.verticalScrollBar().sizeHint().width())
+        # the column is as wide as a band table, so all of it ends on one line; the scroll bar goes in the margin
+        width = self.band_views[0].width()
+        self.sound.widget().setFixedWidth(width)
+        self.sound.setFixedWidth(width + max(SIDE, self.sound.verticalScrollBar().sizeHint().width()))
         self.on_connection(session.status or "searching", "")
 
         self.timer = QTimer(self, interval=20, timeout=self.tick)
