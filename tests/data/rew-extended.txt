@@ -1,0 +1,30 @@
+Filter Settings file
+
+Room EQ V5.40 Beta 134
+Dated: 2026 Oct 6 13:31:09
+
+Notes:Extended test
+
+Equaliser: Extended
+flat
+Filter  1: ON  PK       Fc 1000.00 Hz  Gain   -3.5 dB  Q  2.000
+Filter  2: OFF LS Q     Fc  100.00 Hz  Gain    6.0 dB Q   1.50
+Filter  3: ON  HS Q     Fc 8000.00 Hz  Gain   -4.0 dB Q   0.90
+Filter  4: ON  HP Q     Fc   30.00 Hz  Q   0.50
+Filter  5: ON  LP Q     Fc 18000.00 Hz  Q   2.00
+Filter  6: ON  Notch    Fc   50.00 Hz 
+Filter  7: ON  All pass  Fc  900.00 Hz  Q   0.71
+Filter  8: ON  PK       Fc   63.40 Hz  Gain    4.3 dB  Q  7.123
+Filter  9: ON  None      
+Filter 10: ON  None      
+Filter 11: ON  None      
+Filter 12: ON  None      
+Filter 13: ON  None      
+Filter 14: ON  None      
+Filter 15: ON  None      
+Filter 16: ON  None      
+Filter 17: ON  None      
+Filter 18: ON  None      
+Filter 19: ON  None      
+Filter 20: ON  None      
+
