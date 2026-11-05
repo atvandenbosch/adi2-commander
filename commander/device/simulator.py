@@ -1,6 +1,11 @@
-"""A simulated ADI-2 DAC FS at the level of raw SysEx: bytes in, bytes out.
+"""A simulated ADI-2 at the level of raw SysEx: bytes in, bytes out.
 
 SimPort takes the place of WinmmPort, so everything above it (the session, the app) runs unchanged.
+
+The ADI-2 DAC FS is simulated as it behaves. The ADI-2 Pro and ADI-2/4 Pro are simulated as RME's MIDI table
+(MIDITable_ADI-2 v1.2) and their manuals describe them: their parameters, ranges and factory values. Where they
+share the protocol of the ADI-2 DAC FS (EQ, presets, Volume, Dim, Lock Volume) they follow its rules; what only the
+ADI-2 DAC FS is known to do (Source and the clock, Auto Ref Level, the status message from its inputs) they do not.
 
 Anything the model does not cover is not silently accepted: it is recorded in SimulatedAdi2.unsimulated,
 and tests assert that list stays empty.
@@ -9,6 +14,7 @@ and tests assert that list stays empty.
 import os
 import threading
 import time
+from collections import namedtuple
 
 from . import codec, models
 from .connection import DeviceNotFound, PortBusy
@@ -26,6 +32,7 @@ OUTPUT_ADDRESSES = (3, 6, 9)                     # Line Out, Phones 1/2, Phones 
 EQ_PAIRS = {3: (4, 5), 6: (7, 8), 9: (10, 11)}   # output address -> (left EQ, right EQ)
 LEFT_EQ = {l: o for o, (l, r) in EQ_PAIRS.items()}
 RIGHT_EQ = {r: l for o, (l, r) in EQ_PAIRS.items()}
+INPUT_EQ = (1, 2)                                # ADI-2 Pro and ADI-2/4 Pro: the EQ of the input, left and right
 
 # output channel settings, ADI-2 DAC; index 2 differs between line and phones
 OUTPUT_RANGES = {
@@ -46,6 +53,104 @@ DEVICE_RANGES = {
     32: (0, 1), 33: (0, 5), 34: (0, 3), 35: (0, 1), 36: (0, 1), 37: (0, 3),
 }
 DEVICE_READ_ONLY = {16}                          # Sample Rate, display only
+
+# ---------------------------------------------------------------------------------------------
+# ADI-2 Pro and ADI-2/4 Pro: {index: (min, max, factory value)}. Where the table's maximum and its list of names
+# disagree, the names count: Input Ref Level and DA Filter of the Pro, SRC Gain.
+
+PRO_OUTPUT = {
+    1: (0, 5, 0),                                # Source; one more in Basic Mode DAC (SOURCE_IN_DAC_MODE)
+    3: (0, 1, 1), 4: (0, 2, 0), 5: (-100, 100, 100), 6: (0, 1, 0), 7: (0, 3, 0), 8: (0, 5, 0),
+    9: (0, 5, 0),                                # DA Filter: SD Sharp .. NOS, SD LD
+    10: (0, 2, 0), 11: (0, 1, 0), 12: (-1145, 60, -100), 13: (0, 1, 0), 14: (-100, 100, 0), 15: (0, 1, 0),
+    16: (0, 1, 0), 17: (0, 9, 0), 18: (0, 2, 2), 20: (0, 1, 0), 21: (2, 20, 14), 22: (2, 20, 14),
+    23: (-180, -40, -60),
+}
+PRO_REF_LEVEL = {"line": (0, 3, 2), "phones": (0, 1, 0)}    # +4 .. +24 dBu; Lo-Power, Hi-Power
+PRO_24_OUTPUT = {**PRO_OUTPUT, 9: (0, 6, 2)}     # DA Filter: SD Sharp .. SD LD, Brickwall, NOS
+PRO_24_REF_LEVEL = {"line": (0, 4, 1), "phones": (0, 2, 1)}  # +1 .. +24 dBu; IEM, Lo-Power, Hi-Power
+REAR_TRS_SOURCE = {19: (0, 1, 0)}                # ADI-2/4 Pro, Phones 3/4 only: Line 1/2, Ph. 3/4
+EX_SOURCE = (0, 6, 0)                            # ADI-2/4 Pro EX: ADAT 3/4 besides
+SOURCE_IN_DAC_MODE = (0, 6, 0)                   # Auto, AES, SPDIF coax, Optical, Analog, USB 1/2, USB 3/4
+BASIC_MODE, BASIC_MODE_DAC = 6, 5                # on address 12
+
+INPUT = {                                        # address 0, the ADI-2 Pro
+    1: (0, 3, 2), 2: (0, 1, 0), 3: (0, 12, 0), 4: (0, 12, 0), 5: (0, 3, 0), 6: (0, 1, 0), 7: (0, 3, 2),
+    8: (0, 1, 0), 9: (0, 1, 0), 10: (0, 3, 0),
+}
+INPUT_24_SE = {**INPUT, 1: (0, 4, 2), 10: (0, 1, 0), 11: (0, 5, 0), 12: (0, 1, 0)}
+INPUT_24_EX = {**INPUT_24_SE, 1: (-6, 4, 2), 10: (0, 2, 0), 11: (0, 6, 0), 13: (0, 1, 0)}
+
+# address 12; the Remap Keys 1 .. 7 are indices 26, 27, 28, 29, 22, 23, 24
+PRO_DEVICE = {
+    2: (0, 4, 0), 3: (0, 1, 1), 4: (0, 1, 0), 5: (0, 1, 0), 6: (0, 5, 0), 7: (0, 1, 0), 8: (0, 1, 0),
+    9: (0, 2, 0), 10: (0, 5, 0), 11: (0, 1, 1), 12: (0, 1, 1), 15: (0, 3, 0),
+    22: (0, 61, 48), 23: (0, 61, 49), 24: (0, 61, 51), 25: (0, 2, 2),
+    26: (0, 61, 50), 27: (0, 61, 47), 28: (0, 61, 52), 29: (0, 61, 41),
+    32: (0, 1, 0), 33: (0, 5, 0), 34: (0, 3, 0), 35: (0, 1, 0), 36: (0, 1, 1), 37: (0, 3, 0),
+    40: (0, 2, 0), 41: (0, 2, 2), 42: (0, 1, 0), 43: (0, 2, 0),
+}
+PRO_24_DEVICE = {i: r for i, r in PRO_DEVICE.items() if i != 5}             # no DSD Direct
+PRO_24_DEVICE.update({22: (0, 65, 49), 23: (0, 65, 50), 24: (0, 65, 52),
+                      26: (0, 65, 51), 27: (0, 65, 48), 28: (0, 65, 53), 29: (0, 65, 42)})
+# in a dump, not set by the simulator: Sample Rate (48 kHz) and Load Volume
+DEVICE_REPORTED = {16: 1, 62: 0}
+SETUP_NAMES = ["Setup %d" % n for n in range(1, 10)]
+
+# what the simulator holds for one model: per output address and for the input (address 0) and the device
+# (address 12) {index: (min, max, factory value)}; the ADI-2 DAC FS has no factory values here, it starts from a
+# real dump
+Tables = namedtuple("Tables", "outputs input device")
+
+
+def tables(model, revision):
+    """The Tables of a model; revision tells the ADI-2/4 Pro SE (0) from the EX (1 and up)."""
+    if model.id not in (models.PRO.id, models.PRO_24.id):
+        outputs = {a: {i: r + (None,) for i, r in {**OUTPUT_RANGES, 2: REF_LEVEL_RANGE[a]}.items()}
+                   for a in OUTPUT_ADDRESSES}
+        return Tables(outputs, {}, {i: r + (None,) for i, r in DEVICE_RANGES.items()})
+    pro = model.id == models.PRO.id
+    ex = not pro and revision >= 1
+    output, ref = (PRO_OUTPUT, PRO_REF_LEVEL) if pro else (PRO_24_OUTPUT, PRO_24_REF_LEVEL)
+    if ex:
+        output = {**output, 1: EX_SOURCE}
+    outputs = {a: {**output, 2: ref["line" if a == 3 else "phones"]} for a in OUTPUT_ADDRESSES}
+    if not pro:
+        outputs[9].update(REAR_TRS_SOURCE)
+    inputs = INPUT if pro else INPUT_24_EX if ex else INPUT_24_SE
+    return Tables(outputs, inputs, PRO_DEVICE if pro else PRO_24_DEVICE)
+
+
+def factory_layout(t):
+    """The parameter messages of a dump, [[(address, index), ...] per message], for a model with factory values:
+    in the order of a real dump of the ADI-2 DAC FS, 40 parameters a message. Per channel its settings, the bands
+    left and right, Bass/Treble, Loudness; then the device; then Load B/T and EQ Preset Select of every channel."""
+    keys = []
+    channels = [(0, INPUT_EQ)] + [(o, EQ_PAIRS[o]) for o in OUTPUT_ADDRESSES]
+    for o, (left, right) in channels:
+        own = t.input if o == 0 else t.outputs[o]
+        keys += [(o, i) for i in sorted(own) if i < 20]
+        keys += [(x, i) for x in (left, right) for i in range(2, 20)]
+        keys += [(left, i) for i in range(20, 27)]
+        keys += [(o, i) for i in sorted(own) if i >= 20]
+    keys += [(12, i) for i in sorted(set(t.device) | set(DEVICE_REPORTED))]
+    keys += [(left, i) for _, (left, _) in channels for i in (27, 28)]
+    return [keys[k:k + 40] for k in range(0, len(keys), 40)]
+
+
+def factory_state(t):
+    """What a dump of a factory-new device holds: the factory values of MIDITable_ADI-2 v1.2."""
+    state = {}
+    for o, (left, right) in [(0, INPUT_EQ)] + [(o, EQ_PAIRS[o]) for o in OUTPUT_ADDRESSES]:
+        state.update({(o, i): r[2] for i, r in (t.input if o == 0 else t.outputs[o]).items()})
+        for x in (left, right):
+            state.update({(x, i): v for i, v in FACTORY_BANDS.items()})
+            state[(x, 2)] = 0                    # EQ Enable
+        state.update({(left, i): v for i, v in FACTORY_BT.items()})
+        state.update({(left, 20): 1, (left, 27): 0, (left, 28): MANUAL})
+    state.update({(12, i): r[2] for i, r in t.device.items()})
+    state.update({(12, i): v for i, v in DEVICE_REPORTED.items()})
+    return state
 
 # EQ Preset Select values
 MANUAL, TEMP, CLEAR = 0, 1, 22                   # 2..21 = Preset 1..20
@@ -82,8 +187,15 @@ DUMP_FIRST, DUMP_SPACING = 0.08, 0.028
 class SimulatedAdi2:
     """The device: parameter state, the rules that change it, and the messages it sends back."""
 
-    def __init__(self, state, layout, names, clock=time.monotonic, slots=None, slot_layout=None, model=models.DAC):
+    def __init__(self, state, layout, names, clock=time.monotonic, slots=None, slot_layout=None, model=models.DAC,
+                 revision=None):
         self.model = model                       # it answers only under its own device ID
+        # the rules only the ADI-2 DAC FS is known to follow
+        self.dac_fs = model.id not in (models.PRO.id, models.PRO_24.id)
+        # the device revision in the status message: the D/A converter of the ADI-2 DAC FS (default the ES9028Q2M),
+        # the ADI-2/4 Pro SE (0) or EX (1)
+        self.revision = (2 if self.dac_fs else 0) if revision is None else revision
+        self.tables = tables(model, self.revision)
         self.header = codec.header(model.id)
         self.state = dict(state)
         self.layout = layout                     # [[(address, index), ...] per 0x01 message] as in a real dump
@@ -119,7 +231,6 @@ class SimulatedAdi2:
         self.signals = 0
         self.usb_rate = SAMPLE_RATES[self.state.get((12, 16), 0)]
         self.usb_dsd = False
-        self.revision = 2                        # the device revision in the status message: the ES9028Q2M
         self.lock = threading.Lock()
         self.powered = True
 
@@ -144,6 +255,18 @@ class SimulatedAdi2:
         if presets is not None:
             kw["slots"], kw["slot_layout"] = read_presets(presets)
         return cls(state, layout, names, **kw)
+
+    @classmethod
+    def factory(cls, model, revision=None, presets=None, **kw):
+        """An ADI-2 Pro or ADI-2/4 Pro as it leaves the factory, its setups unnamed. presets: as for from_dump."""
+        if model.id not in (models.PRO.id, models.PRO_24.id):
+            raise ValueError("%s: no factory values; start from a dump" % model.name)
+        t = tables(model, 0 if revision is None else revision)
+        names = [codec.header(model.id) + [0x05, 0x21 + n] + list(name.rjust(14).encode("ascii")) + [0, 0, 0xF7]
+                 for n, name in enumerate(SETUP_NAMES)]
+        if presets is not None:
+            kw["slots"], kw["slot_layout"] = read_presets(presets)
+        return cls(factory_state(t), factory_layout(t), names, model=model, revision=revision, **kw)
 
     # -- helpers ------------------------------------------------------------------------------
     def _bands(self, left):
@@ -182,6 +305,14 @@ class SimulatedAdi2:
         """Load a source into the live EQ; Bass/Treble only with Load B/T on."""
         load_bt = self.state.get((left, 27)) == 1
         self.state.update({k: v for k, v in bank.items() if not (k[0] == left and k[1] in BT_INDICES) or load_bt})
+
+    def _ref_step(self):
+        """Auto Ref Level is modelled on the ADI-2 DAC FS only."""
+        return REF_STEP if self.dac_fs else {}
+
+    def _dac_mode(self):
+        """ADI-2 Pro and ADI-2/4 Pro in Basic Mode DAC: Source has its seven choices."""
+        return not self.dac_fs and self.state.get((12, BASIC_MODE)) == BASIC_MODE_DAC
 
     def _dual(self, left):
         return self.state.get((LEFT_EQ[left], 11), 1) == 1
@@ -269,12 +400,16 @@ class SimulatedAdi2:
         elif a == 12:
             if i in DEVICE_READ_ONLY:
                 return
-            if i not in DEVICE_RANGES:
+            if i not in self.tables.device:
                 self._note("device index %d" % i)
                 return
-            self.state[(12, i)] = _clamp(v, DEVICE_RANGES[i])
+            self.state[(12, i)] = _clamp(v, self.tables.device[i])
         elif a in (13, 14):
             self._set_slot(a, i, v, is_freq)
+        elif a == 0 and i in self.tables.input:
+            self.state[(0, i)] = _clamp(v, self.tables.input[i])
+        elif a in INPUT_EQ and self.tables.input:
+            self._note("input EQ address %d index %d" % (a, i))
         else:
             self._note("address %d index %d" % (a, i))
 
@@ -428,7 +563,8 @@ class SimulatedAdi2:
         """Switching Load B/T with Preset on switches B/T Enable off, on Phones and IEM only."""
         was = self.state.get((left, 27), 0)
         self.state[(left, 27)] = v
-        if was == 0 and v == 1 and LEFT_EQ[left] in BT_OFF_WITH_LOAD_BT and self.state.get((left, 20)) != 0:
+        if (was == 0 and v == 1 and self.dac_fs and LEFT_EQ[left] in BT_OFF_WITH_LOAD_BT
+                and self.state.get((left, 20)) != 0):
             self.state[(left, 20)] = 0
             if self.session:
                 self._emit(self._said([codec.encode(left, 20, 0)]))   # said unasked
@@ -473,10 +609,11 @@ class SimulatedAdi2:
     def _set_output(self, a, i, v):
         if i in (2, 3) and self.state.get((a, i)) == -1:
             return                                   # IEM: no Ref Level, no Auto Ref Level; a write does nothing
+        ranges = self.tables.outputs[a]
         if i == 2:
-            self._set_ref_level(a, _clamp(v, REF_LEVEL_RANGE[a]))
+            self._set_ref_level(a, _clamp(v, ranges[2]))
             return
-        if i not in OUTPUT_RANGES:
+        if i not in ranges:
             self._note("output address %d index %d" % (a, i))
             return
         if i == 12 and self.state.get((a, 13)) == 1:
@@ -484,7 +621,7 @@ class SimulatedAdi2:
             if self.session:
                 self._emit(self._said([codec.encode(a, 12, self.state[(a, 12)])]))
             return
-        v = _clamp(v, OUTPUT_RANGES[i])
+        v = _clamp(v, SOURCE_IN_DAC_MODE if i == 1 and self._dac_mode() else ranges[i])
         if i == 16:
             # Dim: on the active output, on moves Volume itself 20 dB down, unclamped, and says so; off moves it back
             # up only if Dim moved it down and the output stayed active since. Otherwise only the flag. Ref Level stays.
@@ -505,7 +642,7 @@ class SimulatedAdi2:
         if i == 11:
             self._set_dual(a, v)
             return
-        if i == 1:
+        if i == 1 and self.dac_fs:
             self._set_source(a, v)
             return
         if i == 3:
@@ -518,14 +655,14 @@ class SimulatedAdi2:
     def _set_auto_ref_level(self, a, v):
         """Switching Auto Ref Level keeps the level: on, Volume is relative to the highest Ref Level (dBr); off, to
         the Ref Level that is set, which stays. The device reports the new Volume."""
-        if v != self.state.get((a, 3)) and a in REF_STEP:
-            shift = (REF_LEVEL_RANGE[a][1] - self.state[(a, 2)]) * REF_STEP[a]
+        if v != self.state.get((a, 3)) and a in self._ref_step():
+            shift = (self.tables.outputs[a][2][1] - self.state[(a, 2)]) * REF_STEP[a]
             self._report_volume(a, self.state[(a, 12)] + (-shift if v else shift))
         self.state[(a, 3)] = v
         self._follow_ref_level(a)
 
     def _report_volume(self, a, vol):
-        vol = _clamp(vol, OUTPUT_RANGES[12])
+        vol = _clamp(vol, self.tables.outputs[a][12])
         if vol != self.state[(a, 12)]:
             self.state[(a, 12)] = vol
             if self.session:
@@ -557,10 +694,10 @@ class SimulatedAdi2:
 
     def _set_ref_level(self, a, v):
         old = self.state.get((a, 2), v)
-        if a in REF_STEP and self.state.get((a, 3)) == 1 and v != old:
+        if a in self._ref_step() and self.state.get((a, 3)) == 1 and v != old:
             # with Auto Ref Level on, writing Ref Level moves Volume a step's worth, both directions, unreported
             vol = self.state[(a, 12)] + REF_STEP[a] * (v - old)
-            self.state[(a, 12)] = _clamp(vol, OUTPUT_RANGES[12])
+            self.state[(a, 12)] = _clamp(vol, self.tables.outputs[a][12])
         self.state[(a, 2)] = v
 
     def _auto_ref_level(self, a):
@@ -573,7 +710,7 @@ class SimulatedAdi2:
         5000 Hz it is not modelled. A Volume write and switching Auto Ref Level on start it on any output; a band,
         Bass/Treble, EQ Enable or B/T Enable change and a source choice only on the active output, and an output
         becoming active starts it there; one becoming inactive keeps its Ref Level."""
-        if a not in REF_STEP or self.state.get((a, 3)) != 1:
+        if a not in self._ref_step() or self.state.get((a, 3)) != 1:
             return False
         left, right = EQ_PAIRS[a]
 
@@ -677,6 +814,9 @@ class SimulatedAdi2:
         """A plug in Phones (6) or IEM (9), or none: Line Out (3) is active. Becoming active does not
         reload anything; Auto Ref Level of the output that became active follows its band gain then."""
         with self.lock:
+            if not self.dac_fs:
+                self._note("plug: the outputs of the %s" % self.model.name)
+                return
             was, self.active = self.active, 3 if output is None else output
             if self.active != was:
                 self.lowered.discard(was)            # what Dim moved down there, stays down
@@ -688,6 +828,9 @@ class SimulatedAdi2:
         in the simulator so does the one USB (Rec …) records; otherwise it runs on its own clock at the rate of USB.
         A new rate is reported as 12/16."""
         with self.lock:
+            if not self.dac_fs:
+                self._note("signal: the inputs of the %s" % self.model.name)
+                return
             self.signals += 1
             for name, rate in (("coax", coax), ("optical", optical)):
                 if rate is None:
@@ -703,7 +846,10 @@ class SimulatedAdi2:
 
     # -- the status message ------------------------------------------------------------------
     def _clock(self):
-        """The SPDIF input the device follows, "coax" or "optical", or None: its own clock."""
+        """The SPDIF input the device follows, "coax" or "optical", or None: its own clock. The ADI-2 Pro and
+        ADI-2/4 Pro run on their own clock, at the rate of USB."""
+        if not self.dac_fs:
+            return None
         source = self.state.get((3, 1), SOURCE_AUTO)
         if source == SOURCE_COAX and self.coax:
             return "coax"
@@ -737,6 +883,8 @@ class SimulatedAdi2:
     def _status_body(self):
         """The 14 data bytes of a status message, from the model. Bits that carry nothing a remote needs
         (bit depth, channel status, the bit test, overload) stay 0."""
+        if not self.dac_fs:
+            return self._own_status_body()
         clock, rate = self._clock(), self._rate()
         base = _family(rate)[0]
         coax, optical = self.seen["coax"], self.seen["optical"]
@@ -755,6 +903,14 @@ class SimulatedAdi2:
         return [self.revision << 2 | ACTIVE_CODE[self.active], d1, d2, d3, d4, 0x0C if self.usb_dsd else 0, 0,
                 0x40 | SPDIF_FAMILY[base], 0, 0x70 if self.usb_dsd and usb_played else 0, 0x02,
                 SPDIF_FAMILY[usb_base] | usb_n << 2, 0, 0]
+
+    def _own_status_body(self):
+        """ADI-2 Pro and ADI-2/4 Pro: the status message as the table describes it, in the layout of the ADI-2 DAC FS:
+        14 data bytes. No signal on any input, no plug, the internal clock at the rate of USB."""
+        rate = self._rate()
+        d2 = 0x0F << 1 | 0x03 << 5                    # AES and SPDIF: no rate
+        d3 = SAMPLE_RATES.index(rate) << 3 | (_family(rate)[0] == 44100) << 2 | 0x03
+        return [self.revision << 2, 0, d2, d3, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0]
 
 
 def _clamp(v, rng):

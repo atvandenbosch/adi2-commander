@@ -3,9 +3,9 @@
 import unittest
 from unittest import mock
 
-from commander.device import codec
+from commander.device import codec, status
 from commander.device.connection import DeviceNotFound, PortBusy
-from commander.device.models import DAC, PRO
+from commander.device.models import DAC, PRO, PRO_24
 from commander.device.simulator import SimPort, SimulatedAdi2
 from tests import client
 from tests.client import Adi2, read_state
@@ -63,7 +63,7 @@ class Simulator(unittest.TestCase):
         self.assertEqual([m for m in self.sim.poll() if m[5] != 0x07], real)
 
     def test_it_answers_only_under_its_own_device_id(self):
-        pro = SimulatedAdi2.from_dump(DUMP, clock=self.clock, model=PRO)
+        pro = SimulatedAdi2.factory(PRO, clock=self.clock)
         pro.receive_from_remote(HEADER + [0x03, 0x09, 0xF7])
         self.clock.sleep(2.0)
         self.assertEqual(pro.poll(), [])                            # not even the status stream starts
@@ -624,6 +624,107 @@ class Presets(unittest.TestCase):
         self.dev.send(HEADER + [0x03, 0x0B, 0xF7], pause=0)
         self.assertEqual(len(self.sim.unsimulated), 1)
         self.sim.unsimulated.clear()
+
+
+class OtherModels(unittest.TestCase):
+    """The ADI-2 Pro and ADI-2/4 Pro SE and EX, from their factory values."""
+
+    MODELS = {"Pro": (PRO, None), "2/4 SE": (PRO_24, 0), "2/4 EX": (PRO_24, 1)}
+
+    def setUp(self):
+        self.clock = simulated_clock(self)
+
+    def use(self, name):
+        model, revision = self.MODELS[name]
+        self.sim = SimulatedAdi2.factory(model, revision, presets=PRESETS, clock=self.clock)
+        self.addCleanup(lambda sim=self.sim: self.assertEqual(sim.unsimulated, []))
+        return self.sim
+
+    def send(self, *params):
+        self.sim.receive_from_remote(codec.sysex(self.sim.model.id, [
+            codec.encode(a, i, v, a in codec.EQ_ADDRESSES and i in F) for a, i, v in params]))
+
+    def dump(self):
+        self.sim.receive_from_remote(codec.header(self.sim.model.id) + [0x03, 0x09, 0xF7])
+        self.clock.sleep(2.0)
+        return self.sim.poll()
+
+    def test_a_dump_holds_every_parameter_the_table_names(self):
+        for name, (model, revision) in self.MODELS.items():
+            with self.subTest(name):
+                sim = self.use(name)
+                msgs = self.dump()
+                params = [m for m in msgs if m[5] == 0x01]
+                self.assertTrue(all(len(m) <= 256 for m in params))
+                self.assertEqual(client.parse(params), sim.reported())
+                for a, ranges in [(0, sim.tables.input), (12, sim.tables.device)] + list(sim.tables.outputs.items()):
+                    for i, (lo, hi, value) in ranges.items():
+                        self.assertTrue(lo <= sim.state[(a, i)] == value <= hi, (a, i))
+                self.assertEqual([m[6] for m in msgs if m[5] == 0x05], list(range(0x21, 0x2A)))
+                body = [m for m in msgs if m[5] == 0x07][0][6:-1]
+                st = status.decode(body)
+                self.assertEqual((len(body), st.revision, st.rate), (14, revision or 0, 48000))
+
+    def test_the_ranges_of_each_model(self):
+        writes = [(9, 2, 9), (3, 2, 9), (3, 9, 9), (6, 17, 12), (0, 1, -9), (0, 10, 9)]
+        expect = {"Pro": [1, 3, 5, 9, 0, 3], "2/4 SE": [2, 4, 6, 9, 0, 1], "2/4 EX": [2, 4, 6, 9, -6, 2]}
+        for name, values in expect.items():
+            with self.subTest(name):
+                sim = self.use(name)
+                self.send(*writes)
+                self.assertEqual([sim.state[(a, i)] for a, i, _ in writes], values)
+
+    def test_rear_trs_source_and_dsd_direct(self):
+        sim = self.use("2/4 SE")
+        self.send((9, 19, 1))
+        self.assertEqual(sim.state[(9, 19)], 1)
+        self.send((3, 19, 1), (12, 5, 1))
+        self.assertEqual(sim.unsimulated, ["output address 3 index 19", "device index 5"])
+        sim.unsimulated.clear()
+        sim = self.use("Pro")
+        self.send((12, 5, 1))
+        self.assertEqual(sim.state[(12, 5)], 1)
+
+    def test_source_has_one_choice_more_in_basic_mode_dac(self):
+        for name, before, after in (("Pro", 5, 6), ("2/4 SE", 5, 6), ("2/4 EX", 6, 6)):
+            with self.subTest(name):
+                sim = self.use(name)
+                self.send((3, 1, 9))
+                self.send((12, 6, 5), (6, 1, 9))
+                self.assertEqual((sim.state[(3, 1)], sim.state[(6, 1)]), (before, after))
+
+    def test_what_only_the_dac_fs_is_known_to_do_it_does_not(self):
+        sim = self.use("2/4 SE")
+        self.dump()
+        clock_source = sim.state[(12, 15)]
+        self.send((3, 1, 4))                                        # Source on one output, nothing else
+        self.send((3, 12, 60), (6, 2, 0), (6, 12, 0))               # Auto Ref Level is on: Ref Level stays
+        self.send((7, 27, 1))                                       # Load B/T: B/T Enable stays on
+        self.clock.sleep(0.1)
+        self.assertEqual([m for m in sim.poll() if m[5] != 0x07], [])
+        self.assertEqual([sim.state[k] for k in [(6, 1), (9, 1), (12, 15), (3, 2), (6, 2), (7, 20)]],
+                         [0, 0, clock_source, 1, 0, 1])
+
+    def test_the_input_eq_is_not_simulated_yet(self):
+        sim = self.use("Pro")
+        self.send((1, 4, 6))
+        self.assertEqual(sim.unsimulated, ["input EQ address 1 index 4"])
+        sim.unsimulated.clear()
+
+    def test_the_eq_and_presets_follow_the_rules_of_the_dac_fs(self):
+        sim = self.use("Pro")
+        self.dump()
+        self.send((4, 28, 2))                                       # Preset 1
+        self.assertEqual(sim.state[(4, 4)], sim.slots[1]["vals"][(13, 4)])
+        self.clock.sleep(0.1)
+        sim.poll()
+        self.send((4, 7, 3))                                        # edited: Temp, and the device says so
+        self.clock.sleep(0.1)
+        self.assertEqual(client.parse([m for m in sim.poll() if m[5] == 0x01]).get((4, 28)), 1)
+
+    def test_the_dac_fs_has_no_factory_values_here(self):
+        with self.assertRaises(ValueError):
+            SimulatedAdi2.factory(DAC)
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ import unittest
 from unittest import mock
 
 from commander import app
-from commander.device import connection
+from commander.device import connection, models
 from commander.device.simulator import SimulatedAdi2
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,6 +20,20 @@ class Start(unittest.TestCase):
     def test_simulate_starts_from_the_demo(self):
         sim = SimulatedAdi2.from_dump(app.DEMO_DUMP, presets=app.DEMO_PRESETS)
         self.assertTrue(sim.state and sim.slots)
+
+    def test_simulate_a_model(self):
+        self.assertEqual(app.simulator(None, "dac").state, SimulatedAdi2.from_dump(app.DEMO_DUMP).state)
+        for name, (model, revision) in app.SIMULATED_MODELS.items():
+            sim = app.simulator(None, name)
+            self.assertEqual((sim.model, sim.revision), (model, sim.revision if revision is None else revision))
+            self.assertTrue(sim.slots)
+        self.assertIn((0, 1), app.simulator(None, "24ex").state)                 # the input, from the factory
+        sim = app.simulator(app.DEMO_DUMP, "pro")
+        self.assertEqual((sim.model, sim.state), (models.PRO, SimulatedAdi2.from_dump(app.DEMO_DUMP).state))
+
+    def test_model_only_with_simulate(self):
+        with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+            app.main(["--model", "pro"])
 
     def test_an_icon_for_each_way_of_starting(self):
         for path in (app.ICON, app.SIMULATED_ICON):

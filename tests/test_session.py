@@ -122,7 +122,10 @@ class Recognition(Harness):
     """The model is the device ID that answers; the port name only says which to ask first."""
 
     def use(self, model, port=None):
-        self.sim = SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=self.clock, model=model)
+        if model in (PRO, PRO_24):
+            self.sim = SimulatedAdi2.factory(model, presets=PRESETS, clock=self.clock)
+        else:
+            self.sim = SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=self.clock, model=model)
         self.port_name = port
 
     def open_port(self):
