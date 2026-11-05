@@ -3,9 +3,12 @@ preset slots, recover."""
 
 import unittest
 
-from commander.device import codec
+from unittest import mock
+
+from commander.device import codec, models, simulator
 from commander.device import params as P
 from commander.device.connection import PortBusy
+from commander.device.models import DAC, PRO, PRO_24
 from commander.session import Session, loaded
 from commander.device.simulator import SimPort, SimulatedAdi2
 from tests.support import DUMP, PRESETS
@@ -113,6 +116,85 @@ class Connect(Harness):
         self.sim.power(False)
         self.run_for(0.6)
         self.assertEqual(self.statuses(), ["searching"])
+
+
+class Recognition(Harness):
+    """The model is the device ID that answers; the port name only says which to ask first."""
+
+    def use(self, model, port=None):
+        self.sim = SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=self.clock, model=model)
+        self.port_name = port
+
+    def open_port(self):
+        port = SimPort(self.sim)
+        if getattr(self, "port_name", None):
+            port.names = (self.port_name, self.port_name)
+        return port
+
+    def asked(self):
+        """The device IDs dump requests went to, in order."""
+        return [m[4] for m in self.sim.received if m[5:] == [0x03, 0x09, 0xF7]]
+
+    def test_the_port_name_is_a_hint(self):
+        self.assertEqual(models.probe_order("ADI-2 DAC Midi Port 1"), [DAC, PRO, PRO_24])
+        self.assertEqual(models.probe_order("ADI-2 Pro Midi Port 1"), [PRO, DAC, PRO_24])
+        self.assertEqual(models.probe_order("ADI-24 Pro Midi Port 1"), [PRO_24, DAC, PRO])
+        self.assertEqual(models.probe_order("ADI-2"), [DAC, PRO, PRO_24])
+
+    def test_the_dac_is_asked_once(self):
+        self.connect()
+        self.assertEqual((self.session.model, self.asked()), (DAC, [DAC.id]))
+
+    def let_go(self, model):
+        self.use(model)
+        self.run_for(3.0)
+        self.assertEqual(self.statuses(), ["loading", "unsupported"])
+        self.assertEqual((self.session.model, self.asked()), (model, [model.id]))
+        self.assertIsNone(self.session.port)                             # free for other programs
+
+    def test_a_pro_is_named_and_let_go(self):
+        self.let_go(PRO)
+
+    def test_a_2_4_is_named_and_let_go(self):
+        self.let_go(PRO_24)
+
+    def test_past_a_port_name_that_does_not_fit(self):
+        self.use(PRO, port="ADI-2 DAC Midi Port 1")
+        self.run_for(3.0)
+        self.assertEqual((self.session.status, self.asked()), ("unsupported", [DAC.id, PRO.id]))
+
+    def test_a_dac_behind_another_port_name(self):
+        self.use(DAC, port="ADI-24 Pro Midi Port 1")
+        self.run_for(3.0)
+        self.assertEqual((self.session.status, self.asked()), ("ready", [PRO_24.id, DAC.id]))
+
+    def test_a_late_answer_still_counts(self):
+        with mock.patch.object(simulator, "DUMP_FIRST", 1.2), mock.patch.object(simulator, "STATUS_FIRST", 1.2):
+            self.run_for(3.0)
+        self.assertEqual(self.session.status, "ready")
+        self.assertEqual((self.session.model, self.asked()), (DAC, [DAC.id, PRO.id, DAC.id]))
+        self.assertEqual(self.session.state, {k: v for k, v in self.sim.reported().items() if k[0] not in (13, 14)})
+
+    def test_unsupported_until_it_is_gone(self):
+        self.use(PRO)
+        self.run_for(3.0)
+        self.run_for(10.0)
+        self.assertEqual((self.statuses(), self.asked()), (["loading", "unsupported"], [PRO.id]))   # not asked again
+        self.sim.power(False)
+        self.run_for(0.6)
+        self.assertEqual(self.statuses()[-1], "searching")
+        self.use(DAC)
+        self.run_for(3.0)
+        self.assertEqual((self.session.status, self.session.model), ("ready", DAC))
+
+    def test_no_answer_under_any_id(self):
+        self.use(models.Model(0x7F, "Other", "ADI-2 DAC", True))
+        self.run_for(3.5)
+        self.assertEqual(self.statuses(), ["loading", "searching"])
+        self.assertEqual(self.asked(), [DAC.id, PRO.id, PRO_24.id])
+        self.assertIsNone(self.session.model)
+        self.run_for(2.0)
+        self.assertEqual(self.statuses(), ["loading", "searching", "loading"])        # and on looking
 
 
 class DeviceStatus(Harness):

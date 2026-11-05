@@ -4,18 +4,20 @@ import unittest
 from unittest import mock
 
 from commander.device import codec
-from commander.device.connection import DeviceNotFound, PortBusy, HEADER
+from commander.device.connection import DeviceNotFound, PortBusy
+from commander.device.models import DAC, PRO
 from commander.device.simulator import SimPort, SimulatedAdi2
 from tests import client
 from tests.client import Adi2, read_state
 from tests.support import DUMP, PRESETS
 
 F = codec.FREQ_INDICES
+HEADER = codec.header(DAC.id)
 
 
 def raw(*params, cmd=0x02):
     """One message with the given (address, index, value), bypassing the guards of build_messages."""
-    return codec.sysex([codec.encode(a, i, v, a in codec.EQ_ADDRESSES and i in F) for a, i, v in params], cmd)
+    return codec.sysex(DAC.id, [codec.encode(a, i, v, a in codec.EQ_ADDRESSES and i in F) for a, i, v in params], cmd)
 
 
 class Clock:
@@ -59,6 +61,18 @@ class Simulator(unittest.TestCase):
         self.assertEqual(sent, [HEADER + [0x03, 0x09, 0xF7]])
         self.dev.send(HEADER + [0x03, 0x09, 0xF7], pause=0.6)
         self.assertEqual([m for m in self.sim.poll() if m[5] != 0x07], real)
+
+    def test_it_answers_only_under_its_own_device_id(self):
+        pro = SimulatedAdi2.from_dump(DUMP, clock=self.clock, model=PRO)
+        pro.receive_from_remote(HEADER + [0x03, 0x09, 0xF7])
+        self.clock.sleep(2.0)
+        self.assertEqual(pro.poll(), [])                            # not even the status stream starts
+        pro.receive_from_remote(codec.header(PRO.id) + [0x03, 0x09, 0xF7])
+        self.clock.sleep(2.0)
+        msgs = pro.poll()
+        self.assertTrue(msgs)
+        self.assertEqual({m[4] for m in msgs}, {PRO.id})
+        self.assertIn(0x07, [m[5] for m in msgs])
 
     def test_write_is_not_confirmed_and_0x01_does_not_write(self):
         self.dev.dump()

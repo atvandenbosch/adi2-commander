@@ -14,12 +14,15 @@ from PySide6.QtWidgets import QApplication, QLabel
 
 from commander import __version__
 from commander.device import params as P
+from commander.device.models import PRO
+from commander.device.simulator import SimulatedAdi2
 from commander.ui import about
 from commander.ui import loudness as L
 from commander.ui import theme
 from commander.ui.tables import FLASH_TIME, KEY_ROLE
 from commander.ui.widgets import FRAME, SIDE, label_color, placement
 from tests.gui import WindowTest, tooltip_color
+from tests.support import DUMP, PRESETS
 
 
 class Window(WindowTest):
@@ -401,6 +404,14 @@ class Window(WindowTest):
         self.assertIs(self.win.lamp.parent(), self.win.statusBar())
         self.assertEqual(self.win.lamp_text.text(), "Connected")
         self.assertEqual(self.win.source.name.text(), "Manual")               # what the EQ was loaded from
+
+    def test_a_model_that_is_not_supported(self):
+        self.sim.power(False)
+        self.spin(1000)
+        self.sim = SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=self.clock, model=PRO)
+        self.spin(3000)
+        self.assertEqual(self.win.lamp_text.text(), "ADI-2 Pro not currently supported")
+        self.assertIn("ADI-2 DAC FS", self.win.lamp_text.toolTip())
 
     def test_what_comes_in_beside_the_connection(self):
         def bar():

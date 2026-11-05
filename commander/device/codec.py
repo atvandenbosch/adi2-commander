@@ -23,7 +23,12 @@ EQ_ADDRESSES = (1, 2, 4, 5, 7, 8, 10, 11, 13, 14)
 # Hence the grid: 1 Hz up to and including 2040 Hz, 10 Hz above.
 FREQ_FINE_MAX = 2040
 
-HEADER = [0xF0, 0x00, 0x20, 0x0D, 0x71]
+PREFIX = [0xF0, 0x00, 0x20, 0x0D]                # SysEx start, RME's manufacturer ID; the device ID follows
+
+
+def header(device):
+    """The header of every message to and from the device with this device ID (models.py)."""
+    return PREFIX + [device]
 
 
 def encode(address, index, value, is_freq=False):
@@ -71,12 +76,12 @@ def decode_triplet(b1, b2, b3):
     return address, index, raw - 4096 if raw > 2047 else raw, False
 
 
-def sysex(triplets, cmd=0x02):
-    """Build a SysEx message. cmd 0x02 writes; 0x01 is the read direction and does nothing."""
+def sysex(device, triplets, cmd=0x02):
+    """Build a SysEx message for a device ID. cmd 0x02 writes; 0x01 is the read direction and does nothing."""
     body = []
     for t in triplets:
         body += t
-    msg = HEADER + [cmd] + body + [0xF7]
+    msg = header(device) + [cmd] + body + [0xF7]
     if len(msg) > 256:
         raise ValueError("message is %d bytes; the protocol allows 256" % len(msg))
     return msg
@@ -100,9 +105,9 @@ def read_dump(path):
 
 
 def parameter_triplets(msgs):
-    """Yield the raw triplets of all parameter messages (0x01 or 0x02) from the device."""
+    """Yield the raw triplets of all parameter messages (0x01 or 0x02), whatever their device ID."""
     for m in msgs:
-        if len(m) < 7 or list(m[:5]) != HEADER or m[5] not in (0x01, 0x02):
+        if len(m) < 7 or list(m[:4]) != PREFIX or m[5] not in (0x01, 0x02):
             continue
         body = m[6:-1] if m[-1] == 0xF7 else m[6:]
         for i in range(0, len(body) - 2, 3):

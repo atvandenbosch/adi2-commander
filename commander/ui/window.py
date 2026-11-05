@@ -56,7 +56,8 @@ from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, INNER_GAP, SECTION_GAP, SIDE, 
 FS_TIP = "Sample rate the curves are computed at"
 ACTIVE_TIP = "Active on the device: its display and volume knob are on this output."
 LAMP = {"searching": (theme.SECONDARY, "Waiting for the device"), "busy": (theme.WARN, "Port in use"),
-        "loading": (theme.WARN, "Reading"), "ready": (theme.GOOD, "Connected")}
+        "loading": (theme.WARN, "Reading"), "ready": (theme.GOOD, "Connected"),
+        "unsupported": (theme.WARN, "%s not currently supported")}      # with the model's name
 EQ_OWN = ("EQ LEFT", "EQ RIGHT")
 # a thin space around the sign between the channels
 EQ_SHARED = ("EQ L = R", "EQ R = L")
@@ -542,6 +543,8 @@ class MainWindow(QMainWindow):
 
     def on_connection(self, status, detail):
         color, text = LAMP[status]
+        if status == "unsupported":
+            text %= self.session.model.name
         self.lamp.color = color
         self.lamp_text.setText(text)
         self.lamp_text.setToolTip(detail)

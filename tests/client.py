@@ -4,7 +4,10 @@ simulator's port as to WinmmPort."""
 import time
 
 from commander.device import codec
-from commander.device.connection import HEADER, REQUIRED, WinmmPort, build_messages
+from commander.device.connection import REQUIRED, WinmmPort, build_messages
+from commander.device.models import DAC
+
+HEADER = codec.header(DAC.id)
 
 
 def parse(msgs):
@@ -106,7 +109,7 @@ class Adi2:
         if reload and len(params) != 1:
             raise ValueError("a reload parameter goes on its own")
         for attempt in range(attempts):
-            for m in build_messages(params):
+            for m in build_messages(DAC.id, params):
                 self.send(m, pause=1.0 if reload else 0.25)
             state = self.dump()
             wrong = [(a, i, v, state.get((a, i))) for a, i, v, _ in params if state.get((a, i)) != v]

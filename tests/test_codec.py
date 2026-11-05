@@ -11,7 +11,8 @@ from tests.support import DUMP
 class Codec(unittest.TestCase):
     def test_known_messages(self):
         # Auto Standby (address 12, index 2) OFF
-        self.assertEqual(codec.to_hex(codec.sysex([codec.encode(12, 2, 0)])), "f0 00 20 0d 71 02 60 20 00 f7")
+        self.assertEqual(codec.to_hex(codec.sysex(0x71, [codec.encode(12, 2, 0)])), "f0 00 20 0d 71 02 60 20 00 f7")
+        self.assertEqual(codec.to_hex(codec.sysex(0x72, [codec.encode(12, 2, 0)])), "f0 00 20 0d 72 02 60 20 00 f7")
         # Treble Freq 10000 Hz: above 2040 Hz the value goes x10 with the flag in bit 4 of byte 2
         self.assertEqual(codec.encode(4, 25, 10000, True), [0x26, 0x37, 0x68])
         self.assertEqual(codec.decode_triplet(0x26, 0x37, 0x68), (4, 25, 10000, True))
@@ -27,13 +28,14 @@ class Codec(unittest.TestCase):
 
     def test_only_whole_triplets_of_parameter_messages(self):
         t = codec.encode(4, 4, -12)
-        msg = codec.sysex([t], 0x01)
-        other_device = msg[:4] + [0x72] + msg[5:]
+        msg = codec.sysex(0x71, [t], 0x01)
+        other_device = msg[:4] + [0x72] + msg[5:]                   # the caller tells the devices apart
+        other_maker = [0xF0, 0x00, 0x20, 0x0E] + msg[4:]
         name = msg[:5] + [0x05] + msg[6:]
         half = msg[:-1] + [0x10, 0x20, 0xF7]                        # a triplet and two bytes
         unterminated = msg[:-1]
-        msgs = [other_device, name, msg[:6], half, unterminated]
-        self.assertEqual([list(x) for x in codec.parameter_triplets(msgs)], [t, t])
+        msgs = [other_device, other_maker, name, msg[:6], half, unterminated]
+        self.assertEqual([list(x) for x in codec.parameter_triplets(msgs)], [t, t, t])
 
     def test_dump(self):
         self.assertEqual(client.roundtrip_mismatches(DUMP), [])
@@ -44,11 +46,11 @@ class Codec(unittest.TestCase):
 
     def test_build_messages(self):
         params = [(4, 4, 0, False)] * 200
-        msgs = conn.build_messages(params)
+        msgs = conn.build_messages(0x73, params)
         self.assertEqual([len(m) for m in msgs], [247, 247, 127])   # at most 80 triplets per message
-        self.assertTrue(all(m[5] == 0x02 for m in msgs))
+        self.assertTrue(all(m[4:6] == [0x73, 0x02] for m in msgs))
         with self.assertRaises(ValueError):                         # address 5 index > 19 hits shared B/T
-            conn.build_messages([(5, 21, 0, False)])
+            conn.build_messages(0x71, [(5, 21, 0, False)])
 
 
 if __name__ == "__main__":

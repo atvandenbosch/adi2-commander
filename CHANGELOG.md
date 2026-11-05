@@ -6,6 +6,11 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 
 ## [Unreleased]
 
+### Added
+
+- An ADI-2 Pro or ADI-2/4 Pro is recognised and named in the status bar as not currently supported, instead of
+  "Waiting for the device" without end. Commander lets go of its MIDI port.
+
 ### Fixed
 
 - DA Filter follows the device's D/A converter: SD LD with the AK4493, Brickwall with the ES9028Q2M, five filters

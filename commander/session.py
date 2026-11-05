@@ -4,6 +4,10 @@ It finds and opens the port, loads the full state with a dump, follows unsolicit
 front panel, and writes: changes queue up, go out bundled at most ~6 times per second, and are verified by
 a dump once it has been quiet for a moment. The device is the truth: whatever it reports is the state.
 
+The first dump request also tells the model: it goes out under each device ID in turn, the one the port name
+suggests first, and the ID that answers is the model (device/models.py). A model Commander does not support is let
+go at once, its port closed for other programs, and the session waits until it is gone.
+
 The dump does not hold the twenty preset slots. After every dump they are read with 03 0A+n, one at a time:
 asked before the previous answer is complete, the device loses parameter messages. A write goes in between
 two slots.
@@ -13,7 +17,7 @@ on 14, then the flag word on 13/2, which commits it. Each is one operation, read
 more if it does not read back as sent; while it runs, nothing else goes out and nothing is writable.
 
 No Qt here; listeners are plain callables:
-    on_connection(status, detail)   status: 'searching', 'busy', 'loading', 'ready'
+    on_connection(status, detail)   status: 'searching', 'busy', 'loading', 'ready', 'unsupported' (see model)
     on_changed(keys, origin)        origin: 'load', 'device' (front panel), 'write' (our own, optimistic)
     on_verified(results)            {(address, index): (sent, actual)} after a write was read back
     on_slots(numbers)               preset slots that read differently than before, or are gone
@@ -30,9 +34,10 @@ No Qt here; listeners are plain callables:
 import time
 
 from .device import codec
+from .device import models
 from .device import params as P
 from .device import status as S
-from .device.connection import HEADER, REQUIRED, DeviceNotFound, PortBusy, build_messages
+from .device.connection import REQUIRED, DeviceNotFound, PortBusy, build_messages
 
 SEARCH_INTERVAL = 2.0          # seconds between attempts to find the port
 SEND_INTERVAL = 1 / 6          # at most ~6 writes per second
@@ -43,11 +48,11 @@ REFRESH_AFTER = 0.5            # quiet time after a front panel change before re
 IDLE_REFRESH = 3.0             # read everything back when nothing else happens: the device does not echo
                                # what another program (the ADI-2 Remote app) writes
 DUMP_TIMEOUT = 3.0             # a dump takes ~0.5 s on the device
+PROBE_TIMEOUT = 1.0            # per device ID while the model is not known: the first answer comes within ~0.1 s
 PRESENCE_INTERVAL = 0.5       # how often to check that the port still exists: in standby or when unplugged
                                # it leaves the port list at once, also while it is open here
 STATUS_TIMEOUT = 3.5           # the safety net: the device sends a status message every ~1 s (up to ~2 s
                                # just after power on); after ~3 missed ones it is gone
-DUMP_REQUEST = HEADER + [0x03, 0x09, 0xF7]
 SLOT_TIMEOUT = 1.0             # a slot answers within ~0.12 s
 SLOTS = range(1, 21)
 # a used slot: the left side on address 13 (bands and Bass/Treble), the right side on address 14 (bands);
@@ -102,6 +107,8 @@ class Session:
         self.clock = clock
         self.port = None
         self.status = None
+        self.model = None                        # the model messages go to, a models.Model; known once identified
+        self._identified = False
         self.state = {}
         self.pending = {}                        # queued writes {(address, index): value}
         self.sent = {}                           # written, awaiting read-back
@@ -128,6 +135,8 @@ class Session:
         self._op = None                          # a Store or Write: {'kind', 'slot', 'step', ...}
         self._last_status = None
         self._next_presence = 0.0
+        self._candidates = []                    # models still to ask while the model is not known
+        self._let_go = None                      # the closed port of an unsupported model, watched until it is gone
         self._held = False                       # a held control repeats its steps: see hold()
 
     # -- public -------------------------------------------------------------------------------
@@ -272,7 +281,9 @@ class Session:
     def tick(self):
         now = self.clock()
         if self.port is None:
-            if now >= self._next_search:
+            if self._let_go is not None:
+                self._watch_let_go(now)
+            elif now >= self._next_search:
                 self._connect(now)
             return
         try:
@@ -295,8 +306,34 @@ class Session:
             return
         self.state = {}
         self._last_status = None
+        self._identified = False
+        self.model, *self._candidates = models.probe_order(self.port.names[0])
         self._set_status("loading", "reading the device")
         self._request_dump(now, "load")
+
+    def _identify(self, now, model):
+        """The first message under a known device ID: that is the model. False when it is let go."""
+        self._identified = True
+        self._last_status = None
+        if not model.supported:
+            self.model, self._let_go = model, self.port
+            self.close()
+            self._dump = None
+            self._set_status("unsupported", "This version of Commander works with the %s" % models.DAC.name)
+            return False
+        if model != self.model:                          # a late answer to an earlier request
+            self.model = model
+            self._request_dump(now, "load")
+        return True
+
+    def _watch_let_go(self, now):
+        if now >= self._next_presence:
+            self._next_presence = now + PRESENCE_INTERVAL
+            if not self._let_go.present():
+                self._let_go = None
+                self.model, self._identified = None, False
+                self._next_search = now
+                self._set_status("searching", "the device went away (standby, switched off or unplugged)")
 
     def _drop(self, why):
         self.close()
@@ -308,6 +345,7 @@ class Session:
         self._slot = None
         self._slots_due = []
         self.state = {}
+        self.model, self._identified = None, False
         self._emit(self.on_changed, [], "load")
         gone, self.slots, self._stale = list(self.slots), {}, {}
         if gone:
@@ -323,16 +361,20 @@ class Session:
 
     def _request_dump(self, now, purpose, tries=0):
         self._dump = {"purpose": purpose, "since": now, "tries": tries, "end": False}
-        self.port.send(DUMP_REQUEST)
+        self.port.send(codec.header(self.model.id) + [0x03, 0x09, 0xF7])
 
     def _request_slot(self, now, n, tries=0):
         self._slot = {"n": n, "since": now, "tries": tries, "name": None, "vals": {}}
-        self.port.send(HEADER + [0x03, 0x09 + n, 0xF7])
+        self.port.send(codec.header(self.model.id) + [0x03, 0x09 + n, 0xF7])
 
     def _receive(self, now):
         changed = []
         for m in self.port.receive():
-            if len(m) < 7 or list(m[:5]) != HEADER:
+            if len(m) < 7 or list(m[:4]) != codec.PREFIX:
+                continue
+            if not self._identified and m[4] in models.BY_ID and not self._identify(now, models.BY_ID[m[4]]):
+                return
+            if m[4] != self.model.id:
                 continue
             if m[5] == 0x07:
                 self._last_status = now
@@ -390,6 +432,14 @@ class Session:
             if d["purpose"] == "operation":
                 self._operation_dump()
             self._judge()
+            return
+        if not self._identified:
+            if now - d["since"] > PROBE_TIMEOUT:
+                if not self._candidates:
+                    self._drop("no answer under any ADI-2 device ID")
+                    return
+                self.model = self._candidates.pop(0)
+                self._request_dump(now, "load")
             return
         if now - d["since"] > DUMP_TIMEOUT:
             if d["tries"] >= 2:
@@ -459,7 +509,7 @@ class Session:
         if self.pending and not self._holding() and now - self._last_send >= SEND_INTERVAL:
             batch = self._next_batch()
             params = [(a, i, v, a in codec.EQ_ADDRESSES and i in P.FREQ_INDICES) for (a, i), v in sorted(batch.items())]
-            for m in build_messages(params):
+            for m in build_messages(self.model.id, params):
                 self.port.send(m)
             self.sent.update(batch)
             for k in batch:
@@ -519,7 +569,7 @@ class Session:
                 self._finish()
                 return True
             key = (op["selects"][0], P.EQ_PRESET_SELECT)
-            for m in build_messages([key + (op["slot"] + 1, False)]):
+            for m in build_messages(self.model.id, [key + (op["slot"] + 1, False)]):
                 self.port.send(m)
             if self.state.get(key) != op["slot"] + 1:
                 self.state[key] = op["slot"] + 1
@@ -572,10 +622,11 @@ class Session:
         op = self._op
         c, n = op["content"], op["slot"]
         name = list(c["name"].encode("ascii", "replace")[:15])
-        op["messages"] = ([HEADER + [0x06, n] + name + [0] * (16 - len(name)) + [0xF7]]
-                          + build_messages([(13, i, c["vals"][(13, i)], i in P.FREQ_INDICES) for i in SLOT_LEFT])
-                          + build_messages([(14, i, c["vals"][(14, i)], i in P.FREQ_INDICES) for i in SLOT_RIGHT])
-                          + build_messages([(13, 2, (n - 1) << 4 | c["dual"], False)]))
+        d = self.model.id
+        op["messages"] = ([codec.header(d) + [0x06, n] + name + [0] * (16 - len(name)) + [0xF7]]
+                          + build_messages(d, [(13, i, c["vals"][(13, i)], i in P.FREQ_INDICES) for i in SLOT_LEFT])
+                          + build_messages(d, [(14, i, c["vals"][(14, i)], i in P.FREQ_INDICES) for i in SLOT_RIGHT])
+                          + build_messages(d, [(13, 2, (n - 1) << 4 | c["dual"], False)]))
         op["step"], op["at"] = "transfer", now
 
     def _finish(self):
@@ -588,6 +639,8 @@ class Session:
             if not self.port.present():
                 self._drop("the device went away (standby, switched off or unplugged)")
                 return
+        if not self._identified:
+            return                                       # the probe has its own timeout
         if self._last_status is None:
             self._last_status = now                      # the stream starts ~0.7 s after the first message
         elif now - self._last_status > STATUS_TIMEOUT:

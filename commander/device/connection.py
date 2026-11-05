@@ -15,17 +15,15 @@ from ctypes import wintypes as W
 
 from . import codec
 
-HEADER = codec.HEADER
 
-
-def build_messages(params):
-    """SysEx messages (cmd 0x02) for a list of parameters [(address, index, value, is_freq)];
+def build_messages(device, params):
+    """SysEx messages (cmd 0x02) to a device ID for a list of parameters [(address, index, value, is_freq)];
     split to stay under 256 bytes."""
     for address, index, _, _ in params:
         if address == 5 and index > 19:
             raise ValueError("address 5 index %d hits the shared Bass/Treble" % index)
     triplets = [codec.encode(a, i, v, f) for a, i, v, f in params]
-    return [codec.sysex(triplets[i:i + 80], 0x02) for i in range(0, len(triplets), 80)]
+    return [codec.sysex(device, triplets[i:i + 80], 0x02) for i in range(0, len(triplets), 80)]
 
 
 # A dump is complete when all of these are in it.
@@ -182,7 +180,7 @@ class WinmmPort:
 
     def present(self):
         """Whether the device is still there. In standby, switched off or unplugged its ports leave the
-        port list at once, also while they are open here."""
+        port list at once, also while they are open here. Works after close() too."""
         ins, outs = list_ports()
         return self.names[0] in ins and self.names[1] in outs
 

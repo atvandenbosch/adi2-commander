@@ -10,8 +10,8 @@ import os
 import threading
 import time
 
-from . import codec
-from .connection import DeviceNotFound, PortBusy, HEADER
+from . import codec, models
+from .connection import DeviceNotFound, PortBusy
 from .params import EQ_RANGES, FACTORY_BANDS, FACTORY_BT, SAMPLE_RATES
 
 # The device's answers for an invented setup: what --simulate starts from, and the tests too
@@ -82,10 +82,12 @@ DUMP_FIRST, DUMP_SPACING = 0.08, 0.028
 class SimulatedAdi2:
     """The device: parameter state, the rules that change it, and the messages it sends back."""
 
-    def __init__(self, state, layout, names, clock=time.monotonic, slots=None, slot_layout=None):
+    def __init__(self, state, layout, names, clock=time.monotonic, slots=None, slot_layout=None, model=models.DAC):
+        self.model = model                       # it answers only under its own device ID
+        self.header = codec.header(model.id)
         self.state = dict(state)
         self.layout = layout                     # [[(address, index), ...] per 0x01 message] as in a real dump
-        self.names = names                       # the raw 0x05 name messages of a real dump
+        self.names = [self.header + list(m[5:]) for m in names]   # the 0x05 name messages of a real dump
         self.clock = clock
         self.outbox = []                         # messages waiting to be received by the remote
         self.unsimulated = []                    # anything outside the model
@@ -128,7 +130,7 @@ class SimulatedAdi2:
         msgs = codec.read_dump(path)
         state, layout, names = {}, [], []
         for m in msgs:
-            if len(m) < 7 or list(m[:5]) != HEADER:
+            if len(m) < 7 or list(m[:4]) != codec.PREFIX:
                 continue
             if m[5] == 0x01:
                 keys = []
@@ -190,6 +192,10 @@ class SimulatedAdi2:
     def _emit(self, msg, due=None):
         self.outbox.append((self.clock() if due is None else due, list(msg)))
 
+    def _said(self, triplets):
+        """A parameter message from the device (0x01)."""
+        return codec.sysex(self.model.id, triplets, 0x01)
+
     # -- incoming -----------------------------------------------------------------------------
     def receive_from_remote(self, msg):
         """One SysEx message from the remote."""
@@ -198,7 +204,7 @@ class SimulatedAdi2:
                 return                                              # the simulator drops it
             now = self.clock()
             self.received.append(list(msg))
-            if len(msg) < 7 or list(msg[:5]) != HEADER or msg[-1] != 0xF7:
+            if len(msg) < 7 or list(msg[:5]) != self.header or msg[-1] != 0xF7:
                 return                                              # not for us: ignored
             if not self.session:
                 self.session = True
@@ -239,7 +245,7 @@ class SimulatedAdi2:
             self._set(a, i, v, is_freq)
         changed = [k for k in self.source_report if k not in written and self.state.get(k) != before[k]]
         if self.session and changed:
-            self._emit(codec.sysex([codec.encode(a, i, self.state[(a, i)]) for a, i in changed], 0x01))
+            self._emit(self._said([codec.encode(a, i, self.state[(a, i)]) for a, i in changed]))
 
     def front_panel(self, changes):
         """Changes made on the device itself, one knob step each: [(address, index, value)]. Applied by the
@@ -251,7 +257,7 @@ class SimulatedAdi2:
                 before = self.state.get((a, i))
                 self._set(a, i, v, is_freq)
                 if self.session and self.state.get((a, i)) != before:
-                    self._emit(codec.sysex([codec.encode(a, i, self.state[(a, i)], is_freq)], 0x01))
+                    self._emit(self._said([codec.encode(a, i, self.state[(a, i)], is_freq)]))
 
     # -- the rules ----------------------------------------------------------------------------
     def _set(self, a, i, v, is_freq):
@@ -335,15 +341,15 @@ class SimulatedAdi2:
             # asked again before the answer is complete: parameter messages get lost or mixed up
             self._note("03 0A+n for slot %d while the previous answer is still coming" % slot)
         s = self.slots[slot]
-        name = HEADER + [0x05, slot] + list(s["name"]) + [0xF7]
+        name = self.header + [0x05, slot] + list(s["name"]) + [0xF7]
         if s["used"]:
             vals = dict(s["vals"])
             vals[(13, 1)] = (slot - 1) << 4 | s["dual"]
-            params = [codec.sysex([codec.encode(a, i, vals[(a, i)], i in codec.FREQ_INDICES) for a, i in keys], 0x01)
+            params = [self._said([codec.encode(a, i, vals[(a, i)], i in codec.FREQ_INDICES) for a, i in keys])
                       for keys in self.slot_layout]
             msgs = [name] + params
         else:
-            flag = codec.sysex([codec.encode(13, 1, (slot - 1) << 4 | 0x0F)], 0x01)
+            flag = self._said([codec.encode(13, 1, (slot - 1) << 4 | 0x0F)])
             msgs = [flag, name]
         t = now + PRESET_FIRST
         for j, m in enumerate(msgs):
@@ -360,8 +366,8 @@ class SimulatedAdi2:
         changed = sorted((k for k in after if (after[k] != before.get(k) or k in also) and k not in skip),
                          key=lambda k: (k[0] not in OUTPUT_ADDRESSES, k[1], k[0]))
         if self.session and changed:
-            self._emit(codec.sysex([codec.encode(a, i, after[(a, i)], a in codec.EQ_ADDRESSES and i in codec.FREQ_INDICES)
-                                    for a, i in changed], 0x01))
+            self._emit(self._said([codec.encode(a, i, after[(a, i)], a in codec.EQ_ADDRESSES and i in codec.FREQ_INDICES)
+                                    for a, i in changed]))
 
     def _set_eq(self, a, i, v, is_freq):
         written = a
@@ -413,8 +419,8 @@ class SimulatedAdi2:
                 if key is not None and key[1] in BAND_INDICES and not self._dual(left):
                     a, i = key
                     other = EQ_PAIRS[LEFT_EQ[left]][1] if a == left else left
-                    self._emit(codec.sysex([codec.encode(other, i, self.state[(left, i)], i in codec.FREQ_INDICES)], 0x01))
-                self._emit(codec.sysex([codec.encode(left, 28, TEMP)], 0x01))
+                    self._emit(self._said([codec.encode(other, i, self.state[(left, i)], i in codec.FREQ_INDICES)]))
+                self._emit(self._said([codec.encode(left, 28, TEMP)]))
         # a new Temp takes the Bass/Treble of the preset it came from
         self._capture(left, self.state[(left, 28)], bt=new_temp or (key is not None and key[1] in BT_INDICES))
 
@@ -425,7 +431,7 @@ class SimulatedAdi2:
         if was == 0 and v == 1 and LEFT_EQ[left] in BT_OFF_WITH_LOAD_BT and self.state.get((left, 20)) != 0:
             self.state[(left, 20)] = 0
             if self.session:
-                self._emit(codec.sysex([codec.encode(left, 20, 0)], 0x01))   # said unasked
+                self._emit(self._said([codec.encode(left, 20, 0)]))   # said unasked
 
     def _select_source(self, left, v):
         """EQ Preset Select: which bank drives the live bands."""
@@ -476,7 +482,7 @@ class SimulatedAdi2:
         if i == 12 and self.state.get((a, 13)) == 1:
             # Lock Volume on: refused, and the device reports the volume it keeps
             if self.session:
-                self._emit(codec.sysex([codec.encode(a, 12, self.state[(a, 12)])], 0x01))
+                self._emit(self._said([codec.encode(a, 12, self.state[(a, 12)])]))
             return
         v = _clamp(v, OUTPUT_RANGES[i])
         if i == 16:
@@ -489,13 +495,13 @@ class SimulatedAdi2:
                 if move:
                     self.state[(a, 12)] += move
                     if self.session:
-                        self._emit(codec.sysex([codec.encode(a, 12, self.state[(a, 12)])], 0x01))
+                        self._emit(self._said([codec.encode(a, 12, self.state[(a, 12)])]))
             return
         if i == 12 and self.state.get((a, 16)) == 1:
             self.state[(a, 16)] = 0                  # a Volume write turns Dim off and sets the value written
             self.lowered.discard(a)
             if self.session:
-                self._emit(codec.sysex([codec.encode(a, 16, 0)], 0x01))
+                self._emit(self._said([codec.encode(a, 16, 0)]))
         if i == 11:
             self._set_dual(a, v)
             return
@@ -523,7 +529,7 @@ class SimulatedAdi2:
         if vol != self.state[(a, 12)]:
             self.state[(a, 12)] = vol
             if self.session:
-                self._emit(codec.sysex([codec.encode(a, 12, vol)], 0x01))
+                self._emit(self._said([codec.encode(a, 12, vol)]))
 
     def _set_source(self, a, v):
         """Source is one setting of the whole device: written on one output it is set on all three, and Clock Source
@@ -605,8 +611,7 @@ class SimulatedAdi2:
         """Auto Ref Level, reported: Ref Level on its own after a Volume write, with Volume after a band change or
         when the output becomes active."""
         if self._auto_ref_level(a) and self.session:
-            self._emit(codec.sysex([codec.encode(a, i, self.state[(a, i)]) for i in ((2, 12) if volume else (2,))],
-                                   0x01))
+            self._emit(self._said([codec.encode(a, i, self.state[(a, i)]) for i in ((2, 12) if volume else (2,))]))
 
     # -- outgoing -----------------------------------------------------------------------------
     def reported(self):
@@ -627,7 +632,7 @@ class SimulatedAdi2:
         for keys in self.layout:
             triplets = [codec.encode(a, i, rep[(a, i)], a in codec.EQ_ADDRESSES and i in codec.FREQ_INDICES)
                         for a, i in keys]
-            msgs.append(codec.sysex(triplets, 0x01))
+            msgs.append(self._said(triplets))
         t = self.clock() + DUMP_FIRST
         for j, m in enumerate(msgs + self.names):
             self._emit(m, due=t + j * DUMP_SPACING)
@@ -639,7 +644,8 @@ class SimulatedAdi2:
                 return []
             now = self.clock()
             while self.session and self.next_status is not None and now >= self.next_status:
-                self._emit(HEADER + [0x07] + self._status_body() + [0xF7], due=self.next_status)  # collected or not
+                # collected or not
+                self._emit(self.header + [0x07] + self._status_body() + [0xF7], due=self.next_status)
                 self.next_status += STATUS_INTERVAL
             self.outbox.sort(key=lambda e: e[0])
             out = [m for due, m in self.outbox if due <= now]
@@ -726,7 +732,7 @@ class SimulatedAdi2:
         if self.state.get((12, 16)) != index:
             self.state[(12, 16)] = index
             if self.session:
-                self._emit(codec.sysex([codec.encode(12, 16, index)], 0x01))
+                self._emit(self._said([codec.encode(12, 16, index)]))
 
     def _status_body(self):
         """The 14 data bytes of a status message, from the model. Bits that carry nothing a remote needs
@@ -807,7 +813,7 @@ class SimPort:
         if busy:
             raise PortBusy("midiInOpen: the ADI-2 MIDI port is in use by another program (simulated)")
         self.device = device
-        self.names = ("ADI-2 DAC Midi Port 1 (simulated)", "ADI-2 DAC Midi Port 1 (simulated)")
+        self.names = ("%s Midi Port 1 (simulated)" % device.model.port,) * 2
         self.open = True
 
     def send(self, msg):
