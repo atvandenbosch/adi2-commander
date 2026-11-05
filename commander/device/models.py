@@ -13,6 +13,7 @@ from . import MODEL
 # name: as shown
 # port: part of the name of its MIDI port
 # supported: Commander works with it
+# tested: Commander has been tested with an actual device of this model
 # outputs: the names of Line Out, Phones 1/2 and Phones 3/4, in the order of params.OUTPUTS
 # tags: their marks on a preset that is selected there
 # controlled: the output addresses Commander controls
@@ -23,12 +24,13 @@ from . import MODEL
 # active: per value of the active output in the status message (status.Status.output), the output addresses the
 #   device has active. The DAC FS has one at a time. The Pro and ADI-2/4 Pro have Line Out or Phones 1/2, which share
 #   a signal, or neither; and Phones 3/4 always
-Model = namedtuple("Model", "id name port supported outputs tags controlled eq_only no_bt_from one_eq_from active")
+Model = namedtuple("Model", "id name port supported tested outputs tags controlled eq_only no_bt_from one_eq_from "
+                             "active")
 
-DAC = Model(0x71, MODEL, "ADI-2 DAC", True, ("Line Out", "Phones 1/2", "Phones 3/4 · IEM"), ("L", "P", "I"),
+DAC = Model(0x71, MODEL, "ADI-2 DAC", True, True, ("Line Out", "Phones 1/2", "Phones 3/4 · IEM"), ("L", "P", "I"),
             (3, 6, 9), False, 705600, None, ((3,), (6,), (9,), ()))
-PRO = Model(0x72, "ADI-2 Pro", "ADI-2 Pro", True, ("Line Out", "Phones 1/2", "Phones 3/4"), ("L", "P12", "P34"),
-            (3, 9), True, 352800, 352800, ((9,), (3, 9), (6, 9), (6, 9)))
+PRO = Model(0x72, "ADI-2 Pro", "ADI-2 Pro", True, False, ("Line Out", "Phones 1/2", "Phones 3/4"),
+            ("L", "P12", "P34"), (3, 9), True, 352800, 352800, ((9,), (3, 9), (6, 9), (6, 9)))
 PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", one_eq_from=705600)
 MODELS = (DAC, PRO, PRO_24)
 BY_ID = {m.id: m for m in MODELS}

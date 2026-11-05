@@ -26,12 +26,13 @@ writing."""
 import datetime
 import os
 
-from PySide6.QtCore import QModelIndex, QPoint, QRect, QRectF, QSize, QStandardPaths, Qt, QTimer
+from PySide6.QtCore import QModelIndex, QPoint, QRect, QRectF, QSettings, QSize, QStandardPaths, Qt, QTimer
 from PySide6.QtGui import QColor, QCursor, QFont, QIcon, QKeySequence, QPainter, QPalette, QShortcut
 from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
                                QMainWindow, QMessageBox, QScrollArea, QStackedWidget, QTabBar, QVBoxLayout,
                                QWidget)
 
+from .. import __version__
 from ..conversion import eqfile as E
 from ..conversion import eqimport as I
 from ..device import models
@@ -48,6 +49,7 @@ from .output import OutputPanel
 from .presets import ChosenRow, NameEditor, PresetPanel, SideTab
 from .preview import PresetPreview
 from .scrim import RISE, Scrim
+from . import untested
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, LOUDNESS_COLUMNS, CellDelegate, Marks,
                      ParamModel, ParamView, band_address, band_rows, bt_rows, loudness_rows)
 from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE, Action, InfoButton, Option,
@@ -197,9 +199,14 @@ class MainWindow(QMainWindow):
     PRESETS_WIDTH = 260
     LOUDNESS_WIDTHS = [88, 88, 88]
 
-    def __init__(self, session):
+    def __init__(self, session, simulated=False, settings=None):
+        """simulated: the session talks to the simulator; settings: a QSettings for what the app remembers (default
+        the user's, untested.ORGANIZATION and APPLICATION)."""
         super().__init__()
         self.session = session
+        self.simulated = simulated
+        self.settings = settings if settings is not None else QSettings(untested.ORGANIZATION, untested.APPLICATION)
+        self.warned = set()                          # the untested models the notice was shown for in this run
         self.marks = Marks()
         self.slot_issues = {}                        # {slot: {key: (sent, actual)}} after a Store or Write
         self.draft = None                            # the preset open in the edit stand
@@ -572,6 +579,8 @@ class MainWindow(QMainWindow):
     def on_connection(self, status, detail):
         if status == "ready" and self.session.model != self.model:
             self.set_model(self.session.model)
+        if status == "ready":
+            QTimer.singleShot(0, self.warn_untested)    # after this event: the notice is modal
         color, text = LAMP[status]
         if status == "unsupported":
             text %= self.session.model.name
@@ -594,6 +603,21 @@ class MainWindow(QMainWindow):
             tips = ([] if self.tabs.isTabEnabled(i) else [NOT_YET % self.model.name]) + ([tip] if on else [])
             self.tabs.setTabToolTip(i, "\n".join(tips))
         self.refresh()                                   # DSD bypasses the DSP: the switches, curves and cells follow
+
+    def warn_untested(self):
+        """A model Commander has not been tested with: say so before anything is done, once per run. Quit closes
+        Commander."""
+        model = self.session.model
+        if (self.simulated or not self.session.ready() or model in self.warned
+                or not untested.due(self.settings, model)):
+            return
+        self.warned.add(model)
+        box = untested.UntestedBox(self, model)
+        self.ask(box)
+        if box.keep.isChecked():
+            self.settings.setValue(untested.key(model), __version__)
+        if box.clickedButton() is box.quit:
+            self.close()
 
     def heard(self):
         """The input the device takes, as shown, and the status of that input when it is SPDIF. With Auto the input

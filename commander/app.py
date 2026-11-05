@@ -69,7 +69,7 @@ def main(argv=None):
     theme.apply(app)
     collector.start(app)
     session = Session(open_port)
-    win = MainWindow(session)
+    win = MainWindow(session, simulated=sim is not None)
     if sim is not None:
         win.setWindowTitle(win.windowTitle() + "  —  SIMULATED DEVICE")
         win.simulator = sim

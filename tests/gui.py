@@ -1,11 +1,12 @@
 """The main window against the simulator, off-screen."""
 
 import os
+import tempfile
 import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QEventLoop, QPoint, QTimer        # noqa: E402
+from PySide6.QtCore import QEventLoop, QPoint, QSettings, QTimer   # noqa: E402
 from PySide6.QtWidgets import QApplication, QToolTip         # noqa: E402
 
 from commander.device.simulator import SimPort, SimulatedAdi2  # noqa: E402
@@ -65,7 +66,12 @@ class WindowTest(unittest.TestCase):
         else:
             self.sim = SimulatedAdi2.factory(self.model, presets=PRESETS, clock=self.clock)
         self.session = Session(lambda: SimPort(self.sim), clock=self.clock)
-        self.win = MainWindow(self.session)
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.settings = QSettings(os.path.join(folder.name, "settings.ini"), QSettings.IniFormat)
+        self.win = MainWindow(self.session, settings=self.settings)
+        self.dialogs = []                            # what the window asked while it connected: answered OK
+        self.win.ask = lambda dialog: self.dialogs.append(dialog) or True
         self.win.timer.setInterval(24 * 3600 * 1000)   # still running while the window talks, but spin ticks
         if self.size:
             self.win.resize(*self.size)

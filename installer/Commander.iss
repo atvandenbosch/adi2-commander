@@ -41,6 +41,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Type: filesandordirs; Name: "{app}\_internal"
 Type: filesandordirs; Name: "{app}\licenses"
 
+[Registry]
+; What the app remembers (QSettings), removed with it.
+Root: HKCU; Subkey: "Software\ADI-2 Commander"; Flags: uninsdeletekey
+
 [Files]
 Source: "{#Folder}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 

@@ -18,11 +18,14 @@ from commander import __version__
 from commander.device import models
 from commander.device import params as P
 from commander.device.models import PRO, PRO_24
-from commander.device.simulator import SimulatedAdi2
+from commander.device.simulator import SimPort, SimulatedAdi2
+from commander.session import Session
 from commander.ui import about
 from commander.ui import loudness as L
 from commander.ui import theme
 from commander.ui.tables import FLASH_TIME, KEY_ROLE
+from commander.ui.untested import UntestedBox
+from commander.ui.window import MainWindow
 from commander.ui.widgets import FRAME, SIDE, label_color, placement
 from tests.gui import WindowTest, tooltip_color
 from tests.support import DUMP, PRESETS
@@ -403,6 +406,9 @@ class Window(WindowTest):
         self.spin(1000)
         self.assertEqual(len(self.sim.received), sent)
 
+    def test_no_notice_for_the_dac_fs(self):
+        self.assertEqual(self.dialogs, [])
+
     def test_connection_in_the_status_bar(self):
         self.assertIs(self.win.lamp.parent(), self.win.statusBar())
         self.assertEqual(self.win.lamp_text.text(), "Connected")
@@ -611,6 +617,67 @@ class ProWindow(WindowTest):
     settings grey, not to be opened."""
 
     model = PRO
+
+    def notices(self, dialogs):
+        return [d for d in dialogs if isinstance(d, UntestedBox)]
+
+    def start_again(self, simulated=False, answer=None):
+        """Commander started once more, with the same settings: the notices it showed."""
+        sim = SimulatedAdi2.factory(PRO, presets=PRESETS, clock=self.clock)
+        session = Session(lambda: SimPort(sim), clock=self.clock)
+        win = MainWindow(session, simulated=simulated, settings=self.settings)
+        win.timer.setInterval(24 * 3600 * 1000)
+        shown = []
+        win.ask = lambda dialog: shown.append(dialog) or (answer(dialog) if answer else True)
+        win.show()
+        for _ in range(60):
+            self.clock.t += 0.05
+            win.tick()
+            QApplication.processEvents()
+        self.assertTrue(session.ready())
+        win.close()
+        session.close()
+        return self.notices(shown)
+
+    def test_a_notice_that_it_is_not_tested(self):
+        [box] = self.notices(self.dialogs)
+        self.assertEqual(box.windowTitle(), "ADI-2 Commander")
+        self.assertEqual(box.title, "Not tested with the ADI-2 Pro")              # over the text, larger
+        self.assertIn("font-size: 12pt", box.text())
+        self.assertIn(box.title, box.text().replace("\u00a0", " "))
+        self.assertEqual(box.informativeText().replace("\u00a0", " "),             # names kept whole
+                         "Commander has not been tested with an actual ADI-2 Pro.\n\n"
+                         "It is recommended to save the device's state with ADI-2 Remote before continuing: "
+                         "File → Save Setup As…\n\n"
+                         "To explore the app first, or to convert filter sets and curves for your ADI-2 Pro, no "
+                         "device is needed: start ADI-2 Commander (simulated) from the Start menu.")
+        self.assertEqual([b.text() for b in box.buttons()], ["Continue", "Quit"])
+        self.assertIs(box.escapeButton(), box.go)
+        self.assertEqual(box.keep.text(), "Don't show this again")
+        self.assertTrue(self.win.isVisible())                                  # Continue
+        self.sim.power(False)
+        self.spin(1000)
+        self.sim.power(True)
+        self.spin(3000)
+        self.assertTrue(self.session.ready())
+        self.assertEqual(len(self.notices(self.dialogs)), 1)                   # once per run
+        self.assertEqual(len(self.start_again()), 1)                           # and at every start
+
+    def test_dont_show_this_again_in_this_version(self):
+        self.assertEqual(len(self.start_again(answer=lambda box: box.keep.setChecked(True) or True)), 1)
+        self.assertEqual(self.settings.value("untested/72"), __version__)
+        self.assertEqual(self.start_again(), [])
+        self.settings.setValue("untested/72", "0.0.1")                         # another version: again
+        self.assertEqual(len(self.start_again()), 1)
+
+    def test_quit_closes_commander(self):
+        self.win.ask = lambda box: box.quit.click() or False
+        self.win.warned.clear()
+        self.win.warn_untested()
+        self.assertFalse(self.win.isVisible())
+
+    def test_no_notice_in_simulated_mode(self):
+        self.assertEqual(self.start_again(simulated=True), [])
 
     def test_the_outputs_it_controls(self):
         tabs, why = self.win.tabs, "Not yet available for the ADI-2 Pro"
