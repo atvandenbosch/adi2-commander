@@ -663,7 +663,8 @@ class OtherModels(unittest.TestCase):
                 self.assertEqual([m[6] for m in msgs if m[5] == 0x05], list(range(0x21, 0x2A)))
                 body = [m for m in msgs if m[5] == 0x07][0][6:-1]
                 st = status.decode(body)
-                self.assertEqual((len(body), st.revision, st.rate), (14, revision or 0, 48000))
+                self.assertEqual((len(body), st.revision, st.rate, st.usb_rate, st.output),
+                                 (14, revision or 0, 48000, 48000, 1))                 # Line Out active
 
     def test_the_ranges_of_each_model(self):
         writes = [(9, 2, 9), (3, 2, 9), (3, 9, 9), (6, 17, 12), (0, 1, -9), (0, 10, 9)]

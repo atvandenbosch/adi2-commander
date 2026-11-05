@@ -906,11 +906,13 @@ class SimulatedAdi2:
 
     def _own_status_body(self):
         """ADI-2 Pro and ADI-2/4 Pro: the status message as the table describes it, in the layout of the ADI-2 DAC FS:
-        14 data bytes. No signal on any input, no plug, the internal clock at the rate of USB."""
+        14 data bytes. Line Out active (and Phones 3/4, always), no signal on any input, no plug, the internal clock
+        at the rate of USB."""
         rate = self._rate()
         d2 = 0x0F << 1 | 0x03 << 5                    # AES and SPDIF: no rate
         d3 = SAMPLE_RATES.index(rate) << 3 | (_family(rate)[0] == 44100) << 2 | 0x03
-        return [self.revision << 2, 0, d2, d3, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0]
+        usb_base, usb_n = _family(self.usb_rate)
+        return [self.revision << 2 | 1, 0, d2, d3, 0, 0, 0, 0, 0, 0, 0x02, SPDIF_FAMILY[usb_base] | usb_n << 2, 0, 0]
 
 
 def _clamp(v, rng):

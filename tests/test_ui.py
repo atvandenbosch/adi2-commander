@@ -616,7 +616,6 @@ class ProWindow(WindowTest):
         tabs, why = self.win.tabs, "Not yet available for the ADI-2 Pro"
         self.assertEqual([tabs.tabText(i) for i in range(3)], ["Line Out", "Phones 1/2", "Phones 3/4"])
         self.assertEqual([tabs.isTabEnabled(i) for i in range(3)], [True, False, True])
-        self.assertEqual([tabs.tabToolTip(i) for i in range(3)], ["", why, ""])
         self.win.next_tab(1)
         self.assertEqual(tabs.currentIndex(), 2)
         self.win.next_tab(1)
@@ -624,6 +623,26 @@ class ProWindow(WindowTest):
         self.win.next_tab(-1)
         self.assertEqual(tabs.currentIndex(), 2)
         self.assertEqual(self.win.presets.output_title.text(), "PHONES 3/4")
+
+    def test_the_outputs_the_device_has_active(self):
+        """Line Out or Phones 1/2, which share a signal, or neither; Phones 3/4 always. A dot also on Phones 1/2,
+        which Commander does not control."""
+        tabs, why = self.win.tabs, "Not yet available for the ADI-2 Pro"
+
+        def dots():
+            return [tabs.tabIcon(i).cacheKey() == self.win.dot.cacheKey() for i in range(3)]
+        self.spin(1100)                                                         # the first status message
+        self.assertEqual(dots(), [True, False, True])                           # the simulator: Line Out
+        self.assertEqual([tabs.tabToolTip(i) for i in range(3)],
+                         ["Active on the device", why, "Always active on the device"])
+        for code, expected in ((2, [False, True, True]), (3, [False, True, True]), (0, [False, False, True])):
+            self.win.on_device_status(self.session.device_status._replace(output=code))
+            self.assertEqual(dots(), expected)
+        self.assertEqual(tabs.tabToolTip(1), why)                               # code 0: Phones 1/2 not active
+        self.win.on_device_status(self.session.device_status._replace(output=2))
+        self.assertEqual(tabs.tabToolTip(1), why + "\nActive on the device")
+        self.win.on_device_status(None)
+        self.assertEqual(dots(), [False, False, False])
 
     def test_input_and_output_panels_grey(self):
         for tab, area in ((self.win.input_tab, self.win.input_area), (self.win.output_tab, self.win.output_area)):

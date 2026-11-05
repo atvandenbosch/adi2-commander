@@ -55,6 +55,8 @@ from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, INNER_GAP, SECTION_GAP, SIDE, 
 
 FS_TIP = "Sample rate the curves are computed at"
 ACTIVE_TIP = "Active on the device: its display and volume knob are on this output."
+ACTIVE = "Active on the device"                 # the ADI-2 Pro and ADI-2/4 Pro
+ALWAYS_ACTIVE = "Always active on the device"
 NOT_YET = "Not yet available for the %s"          # with the model's name
 ONE_EQ = "EQ on one stereo channel only"
 ONE_EQ_TIP = ("From %g kHz the %s runs the EQ on one stereo channel only: the input, Line Out or Phones 3/4.\n"
@@ -216,6 +218,8 @@ class MainWindow(QMainWindow):
         self.tabs.currentChanged.connect(self.set_output)
         self.tabs.setIconSize(QSize(DOT + DOT_GAP, DOT))
         self.no_dot = QIcon(dot_pixmap(theme.GOOD, True, alpha=0, gap=DOT_GAP))   # a dot's room, so no tab moves
+        self.dot = dot_icon(theme.GOOD, True)
+        self.dot.addPixmap(dot_pixmap(theme.GOOD, True, gap=DOT_GAP), QIcon.Disabled)   # a fact: not greyed out
         top = QHBoxLayout()
         top.addWidget(self.tabs)
         top.addStretch()
@@ -559,7 +563,6 @@ class MainWindow(QMainWindow):
         for i, (name, (_, out, _, _)) in enumerate(zip(model.outputs, P.OUTPUTS)):
             self.tabs.setTabText(i, name)
             self.tabs.setTabEnabled(i, out in model.controlled)
-            self.tabs.setTabToolTip(i, "" if out in model.controlled else why)
         for tab in (self.input_tab, self.output_tab):
             tab.set_available(not model.eq_only, why)
         if self.output[1] not in model.controlled:
@@ -580,14 +583,16 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def on_device_status(self, status):
-        """The output the device has active gets a dot on its tab, in the colour of the lamp: a fact of the device,
-        not a choice here."""
-        for i in range(self.tabs.count()):
-            # of the ADI-2 Pro and ADI-2/4 Pro the status message is not known well enough to tell
-            active = status is not None and not self.model.eq_only and status.output == i
-            self.tabs.setTabIcon(i, dot_icon(theme.GOOD, True) if active else self.no_dot)
-            if self.tabs.isTabEnabled(i):
-                self.tabs.setTabToolTip(i, ACTIVE_TIP if active else "")
+        """An output the device has active gets a dot on its tab, in the colour of the lamp: a fact of the device,
+        not a choice here; also on an output Commander does not control."""
+        active = self.model.active[status.output] if status is not None else ()
+        always = set.intersection(*map(set, self.model.active))
+        for i, (_, out, _, _) in enumerate(P.OUTPUTS):
+            on = out in active
+            self.tabs.setTabIcon(i, self.dot if on else self.no_dot)
+            tip = ACTIVE_TIP if not self.model.eq_only else ALWAYS_ACTIVE if out in always else ACTIVE
+            tips = ([] if self.tabs.isTabEnabled(i) else [NOT_YET % self.model.name]) + ([tip] if on else [])
+            self.tabs.setTabToolTip(i, "\n".join(tips))
         self.refresh()                                   # DSD bypasses the DSP: the switches, curves and cells follow
 
     def heard(self):

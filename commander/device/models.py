@@ -20,14 +20,16 @@ from . import MODEL
 # no_bt_from: from this rate on there is no Bass/Treble and no Loudness (manuals, 8.8)
 # one_eq_from: from this rate on the EQ runs on one stereo channel only: the input, Line Out or Phones 3/4; None when
 #   it never does
-Model = namedtuple("Model", "id name port supported outputs tags controlled eq_only no_bt_from one_eq_from")
+# active: per value of the active output in the status message (status.Status.output), the output addresses the
+#   device has active. The DAC FS has one at a time. The Pro and ADI-2/4 Pro have Line Out or Phones 1/2, which share
+#   a signal, or neither; and Phones 3/4 always
+Model = namedtuple("Model", "id name port supported outputs tags controlled eq_only no_bt_from one_eq_from active")
 
 DAC = Model(0x71, MODEL, "ADI-2 DAC", True, ("Line Out", "Phones 1/2", "Phones 3/4 · IEM"), ("L", "P", "I"),
-            (3, 6, 9), False, 705600, None)
+            (3, 6, 9), False, 705600, None, ((3,), (6,), (9,), ()))
 PRO = Model(0x72, "ADI-2 Pro", "ADI-2 Pro", True, ("Line Out", "Phones 1/2", "Phones 3/4"), ("L", "P12", "P34"),
-            (3, 9), True, 352800, 352800)
-PRO_24 = Model(0x73, "ADI-2/4 Pro", "ADI-24", True, ("Line Out", "Phones 1/2", "Phones 3/4"), ("L", "P12", "P34"),
-               (3, 9), True, 352800, 705600)
+            (3, 9), True, 352800, 352800, ((9,), (3, 9), (6, 9), (6, 9)))
+PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", one_eq_from=705600)
 MODELS = (DAC, PRO, PRO_24)
 BY_ID = {m.id: m for m in MODELS}
 
