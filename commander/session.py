@@ -137,6 +137,10 @@ class Session:
     def dual(self, out):
         return self.state.get((out, P.DUAL_EQ), 1) == 1
 
+    def revision(self):
+        """The device revision from its status message; None before the first."""
+        return None if self.device_status is None else self.device_status.revision
+
     def bypassed(self):
         """True while the device plays DSD: it has no DSP for DSD, so whatever is on is bypassed."""
         return self.device_status is not None and self.device_status.dsd
@@ -150,6 +154,8 @@ class Session:
                 return False                             # the device chooses it; written, it moves Volume a step
             if i == P.VOLUME and self.state.get((a, P.LOCK_VOLUME)) == 1:
                 return False                             # the device refuses it while Lock Volume is on
+            if i == P.DA_FILTER and P.da_filters(self.revision()) is None:
+                return False                             # what its values mean is not known
             return i in P.OUTPUT_RANGES and not P.absent(i, self.state[key])
         if i not in P.EQ_RANGES:
             return False
@@ -169,7 +175,7 @@ class Session:
         any amount."""
         if not self.writable(key):
             raise ValueError("parameter %d/%d is not writable now" % key)
-        lo, hi = P.limits(key)
+        lo, hi = P.limits(key, self.revision())
         if not lo <= value <= hi:
             raise ValueError("%d/%d: %d outside %d..%d" % (key + (value, lo, hi)))
         if key[0] in P.OUTPUT_ADDRESSES and key[1] == P.VOLUME:

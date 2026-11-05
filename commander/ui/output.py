@@ -49,6 +49,7 @@ TIPS = {P.REF_LEVEL: "The output level at full scale",
                    "Click the value for a slider by 1",
         P.WIDTH: "Stereo 1.00, Mono 0.00, Swapped -1.00: left and right exchanged\n"
                  "Steps of 0.05; with Ctrl of 0.01\nClick the value for a slider by 0.01"}
+NOT_KNOWN = "Not known for this device"           # DA Filter: the device's filters (params.da_filters)
 PLUG_WARNING = ("Plugging in headphones will bring up a warning on the device:\n"
                 "it will hold the output low until Volume is -15 dB or lower, or the warning is confirmed there.")
 PLUG_WARNING_ABOVE = -150                       # Phones on Hi-Power: the warning comes above -15 dB, not at -15.0
@@ -547,6 +548,8 @@ class OutputPanel(QWidget):
             s = RangeStepper(i, [("L 100", -100), ("C", 0), ("R 100", 100)], anchor=0)
         elif i == P.REF_LEVEL:
             s = Stepper(P.REF_LEVELS[P.OUTPUTS[0][1]])                       # its names follow the output
+        elif i == P.DA_FILTER:
+            s = Stepper(P.DA_FILTERS[0])                                     # its names follow the device
         else:
             s = Stepper(names, off=names.index("Off") if "Off" in names else None)
         s.setFixedWidth(VALUE_WIDTH)
@@ -606,13 +609,19 @@ class OutputPanel(QWidget):
     def refresh(self):
         s, out, ready = self.session.state, self.out[1], self.session.ready()
         bypassed = ready and self.session.bypassed()
+        da_filters = P.da_filters(self.session.revision())
+        if da_filters is not None:
+            self.steppers[P.DA_FILTER].names = da_filters
         for i, stepper in self.steppers.items():
             key = (out, i)
-            v = s.get(key) if ready else None
+            unknown = i == P.DA_FILTER and da_filters is None
+            v = s.get(key) if ready and not unknown else None
             self.rows[i].setVisible(not P.absent(i, v))
             if P.absent(i, v):
                 continue
             tip = TIPS[i]
+            if unknown:
+                tip += "\n" + NOT_KNOWN
             held = i == P.REF_LEVEL and s.get((out, P.AUTO_REF_LEVEL)) == 1
             if held:
                 tip = "Chosen by Auto Ref Level, from Volume and the positive EQ gain"

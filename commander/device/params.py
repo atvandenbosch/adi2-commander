@@ -40,9 +40,20 @@ NOT_APPLICABLE = -1
 REF_LEVELS = {3: ["-5 dBu", "+1 dBu", "+7 dBu", "+13 dBu"], 6: ["Lo-Power", "Hi-Power"]}
 CHOICES = {MONO: ["Off", "On", "to Left"], POLARITY: ["Off", "Both", "Left", "Right"],
            CROSSFEED: ["Off", "1", "2", "3", "4", "5"],
-           DA_FILTER: ["SD Sharp", "SD Slow", "Sharp", "Slow", "NOS", "Brickwall"],   # the FS has an ESS DAC
            DE_EMPHASIS: ["Auto", "On", "Off"], DC_PROTECTION: ["Off", "On", "Filter"], MS_PROC: ["Off", "On"],
            LOOPBACK: ["Off", "pre FX", "post FX", "post -6 dB"]}
+# DA Filter: which filters there are depends on the D/A converter, which the device reports as its revision
+# (status.revision): the AK4490 (0) has five, the AK4493 (1) adds SD LD, the ES9028Q2M (2) Brickwall
+DA_FILTERS = {0: ["SD Sharp", "SD Slow", "Sharp", "Slow", "NOS"]}
+DA_FILTERS.update({1: DA_FILTERS[0] + ["SD LD"], 2: DA_FILTERS[0] + ["Brickwall"]})
+
+
+def da_filters(revision):
+    """The DA Filter names of a device of this revision; None when they are not known: before the first status
+    message, or for another revision."""
+    return DA_FILTERS.get(revision)
+
+
 # Width and Balance -100 .. 100, in hundredths; shown -1.00 .. 1.00 with its three points by name, and
 # L 100 .. C .. R 100
 WIDTH_NAMES = {-100: "Swapped", 0: "Mono", 100: "Stereo"}
@@ -58,6 +69,7 @@ LD_BASS, LD_TREBLE, LD_LOW_VOL_REF = 21, 22, 23
 OUTPUT_RANGES = {LOUDNESS_ENABLE: (0, 1), LD_BASS: (2, 20), LD_TREBLE: (2, 20), LD_LOW_VOL_REF: (-180, -40)}
 # what Commander writes besides Loudness. Ref Level: Line Out 0 .. 3, Phones 0 .. 1 (limits())
 OUTPUT_RANGES.update({i: (0, len(names) - 1) for i, names in CHOICES.items()})
+OUTPUT_RANGES[DA_FILTER] = (0, max(map(len, DA_FILTERS.values())) - 1)   # the widest; limits() takes the revision's
 OUTPUT_RANGES.update({WIDTH: (-100, 100), BALANCE: (-100, 100), LOCK_VOLUME: (0, 1), VOLUME: (-1145, 60),
                       REF_LEVEL: (0, 3), AUTO_REF_LEVEL: (0, 1), MUTE: (0, 1), DIM: (0, 1),
                       SOURCE: (0, len(INPUTS) - 1)})
@@ -98,11 +110,17 @@ def spec(key):
     return ("out", i) if a in OUTPUT_ADDRESSES else i
 
 
-def limits(key):
-    """The lowest and highest value of a parameter key; Ref Level as far as its output goes."""
+def limits(key, revision=None):
+    """The lowest and highest value of a parameter key; Ref Level as far as its output goes, DA Filter as far as the
+    device's revision goes (ValueError when its filters are not known)."""
     a, i = key
     if a in OUTPUT_ADDRESSES and i == REF_LEVEL:
         return 0, len(REF_LEVELS.get(a, [])) - 1
+    if a in OUTPUT_ADDRESSES and i == DA_FILTER:
+        names = da_filters(revision)
+        if names is None:
+            raise ValueError("the DA filters of revision %s are not known" % revision)
+        return 0, len(names) - 1
     return RANGES[spec(key)]
 
 
@@ -133,7 +151,7 @@ def kind(index):
     if isinstance(index, tuple):
         if index[1] in (WIDTH, BALANCE):
             return "width" if index[1] == WIDTH else "balance"
-        if index[1] in CHOICES or index[1] in (REF_LEVEL, SOURCE):
+        if index[1] in CHOICES or index[1] in (REF_LEVEL, SOURCE, DA_FILTER):
             return "choice"
         if index[1] == VOLUME:
             return "volume"

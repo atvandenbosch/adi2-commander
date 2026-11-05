@@ -44,14 +44,23 @@ class Output(unittest.TestCase):
 
     def test_what_is_written_on_an_output_address(self):
         for i in list(p.CHOICES) + [p.WIDTH, p.BALANCE, p.LOCK_VOLUME, p.VOLUME, p.REF_LEVEL, p.AUTO_REF_LEVEL,
-                                    p.MUTE, p.DIM, p.SOURCE]:
+                                    p.MUTE, p.DIM, p.SOURCE, p.DA_FILTER]:
             self.assertIn(i, p.OUTPUT_RANGES)
         self.assertEqual(p.OUTPUT_RANGES[p.SOURCE], (0, len(p.INPUTS) - 1))
+        self.assertEqual(p.kind(p.spec((3, p.DA_FILTER))), "choice")
 
     def test_ref_level_as_far_as_its_output_goes(self):
         self.assertEqual((p.limits((3, p.REF_LEVEL)), p.limits((6, p.REF_LEVEL))), ((0, 3), (0, 1)))
         self.assertEqual(p.limits((3, p.VOLUME)), (-1145, 60))
         self.assertEqual(p.limits((4, 4)), (-24, 24))                          # an EQ address as before
+
+    def test_the_da_filters_follow_the_d_a_converter(self):
+        self.assertEqual([p.da_filters(r)[5:] for r in (0, 1, 2)], [[], ["SD LD"], ["Brickwall"]])
+        self.assertEqual([p.da_filters(r) for r in (3, None)], [None, None])          # not known
+        self.assertEqual([p.limits((9, p.DA_FILTER), r) for r in (0, 1, 2)], [(0, 4), (0, 5), (0, 5)])
+        with self.assertRaises(ValueError):
+            p.limits((9, p.DA_FILTER), 3)
+        self.assertEqual(p.OUTPUT_RANGES[p.DA_FILTER], (0, 5))
 
     def test_volume_steps_onto_the_half_dbs_whatever_the_size(self):
         v = p.spec((3, p.VOLUME))

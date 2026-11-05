@@ -117,6 +117,7 @@ class SimulatedAdi2:
         self.signals = 0
         self.usb_rate = SAMPLE_RATES[self.state.get((12, 16), 0)]
         self.usb_dsd = False
+        self.revision = 2                        # the device revision in the status message: the ES9028Q2M
         self.lock = threading.Lock()
         self.powered = True
 
@@ -745,7 +746,7 @@ class SimulatedAdi2:
         source = self.state.get((3, 1), SOURCE_AUTO)
         usb_played = source not in (SOURCE_COAX, SOURCE_OPTICAL) and not (source == SOURCE_AUTO and clock)
         usb_base, usb_n = _family(self.usb_rate)
-        return [0x08 | ACTIVE_CODE[self.active], d1, d2, d3, d4, 0x0C if self.usb_dsd else 0, 0,
+        return [self.revision << 2 | ACTIVE_CODE[self.active], d1, d2, d3, d4, 0x0C if self.usb_dsd else 0, 0,
                 0x40 | SPDIF_FAMILY[base], 0, 0x70 if self.usb_dsd and usb_played else 0, 0x02,
                 SPDIF_FAMILY[usb_base] | usb_n << 2, 0, 0]
 

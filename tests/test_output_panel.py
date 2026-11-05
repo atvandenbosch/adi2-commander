@@ -589,6 +589,29 @@ class OutputSettings(WindowTest):
         self.settle()
         self.assertEqual((self.sim.state[(3, P.DA_FILTER)], self.sim.state[(6, P.DA_FILTER)]), (line, line + 1))
 
+    def test_the_da_filters_follow_the_d_a_converter(self):
+        s = self.panel.steppers[P.DA_FILTER]
+        self.assertEqual(s.names[5], "Brickwall")                               # revision 2: the ES9028Q2M
+        self.sim.revision = 1                                                   # the AK4493
+        self.spin(1100)
+        self.assertEqual(s.names[5:], ["SD LD"])
+        self.sim.revision = 0                                                   # the AK4490: five
+        self.sim.front_panel([(3, P.DA_FILTER, 4)])
+        self.spin(1100)
+        self.assertEqual((len(s.names), s.text(s.value)), (5, "NOS"))
+        self.assertFalse(s.can_step(+1))
+
+    def test_no_da_filter_of_an_unknown_revision(self):
+        s = self.panel.steppers[P.DA_FILTER]
+        self.sim.revision = 3
+        self.spin(1100)
+        self.assertEqual((s.value, s.isEnabled()), (None, False))
+        self.assertIn("Not known for this device", s.toolTip())
+        self.assertFalse(self.session.writable((3, P.DA_FILTER)))
+        self.sim.revision = 2
+        self.spin(1100)
+        self.assertEqual((s.value, s.isEnabled()), (self.sim.state[(3, P.DA_FILTER)], True))
+
     def test_processing_that_is_on_is_bypassed_while_dsd_plays(self):
         self.arrow(P.MONO, +1)
         self.settle()

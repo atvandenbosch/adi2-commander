@@ -51,6 +51,10 @@ class Status(unittest.TestCase):
         self.assertTrue(s.optical.non_audio)
         self.assertFalse(s.coax.non_audio)
 
+    def test_the_revision_beside_the_active_output(self):
+        revisions = [S.decode(body("%02x 30 7e 08 00 00 00 42 00 00 02 02 00 00" % d0)) for d0 in (0x08, 0x05, 0x02)]
+        self.assertEqual([(s.revision, s.output) for s in revisions], [(2, 0), (1, 1), (0, 2)])
+
     def test_too_short(self):
         with self.assertRaises(ValueError):
             S.decode(body("08 30 7e 28 00 00 00 42 00 00 02 0a"))

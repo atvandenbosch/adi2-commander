@@ -15,8 +15,9 @@ Spdif = namedtuple("Spdif", "lock sync rate dsd non_audio")
 # output: the active output, the one the display and the volume knob control, as an index into params.OUTPUTS;
 # phones, iem: a plug in that jack; clock: "coax" or "optical" while the device follows that input, None on its
 # own clock (internal, or USB); rate: the rate the device runs at; usb_rate: the rate set for USB on the
-# computer; usb_dsd: DSD over USB (DoP); dsd: DSD is played, with the DSP bypassed; coax, optical: Spdif
-Status = namedtuple("Status", "output phones iem clock rate usb_rate usb_dsd dsd coax optical")
+# computer; usb_dsd: DSD over USB (DoP); dsd: DSD is played, with the DSP bypassed; coax, optical: Spdif;
+# revision: the device revision, which tells its D/A converter (params.da_filters)
+Status = namedtuple("Status", "output phones iem clock rate usb_rate usb_dsd dsd coax optical revision")
 
 SPDIF_FAMILIES = (32000, 44100, 48000, None)    # the fourth: no signal seen since power-on
 USB_FAMILIES = (None, 44100, 48000, None)
@@ -49,4 +50,5 @@ def decode(body):
                    dsd=bool(d[5] & 0x40), non_audio=bool(d[7] & 0x04)),
         optical=Spdif(lock=bool(d[1] & 0x02), sync=bool(d[1] & 0x08),
                       rate=_spdif_rate((d[2] >> 5) & 0x03, d[3] & 0x03),
-                      dsd=bool(d[6] & 0x01), non_audio=bool(d[7] & 0x08)))
+                      dsd=bool(d[6] & 0x01), non_audio=bool(d[7] & 0x08)),
+        revision=(d[0] >> 2) & 0x03)
