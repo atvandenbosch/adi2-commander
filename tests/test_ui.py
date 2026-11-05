@@ -3,6 +3,8 @@ layout by Dual EQ, the EQ and Loudness switches, Share, Loudness and its graph i
 the status bar, the keyboard in and across the tables, spinners at the band limits."""
 
 import math
+import os
+import tempfile
 import time
 import unittest
 from unittest import mock
@@ -13,8 +15,9 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel
 
 from commander import __version__
+from commander.device import models
 from commander.device import params as P
-from commander.device.models import PRO
+from commander.device.models import PRO, PRO_24
 from commander.device.simulator import SimulatedAdi2
 from commander.ui import about
 from commander.ui import loudness as L
@@ -408,8 +411,9 @@ class Window(WindowTest):
     def test_a_model_that_is_not_supported(self):
         self.sim.power(False)
         self.spin(1000)
-        self.sim = SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=self.clock, model=PRO)
-        self.spin(3000)
+        self.sim = SimulatedAdi2.factory(PRO, presets=PRESETS, clock=self.clock)
+        with mock.patch.dict(models.BY_ID, {PRO.id: PRO._replace(supported=False)}):
+            self.spin(3000)
         self.assertEqual(self.win.lamp_text.text(), "ADI-2 Pro not currently supported")
         self.assertIn("ADI-2 DAC FS", self.win.lamp_text.toolTip())
 
@@ -600,6 +604,85 @@ class Window(WindowTest):
         self.assertEqual((m.can_step(f4, +1), m.can_step(f4, -1)), (True, False))
         pk = m.index(1, 0).data(KEY_ROLE)                          # band 2 type: fixed Peak
         self.assertEqual((m.can_step(pk, +1), m.can_step(pk, -1)), (False, False))
+
+
+class ProWindow(WindowTest):
+    """An ADI-2 Pro: the EQ of Line Out and Phones 3/4; Phones 1/2 and the panels of the input and the output's other
+    settings grey, not to be opened."""
+
+    model = PRO
+
+    def test_the_outputs_it_controls(self):
+        tabs, why = self.win.tabs, "Not yet available for the ADI-2 Pro"
+        self.assertEqual([tabs.tabText(i) for i in range(3)], ["Line Out", "Phones 1/2", "Phones 3/4"])
+        self.assertEqual([tabs.isTabEnabled(i) for i in range(3)], [True, False, True])
+        self.assertEqual([tabs.tabToolTip(i) for i in range(3)], ["", why, ""])
+        self.win.next_tab(1)
+        self.assertEqual(tabs.currentIndex(), 2)
+        self.win.next_tab(1)
+        self.assertEqual(tabs.currentIndex(), 0)
+        self.win.next_tab(-1)
+        self.assertEqual(tabs.currentIndex(), 2)
+        self.assertEqual(self.win.presets.output_title.text(), "PHONES 3/4")
+
+    def test_input_and_output_panels_grey(self):
+        for tab, area in ((self.win.input_tab, self.win.input_area), (self.win.output_tab, self.win.output_area)):
+            self.assertFalse(tab.isEnabled())
+            self.assertEqual(tab.toolTip(), "Not yet available for the ADI-2 Pro")
+            QTest.mouseClick(tab, Qt.LeftButton)
+            self.assertTrue(area.isHidden())
+        QTest.mouseClick(self.win.presets_tab, Qt.LeftButton)
+        self.assertFalse(self.win.presets_area.isHidden())
+
+    def test_the_status_bar_and_the_rate(self):
+        self.assertEqual(self.win.lamp_text.text(), "Connected")
+        self.assertTrue(self.win.input_text.isHidden())
+        self.assertEqual((self.win.rate_text.text(), self.win.one_eq.isHidden()), ("48 kHz", True))
+        self.sim.state[(12, 16)] = 6                                  # 352.8 kHz, read back by the idle refresh
+        self.spin(4000)
+        self.assertEqual((self.win.rate_text.text(), self.win.one_eq.isHidden()), ("352.8 kHz", False))
+        self.assertIn("From 352.8 kHz the ADI-2 Pro runs the EQ on one stereo channel only", self.win.one_eq.toolTip())
+        self.win.fs_box.setCurrentIndex(P.SAMPLE_RATES.index(352800))
+        self.assertEqual(self.win.graph_note.text(), "No Bass/Treble at 352.8 kHz")
+        self.assertNotIn("Phones and IEM", self.win.load_bt.toolTip())
+
+    def test_a_preset_shows_where_it_is_selected(self):
+        self.sim.front_panel([(7, 28, 3), (10, 28, 3)])               # Preset 2 on Phones 1/2 and Phones 3/4
+        self.spin(1500)
+        self.assertEqual(self.win.presets.rows[3].tags.text(), "P34")
+
+    def test_save_names_the_device_and_the_output(self):
+        self.win.tabs.setCurrentIndex(2)
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "eq.txt")
+            self.win.save_file(path)
+            with open(path, encoding="utf-8") as f:
+                head = f.read(300)
+        self.assertIn("# Device: RME ADI-2 Pro\n# Output: Phones 3/4\n", head)
+
+    def test_back_to_the_dac_fs(self):
+        self.sim.power(False)
+        self.spin(1000)
+        self.sim = SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=self.clock)
+        self.spin(3000)
+        self.assertTrue(self.session.ready())
+        tabs = self.win.tabs
+        self.assertEqual([tabs.tabText(i) for i in range(3)], ["Line Out", "Phones 1/2", "Phones 3/4 · IEM"])
+        self.assertTrue(all(tabs.isTabEnabled(i) for i in range(3)) and self.win.input_tab.isEnabled())
+        self.assertEqual(self.win.input_text.isHidden(), False)
+
+
+class Pro24Window(WindowTest):
+    model = PRO_24
+
+    def test_the_eq_on_one_channel_from_705_6_khz(self):
+        self.assertEqual(self.win.tabs.tabToolTip(1), "Not yet available for the ADI-2/4 Pro")
+        self.sim.state[(12, 16)] = 7                                  # 384 kHz: no Bass/Treble, the EQ as before
+        self.spin(4000)
+        self.assertTrue(self.win.one_eq.isHidden())
+        self.sim.state[(12, 16)] = 8                                  # 705.6 kHz
+        self.spin(4000)
+        self.assertFalse(self.win.one_eq.isHidden())
 
 
 class Placement(unittest.TestCase):

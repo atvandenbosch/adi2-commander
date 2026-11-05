@@ -60,12 +60,14 @@ def apply(app):
         QTabBar::tab { background: %(panel)s; color: %(label)s; padding: 7px 16px; border: none;
                        border-bottom: %(tab_line)dpx solid transparent; }
         QTabBar::tab:selected { color: %(text)s; border-bottom: %(tab_line)dpx solid %(accent)s; }
+        QTabBar::tab:disabled { color: %(secondary)s; }
         QTableView { gridline-color: %(grid)s; border: none; }
         QHeaderView::section { background: %(background)s; color: %(label)s; border: none; padding: 4px %(pad)dpx; }
         QTableCornerButton::section { background: %(background)s; border: none; }
         QStatusBar { background: %(panel)s; color: %(label)s; border-top: 1px solid %(grid)s; }
         QStatusBar::item { border: none; }
     """ % dict(text=TEXT.name(), panel=PANEL.name(), grid=GRID.name(), label=LABEL.name(), accent=ACCENT.name(),
+               secondary=SECONDARY.name(),
                background=BACKGROUND.name(), pad=HEADER_PADDING, tab_line=TAB_LINE))
 
 

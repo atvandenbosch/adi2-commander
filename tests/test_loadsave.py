@@ -11,7 +11,9 @@ from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import QApplication, QDialog, QPushButton
 
 from commander.conversion import eqfile as E
+from commander.device import codec
 from commander.device import params as P
+from commander.device.models import PRO
 from commander.ui import loaddialog as L
 from commander.ui import theme
 from commander.ui.widgets import INNER_GAP, SIDE
@@ -385,6 +387,24 @@ def wait_for_fit(dialog, limit=120):
     while dialog.fitting and time.monotonic() - t0 < limit:
         time.sleep(0.02)
         QApplication.processEvents()
+
+
+class ProLoad(LoadTest):
+    """Load into Phones 3/4 of an ADI-2 Pro: its name, and only its EQ is written."""
+
+    model = PRO
+
+    def test_into_phones_3_4(self):
+        self.win.tabs.setCurrentIndex(2)
+        since = len(self.sim.received)
+        self.win.load_file(self.file("three.txt", THREE))
+        self.settle()
+        dialog = self.asked[0]
+        self.assertEqual(dialog.name, "Phones 3/4")
+        self.assertEqual([self.sim.state[(10, i)] for i in (5, 4, 6)], [100, 4, 10])      # band 1
+        written = {a for m in self.sim.received[since:] if m[5] == 0x02
+                   for a, *_ in [codec.decode_triplet(*t) for t in codec.parameter_triplets([m])]}
+        self.assertLessEqual(written, {9, 10, 11})
 
 
 if __name__ == "__main__":

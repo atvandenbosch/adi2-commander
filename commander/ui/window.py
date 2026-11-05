@@ -34,12 +34,12 @@ from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QFrame, QHBox
 
 from ..conversion import eqfile as E
 from ..conversion import eqimport as I
-from ..device import MODEL
+from ..device import models
 from ..device import params as P
 from ..draft import Draft
 from . import theme
 from .about import AboutDialog
-from .graph import LEGEND_GAP, NO_BT_FROM, SAMPLE_RATES, TITLE_ROOM, ZONE_INK, ResponseGraph, side_color
+from .graph import LEGEND_GAP, SAMPLE_RATES, TITLE_ROOM, ZONE_INK, ResponseGraph, side_color
 from .inputs import InputPanel
 from .legend import ITEM_PAD, Legend
 from .loaddialog import LoadDialog, read_file
@@ -55,6 +55,10 @@ from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, INNER_GAP, SECTION_GAP, SIDE, 
 
 FS_TIP = "Sample rate the curves are computed at"
 ACTIVE_TIP = "Active on the device: its display and volume knob are on this output."
+NOT_YET = "Not yet available for the %s"          # with the model's name
+ONE_EQ = "EQ on one stereo channel only"
+ONE_EQ_TIP = ("From %g kHz the %s runs the EQ on one stereo channel only: the input, Line Out or Phones 3/4.\n"
+              "It may not be this output.")
 LAMP = {"searching": (theme.SECONDARY, "Waiting for the device"), "busy": (theme.WARN, "Port in use"),
         "loading": (theme.WARN, "Reading"), "ready": (theme.GOOD, "Connected"),
         "unsupported": (theme.WARN, "%s not currently supported")}      # with the model's name
@@ -205,8 +209,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("ADI-2 Commander")
 
         # top: output tabs; the connection is in the status bar
+        self.model = models.DAC                          # the model the window is laid out for: the last connected
         self.tabs = QTabBar()
-        for name, *_ in P.OUTPUTS:
+        for name in self.model.outputs:
             self.tabs.addTab(name)
         self.tabs.currentChanged.connect(self.set_output)
         self.tabs.setIconSize(QSize(DOT + DOT_GAP, DOT))
@@ -233,8 +238,12 @@ class MainWindow(QMainWindow):
         signal_lay = QHBoxLayout(self.signal_info)
         signal_lay.setContentsMargins(INNER_GAP, 0, 0, 0)
         signal_lay.setSpacing(INNER_GAP)
+        self.one_eq = QLabel(ONE_EQ)                     # ADI-2 Pro and ADI-2/4 Pro at a high rate: show_own_rate
+        self.one_eq.setStyleSheet(label_color(theme.WARN))
+        self.one_eq.hide()
         signal_lay.addWidget(self.input_text)
         signal_lay.addWidget(self.rate_text)
+        signal_lay.addWidget(self.one_eq)
         bar.addWidget(self.signal_info)
         self.file_note = QLabel()                        # what the last Save or Load did
         self.file_note.setContentsMargins(0, 0, 8, 0)    # as far from the edge as the lamp on the left
@@ -500,7 +509,7 @@ class MainWindow(QMainWindow):
         session.on_operation.append(self.on_operation)
         session.on_device_status.append(self.on_device_status)
         self.set_output(0)
-        self.on_device_status(session.device_status)
+        self.set_model(self.model)
         for v in self.band_views:
             v.fit(BAND_WIDTHS)
         self.bt_view.fit(BT_WIDTHS)
@@ -541,7 +550,25 @@ class MainWindow(QMainWindow):
         if self.preview_row is not None:
             self.follow_preview(self.pointer())
 
+    def set_model(self, model):
+        """Lay the window out for a model: the names of the outputs; an output, and the panels of the input and the
+        output's other settings, that Commander does not control on it are grey and cannot be opened."""
+        self.model = model
+        self.graph.no_bt_from = self.loudness_graph.no_bt_from = self.preview.no_bt_from = model.no_bt_from
+        why = NOT_YET % model.name
+        for i, (name, (_, out, _, _)) in enumerate(zip(model.outputs, P.OUTPUTS)):
+            self.tabs.setTabText(i, name)
+            self.tabs.setTabEnabled(i, out in model.controlled)
+            self.tabs.setTabToolTip(i, "" if out in model.controlled else why)
+        for tab in (self.input_tab, self.output_tab):
+            tab.set_available(not model.eq_only, why)
+        if self.output[1] not in model.controlled:
+            self.tabs.setCurrentIndex(next(i for i, o in enumerate(P.OUTPUTS) if o[1] in model.controlled))
+        self.on_device_status(self.session.device_status)
+
     def on_connection(self, status, detail):
+        if status == "ready" and self.session.model != self.model:
+            self.set_model(self.session.model)
         color, text = LAMP[status]
         if status == "unsupported":
             text %= self.session.model.name
@@ -556,9 +583,11 @@ class MainWindow(QMainWindow):
         """The output the device has active gets a dot on its tab, in the colour of the lamp: a fact of the device,
         not a choice here."""
         for i in range(self.tabs.count()):
-            active = status is not None and status.output == i
+            # of the ADI-2 Pro and ADI-2/4 Pro the status message is not known well enough to tell
+            active = status is not None and not self.model.eq_only and status.output == i
             self.tabs.setTabIcon(i, dot_icon(theme.GOOD, True) if active else self.no_dot)
-            self.tabs.setTabToolTip(i, ACTIVE_TIP if active else "")
+            if self.tabs.isTabEnabled(i):
+                self.tabs.setTabToolTip(i, ACTIVE_TIP if active else "")
         self.refresh()                                   # DSD bypasses the DSP: the switches, curves and cells follow
 
     def heard(self):
@@ -573,8 +602,11 @@ class MainWindow(QMainWindow):
 
     def live_rate(self):
         """The rate the device runs at, or None where it does not apply: no device, DSD (no DSP), or nothing on
-        the SPDIF input."""
+        the SPDIF input. Of the ADI-2 Pro and ADI-2/4 Pro: Sample Rate as the device reports it (12/16)."""
         st = self.session.device_status
+        if self.session.ready() and self.model.eq_only:
+            index = self.session.state.get(P.SAMPLE_RATE)
+            return P.SAMPLE_RATES[index] if index in range(len(P.SAMPLE_RATES)) else None
         if not self.session.ready() or st is None or st.dsd:
             return None
         spdif = self.heard()[1]
@@ -584,6 +616,11 @@ class MainWindow(QMainWindow):
         """Beside the connection: the input, then the rate and PCM, or DSD. A chosen SPDIF input without a signal,
         or with non-audio data, says so in amber instead: nothing plays."""
         self.show_live_rate()
+        if self.model.eq_only:
+            self.show_own_rate()
+            return
+        self.input_text.show()
+        self.one_eq.hide()
         st = self.session.device_status
         known = self.session.ready() and st is not None
         self.signal_info.setVisible(known)
@@ -600,6 +637,20 @@ class MainWindow(QMainWindow):
             text, color = "%g kHz PCM" % (st.rate / 1000), theme.LABEL
         self.rate_text.setText(text)
         self.rate_text.setStyleSheet(label_color(color))
+
+    def show_own_rate(self):
+        """ADI-2 Pro and ADI-2/4 Pro: beside the connection only the rate; from the rate on which the EQ runs on one
+        stereo channel only, a note."""
+        rate = self.live_rate()
+        self.signal_info.setVisible(rate is not None)
+        self.input_text.hide()
+        if rate is None:
+            return
+        self.rate_text.setText("%g kHz" % (rate / 1000))
+        self.rate_text.setStyleSheet(label_color(theme.LABEL))
+        one = self.model.one_eq_from is not None and rate >= self.model.one_eq_from
+        self.one_eq.setVisible(one)
+        self.one_eq.setToolTip(ONE_EQ_TIP % (self.model.one_eq_from / 1000, self.model.name) if one else "")
 
     def show_live_rate(self):
         """The chosen fs in amber when the device runs at another rate; as always when it runs at this one, or when
@@ -654,8 +705,11 @@ class MainWindow(QMainWindow):
 
     # -- actions ------------------------------------------------------------------------------
     def next_tab(self, step):
-        if self.draft is None:                           # the edit stand stays on its output
-            self.tabs.setCurrentIndex((self.tabs.currentIndex() + step) % self.tabs.count())
+        """The next output Commander controls; the edit stand stays on its output."""
+        if self.draft is None:
+            n, i = self.tabs.count(), self.tabs.currentIndex()
+            self.tabs.setCurrentIndex(next(j % n for j in range(i + step, i + step * n, step)
+                                           if self.tabs.isTabEnabled(j % n)))
 
     def set_output(self, i):
         self.output = P.OUTPUTS[i]
@@ -710,9 +764,12 @@ class MainWindow(QMainWindow):
         else:
             eq.set_dual(out, True)
 
+    def output_name(self):
+        return self.model.outputs[P.OUTPUTS.index(self.output)]
+
     def save_dialog(self):
-        what = "Preset %d" % self.draft.slot if self.draft is not None else self.output[0]
-        name = "%s %s %s.txt" % (MODEL, what.replace("·", "-").replace("/", "-"),
+        what = "Preset %d" % self.draft.slot if self.draft is not None else self.output_name()
+        name = "%s %s %s.txt" % (self.model.name.replace("/", "-"), what.replace("·", "-").replace("/", "-"),
                                  datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
         path, _ = QFileDialog.getSaveFileName(self, "Save EQ - %s" % what,
                                               os.path.join(self.folder, name), "Equalizer APO (*.txt)")
@@ -725,14 +782,14 @@ class MainWindow(QMainWindow):
         self.folder = os.path.dirname(path)
         try:
             preset = (self.draft.slot, self.draft.name) if self.draft is not None else None
-            E.save(path, E.write(self.eq().state, self.output[1], self.graph.fs, preset=preset))
+            E.save(path, E.write(self.eq().state, self.output[1], self.graph.fs, preset=preset, model=self.model))
         except (OSError, ValueError) as e:
             self.note("Not saved: %s" % e, theme.WARN)
             return
         self.note("Saved %s" % os.path.basename(path))
 
     def load_dialog(self):
-        what = "Preset %d" % self.draft.slot if self.draft is not None else self.output[0]
+        what = "Preset %d" % self.draft.slot if self.draft is not None else self.output_name()
         path, _ = QFileDialog.getOpenFileName(self, "Load filters - %s" % what, self.folder,
                                               "Filter files and curves (*.txt *.csv);;All files (*)")
         if path:
@@ -756,7 +813,7 @@ class MainWindow(QMainWindow):
             self.note("Not loaded: %s is not a filter file or a curve" % name, theme.WARN)
             return
         preset = (self.draft.slot, self.draft.name) if self.draft is not None else None
-        dialog = LoadDialog(source, path, eq, out, self.live_rate(), self.graph.fs, self, preset)
+        dialog = LoadDialog(source, path, eq, out, self.live_rate(), self.graph.fs, self, preset, self.output_name())
         try:
             if not self.ask(dialog):
                 self.note("Load cancelled")
@@ -881,8 +938,9 @@ class MainWindow(QMainWindow):
         if self.draft is not None or not self.previewable(row) or not self.presets_area.isVisible():
             self.close_preview()
             return
-        s, (name, _, left, _) = self.session.state, self.output
-        others = [o for o, _, l, _ in P.OUTPUTS if l != left and s.get((l, P.EQ_PRESET_SELECT)) == row.value]
+        s, (_, _, left, _), name = self.session.state, self.output, self.output_name()
+        others = [o for o, (_, out, l, _) in zip(self.model.outputs, P.OUTPUTS)
+                  if l != left and self.session.controls(out) and s.get((l, P.EQ_PRESET_SELECT)) == row.value]
         self.preview.show_preset(row.value, self.session.slots.get(row.slot), name, s.get((left, P.LOAD_BT)) == 1,
                                  s.get((left, P.EQ_PRESET_SELECT)) == row.value, self.graph.fs, others)
 
@@ -1035,7 +1093,8 @@ class MainWindow(QMainWindow):
         if not session.ready() or session.operating() or not d.changed():
             return ""
         lines = []
-        chosen = [name for name, _, left, _ in P.OUTPUTS if live.get((left, P.EQ_PRESET_SELECT)) == d.slot + 1]
+        chosen = [name for name, (_, out, left, _) in zip(self.model.outputs, P.OUTPUTS)
+                  if session.controls(out) and live.get((left, P.EQ_PRESET_SELECT)) == d.slot + 1]
         if chosen:
             lines.append("Selected on %s: OK loads it there" % " and ".join(chosen))
         if session.slots.get(d.slot) not in (None, d.stored):
@@ -1134,8 +1193,9 @@ class MainWindow(QMainWindow):
         editing = None if d is None else (d.slot, d.name, ready and not d.locked and d.changed(), self.edit_warning(),
                                           "Nothing to write: the preset is unchanged" if not d.changed() else
                                           "" if ready else "OK waits for the device: it is not connected")
-        self.presets.refresh(s, self.output, self.session.slots, ready, self.session.operation(), self.slot_issues,
-                             editing)
+        tags = {o: tag for tag, (_, o, _, _) in zip(self.model.tags, P.OUTPUTS) if o in self.model.controlled}
+        self.presets.refresh(s, (self.output_name(),) + self.output[1:], self.session.slots, ready,
+                             self.session.operation(), self.slot_issues, editing, tags)
         self.source.copy(self.presets.rows.get(s.get((left, P.EQ_PRESET_SELECT))) if ready and not editing else None,
                          bool(self.session.stale(out)))
         self.refresh_preview()
@@ -1200,12 +1260,14 @@ class MainWindow(QMainWindow):
                                         bypassed)
         self.load_bt.show_state(load_bt, live and not editing, "Load Bass/Treble with preset: %s\n"
                                 "On: selecting a preset brings its Bass/Treble too, and changing Bass/Treble on a\n"
-                                "preset makes it Temp. Switching it on switches Bass/Treble off on Phones and IEM\n"
-                                "(the device does so)." % ("on" if load_bt else "off"))
+                                "preset makes it Temp.%s" % ("on" if load_bt else "off", "" if self.model.eq_only else
+                                                             " Switching it on switches Bass/Treble off on Phones and"
+                                                             " IEM\n(the device does so)."))
         self.refresh_presets()
         self.refresh_edit()
-        self.input_panel.refresh()
-        self.output_panel.refresh()
+        if not self.model.eq_only:                       # else closed, and their names are those of the DAC FS
+            self.input_panel.refresh()
+            self.output_panel.refresh()
         for m in self.band_models + [self.bt_model, self.loudness_model]:
             m.refresh()
         rate = self.live_rate()                          # compared: the rate the device runs at, when it is another
@@ -1217,6 +1279,6 @@ class MainWindow(QMainWindow):
         self.graph_head.legend.setVisible(ready)
         self.graph_note.setText("No %s at %g kHz" % ("Loudness" if self.loudness_shown() else "Bass/Treble",
                                                      self.graph.fs / 1000)
-                                if ready and self.graph.fs >= NO_BT_FROM else "")
+                                if ready and self.graph.fs >= self.model.no_bt_from else "")
         self.graph_head.refit()                          # the legend and the note can change width
         self.show_signal()

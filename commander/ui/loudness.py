@@ -36,9 +36,10 @@ from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QToolTip, QWidget
 
 from ..device import filters as F
+from ..device import models
 from ..device import params as P
 from . import theme
-from .graph import (BAND_ALPHA, BAND_W, GRAB, LANE_PX, NO_BT_FROM, RING, X_HI, X_LO, X_PAD, Y_HI, Y_LO,
+from .graph import (BAND_ALPHA, BAND_W, GRAB, LANE_PX, RING, X_HI, X_LO, X_PAD, Y_HI, Y_LO,
                     _pen, _ticks, title_axes)
 from .legend import GROUP_GAP, ITEM_PAD, MARK_H, MARK_W, mark_pixmap
 
@@ -175,6 +176,7 @@ class LoudnessGraph(pg.PlotWidget):
     def __init__(self):
         self.view = _View(self)
         super().__init__(viewBox=self.view, background=theme.DISPLAY)
+        self.no_bt_from = models.DAC.no_bt_from  # of the model: no Loudness from this rate on
         pi = self.getPlotItem()
         pi.hideButtons()
         pi.setMenuEnabled(False)
@@ -231,7 +233,7 @@ class LoudnessGraph(pg.PlotWidget):
         if not shelves:
             self.legend.show_items([])
             return
-        on = self.on = shelves[0].active and not bypassed and fs < NO_BT_FROM
+        on = self.on = shelves[0].active and not bypassed and fs < self.no_bt_from
         ref = self.ref = state[(out, P.LD_LOW_VOL_REF)] / 2
         self.state = state
         volume = state[(out, P.VOLUME)] / 10

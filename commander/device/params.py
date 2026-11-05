@@ -60,6 +60,7 @@ WIDTH_NAMES = {-100: "Swapped", 0: "Mono", 100: "Stereo"}
 OUTPUT_ADDRESSES = tuple(out for _, out, _, _ in OUTPUTS)
 # the rates the device runs at, in the order of their index (Sample Rate, 12/16, and the status message)
 SAMPLE_RATES = [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000]
+SAMPLE_RATE = (12, 16)                           # Sample Rate: the rate the device runs at, display only
 
 # Loudness, on the output address (manual 12.4): Bass and Treble Gain +1..+10 dB, Low Vol Ref -90..-20 dB,
 # all in 0.5 dB steps. Their indices 20..23 are Bass/Treble on an EQ address, so they are told apart by spec():

@@ -148,23 +148,30 @@ class Recognition(Harness):
         self.connect()
         self.assertEqual((self.session.model, self.asked()), (DAC, [DAC.id]))
 
-    def let_go(self, model):
+    def recognised(self, model):
         self.use(model)
         self.run_for(3.0)
-        self.assertEqual(self.statuses(), ["loading", "unsupported"])
+        self.assertEqual(self.statuses(), ["loading", "ready"])
         self.assertEqual((self.session.model, self.asked()), (model, [model.id]))
+
+    def test_a_pro_is_recognised(self):
+        self.recognised(PRO)
+
+    def test_a_2_4_is_recognised(self):
+        self.recognised(PRO_24)
+
+    def test_a_model_that_is_not_supported_is_named_and_let_go(self):
+        with mock.patch.dict(models.BY_ID, {PRO.id: PRO._replace(supported=False)}):
+            self.use(PRO)
+            self.run_for(3.0)
+        self.assertEqual(self.statuses(), ["loading", "unsupported"])
+        self.assertEqual((self.session.model.name, self.asked()), (PRO.name, [PRO.id]))
         self.assertIsNone(self.session.port)                             # free for other programs
-
-    def test_a_pro_is_named_and_let_go(self):
-        self.let_go(PRO)
-
-    def test_a_2_4_is_named_and_let_go(self):
-        self.let_go(PRO_24)
 
     def test_past_a_port_name_that_does_not_fit(self):
         self.use(PRO, port="ADI-2 DAC Midi Port 1")
         self.run_for(3.0)
-        self.assertEqual((self.session.status, self.asked()), ("unsupported", [DAC.id, PRO.id]))
+        self.assertEqual((self.session.status, self.asked()), ("ready", [DAC.id, PRO.id]))
 
     def test_a_dac_behind_another_port_name(self):
         self.use(DAC, port="ADI-24 Pro Midi Port 1")
@@ -179,9 +186,10 @@ class Recognition(Harness):
         self.assertEqual(self.session.state, {k: v for k, v in self.sim.reported().items() if k[0] not in (13, 14)})
 
     def test_unsupported_until_it_is_gone(self):
-        self.use(PRO)
-        self.run_for(3.0)
-        self.run_for(10.0)
+        with mock.patch.dict(models.BY_ID, {PRO.id: PRO._replace(supported=False)}):
+            self.use(PRO)
+            self.run_for(3.0)
+            self.run_for(10.0)
         self.assertEqual((self.statuses(), self.asked()), (["loading", "unsupported"], [PRO.id]))   # not asked again
         self.sim.power(False)
         self.run_for(0.6)
@@ -191,7 +199,7 @@ class Recognition(Harness):
         self.assertEqual((self.session.status, self.session.model), ("ready", DAC))
 
     def test_no_answer_under_any_id(self):
-        self.use(models.Model(0x7F, "Other", "ADI-2 DAC", True))
+        self.use(DAC._replace(id=0x7F, name="Other"))
         self.run_for(3.5)
         self.assertEqual(self.statuses(), ["loading", "searching"])
         self.assertEqual(self.asked(), [DAC.id, PRO.id, PRO_24.id])
@@ -804,6 +812,51 @@ class StoreWrite(Harness):
         self.run_for(1.0)
         self.assertEqual(self.operations, [("store", 7, None)])
         self.assertFalse(self.session.operating())
+
+
+class EqOnly(Harness):
+    """An ADI-2 Pro: Commander writes the EQ of Line Out and Phones 3/4, and nothing else."""
+
+    def setUp(self):
+        super().setUp()
+        self.sim = SimulatedAdi2.factory(PRO, presets=PRESETS, clock=self.clock)
+        self.operations = []
+        self.session.on_operation.append(lambda kind, slot, result: self.operations.append((kind, slot, result)))
+        self.connect()
+        self.run_for(3.0)                                               # the slots
+
+    def written(self, since=0):
+        return [codec.decode_triplet(*t)[:2] for m in self.sim.received[since:] if m[5] == 0x02
+                for t in codec.parameter_triplets([m])]
+
+    def test_what_it_writes(self):
+        writable = [k for k in [(4, 4), (5, 4), (10, 4), (4, 21), (4, 28), (3, 20), (3, 23), (9, 21)]
+                    if self.session.writable(k)]
+        self.assertEqual(writable, [(4, 4), (10, 4), (4, 21), (4, 28), (3, 20), (3, 23), (9, 21)])  # right: Dual EQ off
+        for key in [(7, 4), (8, 4), (6, 20), (3, 1), (3, 2), (3, 12), (3, 15), (9, 9), (0, 1), (1, 4), (12, 6)]:
+            self.assertFalse(self.session.writable(key), key)
+        self.assertEqual((self.session.controls(3), self.session.controls(6), self.session.controls(9)),
+                         (True, False, True))
+
+    def test_dual_eq_store_and_source_only_where_it_controls(self):
+        self.session.set_dual(3, True)
+        self.run_for(2.0)
+        self.assertEqual(self.sim.state[(3, 11)], 1)
+        for act in (lambda: self.session.set_dual(6, True), lambda: self.session.store(6, 2),
+                    lambda: self.session.set_source(1)):
+            with self.assertRaises(ValueError):
+                act()
+
+    def test_store_selects_again_only_where_it_controls(self):
+        self.sim.front_panel([(7, 28, 3), (10, 28, 3)])                 # Preset 2 on Phones 1/2 and Phones 3/4
+        self.run_for(2.0)
+        since = len(self.sim.received)
+        self.session.set((4, 7), -6)
+        self.session.store(3, 2)
+        self.run_for(8.0)
+        self.assertEqual(self.operations, [("store", 2, {})])
+        self.assertEqual({k for k in self.written(since) if k[1] == P.EQ_PRESET_SELECT}, {(4, 28), (10, 28)})
+        self.assertNotIn(7, {a for a, _ in self.written()})
 
 
 if __name__ == "__main__":

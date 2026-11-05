@@ -55,11 +55,15 @@ class WindowTest(unittest.TestCase):
     """The window on the dump, connected and loaded, on a simulated clock: the test turns it."""
 
     size = None
+    model = None                                 # a models.Model to start from its factory values instead of the dump
     TICK = 20                                    # ms, as the window's timer
 
     def setUp(self):
         self.clock = Clock()
-        self.sim = SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=self.clock)
+        if self.model is None:
+            self.sim = SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=self.clock)
+        else:
+            self.sim = SimulatedAdi2.factory(self.model, presets=PRESETS, clock=self.clock)
         self.session = Session(lambda: SimPort(self.sim), clock=self.clock)
         self.win = MainWindow(self.session)
         self.win.timer.setInterval(24 * 3600 * 1000)   # still running while the window talks, but spin ticks

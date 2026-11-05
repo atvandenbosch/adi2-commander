@@ -35,6 +35,7 @@ from PySide6.QtGui import QBrush, QColor, QCursor, QLinearGradient, QPen
 from PySide6.QtWidgets import QToolTip
 
 from ..device import filters as F
+from ..device import models
 from ..device import params as P
 from . import theme
 
@@ -67,8 +68,6 @@ CHANNEL = [theme.LEFT, theme.RIGHT]
 pg.setConfigOptions(antialias=True)
 
 SAMPLE_RATES = P.SAMPLE_RATES
-NO_BT_FROM = 705600                              # Bass/Treble and Loudness are not available from this rate on
-                                                 # (manual 8.8)
 CHANNEL_KEY = {0: "L", 1: "R", None: "BT"}
 
 
@@ -259,6 +258,7 @@ class ResponseGraph(pg.PlotWidget):
         self._off = set()                        # (side, filter name) set but out of the path: EQ or B/T off
         self.fs = 48000
         self.fs_compare = None                   # the rate the device runs at, when known and not fs; or None
+        self.no_bt_from = models.DAC.no_bt_from  # of the model: no Bass/Treble from this rate on
 
         pi = self.getPlotItem()
         pi.hideButtons()
@@ -340,10 +340,9 @@ class ResponseGraph(pg.PlotWidget):
         if self.output is not None:
             self.update_from(self.output)
 
-    @staticmethod
-    def _bt_at(bt, fs):
-        """Bass/Treble as the device runs it at this sample rate: not at all from NO_BT_FROM on."""
-        return [f._replace(active=False) for f in bt] if fs >= NO_BT_FROM else bt
+    def _bt_at(self, bt, fs):
+        """Bass/Treble as the device runs it at this sample rate: not at all from no_bt_from on."""
+        return [f._replace(active=False) for f in bt] if fs >= self.no_bt_from else bt
 
     def _lit(self, *keys):
         return self.emphasis is not None and self.emphasis in keys
@@ -549,7 +548,7 @@ class ResponseGraph(pg.PlotWidget):
                  "%d … %d Hz%s · Q %.1f … %.1f" % (flo, fhi, "" if no_gain else " · ±12 dB", qlo / 10, qhi / 10)]
         if no_gain:
             lines.append("No gain; Q sets the resonance")
-        if f.band is None and self.fs >= NO_BT_FROM:
+        if f.band is None and self.fs >= self.no_bt_from:
             lines.append("Not available at %g kHz" % (self.fs / 1000))
         elif self.session.bypassed():
             lines.append("DSD input: no DSP, not in the signal path")

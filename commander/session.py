@@ -68,6 +68,9 @@ RELOAD = {P.EQ_ENABLE, P.EQ_PRESET_SELECT}  # make the device rebuild its filter
 
 LEFT = {left: out for _, out, left, _ in P.OUTPUTS}
 RIGHT = {right: out for _, out, _, right in P.OUTPUTS}
+# what Commander writes with set() on the address of an output of a model it controls only the EQ of
+# (models.Model.eq_only); Dual EQ goes by set_dual()
+EQ_ONLY = {P.LOUDNESS_ENABLE, P.LD_BASS, P.LD_TREBLE, P.LD_LOW_VOL_REF}
 
 
 def output_content(state, out):
@@ -154,11 +157,18 @@ class Session:
         """True while the device plays DSD: it has no DSP for DSD, so whatever is on is bypassed."""
         return self.device_status is not None and self.device_status.dsd
 
+    def controls(self, out):
+        """Whether Commander controls output out of the device connected: on an ADI-2 Pro and ADI-2/4 Pro not
+        Phones 1/2 (models.py)."""
+        return self.model is not None and out in self.model.controlled
+
     def writable(self, key):
         a, i = key
         if not self.ready() or self._op is not None or key not in self.state:
             return False
         if a in P.OUTPUT_ADDRESSES:
+            if not self.controls(a) or (self.model.eq_only and i not in EQ_ONLY):
+                return False
             if i == P.REF_LEVEL and self.state.get((a, P.AUTO_REF_LEVEL)) == 1:
                 return False                             # the device chooses it; written, it moves Volume a step
             if i == P.VOLUME and self.state.get((a, P.LOCK_VOLUME)) == 1:
@@ -169,8 +179,8 @@ class Session:
         if i not in P.EQ_RANGES:
             return False
         if a in RIGHT:
-            return i <= 19 and self.dual(RIGHT[a])      # right is an alias of left with Dual EQ off
-        return a in LEFT
+            return i <= 19 and self.controls(RIGHT[a]) and self.dual(RIGHT[a])   # with Dual EQ off an alias of left
+        return a in LEFT and self.controls(LEFT[a])
 
     def hold(self, on):
         """While a held control repeats its steps, what is written, and what the device changed besides (Ref Level
@@ -212,7 +222,8 @@ class Session:
         Off: one EQ for both channels. keep='left' or 'right' says which channel's bands become the shared
         set; the device uses the left set, so for 'right' the left bands get the right values first.
         On: the device starts both channels from the shared set (it copies left to right)."""
-        if not self.ready() or self._op is not None or (out, P.DUAL_EQ) not in self.state:
+        if (not self.ready() or self._op is not None or (out, P.DUAL_EQ) not in self.state
+                or not self.controls(out)):
             raise ValueError("Dual EQ of output %d is not writable now" % out)
         left, right = next((l, r) for _, o, l, r in P.OUTPUTS if o == out)
         if not on and self.dual(out) and keep == "right":
@@ -232,7 +243,7 @@ class Session:
         has. Queued writes go first, and what is stored is what a dump after them reports. Afterwards the slot is
         selected again on out and on every output that has it as source: the device itself updates only the active
         output."""
-        if out not in P.OUTPUT_ADDRESSES:
+        if out not in P.OUTPUT_ADDRESSES or (self.model is not None and not self.controls(out)):
             raise ValueError("output %s" % out)
         self._start("store", slot, out=out)
 
@@ -608,8 +619,8 @@ class Session:
             op["result"].update(diff)
             self._finish()
         else:
-            op["selects"] = [left for _, out, left, _ in P.OUTPUTS
-                             if out == op.get("out") or self.state.get((left, P.EQ_PRESET_SELECT)) == op["slot"] + 1]
+            op["selects"] = [left for _, out, left, _ in P.OUTPUTS if self.controls(out) and (
+                out == op.get("out") or self.state.get((left, P.EQ_PRESET_SELECT)) == op["slot"] + 1)]
             op["step"] = "select"
 
     def _content(self, op, slot):

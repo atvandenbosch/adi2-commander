@@ -25,7 +25,7 @@ import re
 from collections import namedtuple
 
 from .. import __version__
-from ..device import DEVICE
+from ..device import models
 from ..device import filters as F
 from ..device import params as P
 
@@ -80,14 +80,15 @@ OUTPUT_NOTE = re.compile(r"^#\s*Output:\s*(.+?)\s*$")
 
 # -- writing ---------------------------------------------------------------------------------------
 
-def write(state, out, fs=F.FS, now=None, preset=None):
+def write(state, out, fs=F.FS, now=None, preset=None, model=models.DAC):
     """The EQ of one output as a file: a header (tool, date, device, where the settings come from, which settings),
     the settings as a table for people (and for Commander to load back exactly), then the same converted to RBJ
     Cookbook biquads in the format of Equalizer APO. A channel with EQ Enable off, and Bass/Treble with B/T Enable
     off, are '(off)' on their group in the table and OFF for APO, which skips them. The column of types is as wide
     as the longest type in it. preset: (slot, name) when state holds a preset being edited rather than the output.
-    Raises ValueError when the state of the output is incomplete."""
-    name, _, left, right = next(o for o in P.OUTPUTS if o[1] == out)
+    model: the device, with its names of the outputs. Raises ValueError when the state of the output is incomplete."""
+    k = next(k for k, o in enumerate(P.OUTPUTS) if o[1] == out)
+    (_, _, left, right), name = P.OUTPUTS[k], model.outputs[k]
     dual = state.get((out, P.DUAL_EQ))
     sets = [("L", left), ("R", right)] if dual == 1 else [("all", left)]
     bands = {ch: F.band_filters(state, addr, left) for ch, addr in sets}
@@ -106,7 +107,7 @@ def write(state, out, fs=F.FS, now=None, preset=None):
         source = "# Preset: %d" % slot + (" (%s)" % label if label else "")
     else:
         source = "# Output: " + name.replace("·", "-")
-    lines = ["%s %s" % (HEADER, __version__), "# Date: " + when, "# Device: " + DEVICE, source,
+    lines = ["%s %s" % (HEADER, __version__), "# Date: " + when, "# Device: RME " + model.name, source,
              "# Settings: EQ, Bass/Treble", "#"]
     shown = None
     for _, head, label, typ, flt in rows:

@@ -24,10 +24,11 @@ from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from ..device import filters as F
+from ..device import models
 from ..device import params as P
 from ..session import loaded
 from . import theme
-from .graph import NO_BT_FROM, X_HI, X_LO, Y_HI, Y_LO, side_color
+from .graph import X_HI, X_LO, Y_HI, Y_LO, side_color
 from .presets import CLEAR, ROW_HEIGHT
 from .scrim import RADIUS, RISE
 from .widgets import ATTACHED_GAP, Action, head
@@ -150,6 +151,7 @@ class PresetPreview(QWidget):
 
     def __init__(self, parent):
         super().__init__(parent)
+        self.no_bt_from = models.DAC.no_bt_from  # of the model: no Bass/Treble from this rate on
         self.value = None
         self.load_bt = True
         self.no_bt = False                       # the device has no Bass/Treble at the graph's rate
@@ -185,7 +187,7 @@ class PresetPreview(QWidget):
         """value: Clear or a slot's EQ Preset Select value; stored: the slot as read, None while not read (Clear:
         not used); output: the name of this output; load_bt: Load Bass/Treble with preset on this output; current:
         selected on this output; fs: the rate of the main graph; others: the other outputs it is selected on."""
-        self.value, self.load_bt, self.no_bt = value, load_bt, fs >= NO_BT_FROM
+        self.value, self.load_bt, self.no_bt = value, load_bt, fs >= self.no_bt_from
         clear = value == CLEAR
         known = clear or stored is not None
         used = not clear and known and stored["used"]

@@ -659,9 +659,9 @@ class LoadDialog(QDialog):
     SIZE = QSize(1500, 780)
     maximized = False                                     # as the last one was closed: the next one opens so too
 
-    def __init__(self, source, path, session, out, live=None, fs=F.FS, parent=None, preset=None):
+    def __init__(self, source, path, session, out, live=None, fs=F.FS, parent=None, preset=None, name=None):
         """source: what read_file made of the file at path; session: a Session, or a Draft with preset its number
-        and name."""
+        and name; name: of the output, as the window shows it (default the name in params.OUTPUTS)."""
         super().__init__(parent)
         self.session, self.out, self.live, self.fs_default = session, out, live, fs
         self.preset = preset
@@ -669,7 +669,8 @@ class LoadDialog(QDialog):
         self.setModal(True)
         self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)    # a large dialog: it may take the whole screen
         self.setAcceptDrops(True)                           # another file dropped on it: that file instead
-        self.name, _, self.left, self.right = next(o for o in P.OUTPUTS if o[1] == out)
+        default, _, self.left, self.right = next(o for o in P.OUTPUTS if o[1] == out)
+        self.name = default if name is None else name
         self.dual = session.dual(out)
         self.connected = session.ready()
         self.mode, self.origin, self.tone = FIT, I.EXTERNAL, False

@@ -260,17 +260,19 @@ class PresetPanel(QWidget):
         lay.addSpacing(ATTACHED_GAP)
         return title
 
-    def refresh(self, state, output, slots, ready, operation=None, issues=None, editing=None):
+    def refresh(self, state, output, slots, ready, operation=None, issues=None, editing=None, tags=None):
         """state: the session's; output: (name, address, left, right) of this tab; slots: as read; operation: the
         Store or Write under way (Session.operation); issues: {slot: how it read back otherwise}; editing: the slot
         open in the edit stand, its name as typed, whether OK can write it now, what OK changes beyond the preset,
-        and why OK cannot be clicked; or None. Nothing can be clicked while not ready, while an
-        operation is under way, or while a slot is edited."""
+        and why OK cannot be clicked; or None; tags: {output address: its mark} of the outputs a preset shows it is
+        selected on (default TAGS). Nothing can be clicked while not ready, while an operation is under way, or while
+        a slot is edited."""
         name, out, left, _ = output
+        tags_of = TAGS if tags is None else tags
         self.output_title.setText(name.upper())
         issues = issues or {}
         enabled = ready and operation is None and editing is None
-        chosen = {o: state.get((l, P.EQ_PRESET_SELECT)) for _, o, l, _ in P.OUTPUTS}
+        chosen = {o: state.get((l, P.EQ_PRESET_SELECT)) for _, o, l, _ in P.OUTPUTS if o in tags_of}
         for value, row in self.rows.items():
             busy, edited = "", editing is not None and editing[0] == row.slot
             if row.slot is None:
@@ -288,7 +290,7 @@ class PresetPanel(QWidget):
                 name = name or ("Preset %d" % row.slot if s is None and not edited else "no name")
                 m = mark(s)
             shared = row.slot is not None or value == CLEAR
-            tags = [TAGS[o] for o, v in chosen.items() if o != out and v == value] if shared else []
+            tags = [tags_of[o] for o, v in chosen.items() if o != out and v == value] if shared else []
             row.set_state(name, named and (ready or edited), m, ready and chosen.get(out) == value, tags, enabled,
                           busy, describe(issues[row.slot]) if row.slot in issues else "", edited,
                           *(editing[2:] if edited else ()))
@@ -355,6 +357,14 @@ class SideTab(QWidget):
         if e.button() == Qt.LeftButton:
             self.set_open(not self.open)
 
+    def set_available(self, on, why=""):
+        """Not available: grey, closed and not to be opened, with why as its tooltip."""
+        if not on and self.open:
+            self.set_open(False)
+        self.setEnabled(on)
+        self.setCursor(Qt.PointingHandCursor if on else Qt.ArrowCursor)
+        self.setToolTip("Show or hide the %s" % self.text.lower() if on else why)
+
     def set_open(self, on):
         self.open = on
         self.update()
@@ -364,7 +374,7 @@ class SideTab(QWidget):
         p = QPainter(self)
         if self.open:
             p.fillRect(self.width() - 2, 0, 2, self.height(), theme.ACCENT)
-        p.setPen(theme.TEXT if self.open else theme.LABEL)
+        p.setPen(theme.TEXT if self.open else theme.LABEL if self.isEnabled() else theme.SECONDARY)
         p.translate(0, self.height())
         p.rotate(-90)
         p.drawText(QRect(0, 0, self.height(), self.width()), Qt.AlignCenter, self.text)
