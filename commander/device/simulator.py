@@ -4,8 +4,9 @@ SimPort takes the place of WinmmPort, so everything above it (the session, the a
 
 The ADI-2 DAC FS is simulated as it behaves. The ADI-2 Pro and ADI-2/4 Pro are simulated as RME's MIDI table
 (MIDITable_ADI-2 v1.2) and their manuals describe them: their parameters, ranges and factory values. Where they
-share the protocol of the ADI-2 DAC FS (EQ, presets, Volume, Dim, Lock Volume) they follow its rules; what only the
-ADI-2 DAC FS is known to do (Source and the clock, Auto Ref Level, the status message from its inputs) they do not.
+share the protocol of the ADI-2 DAC FS (EQ, presets, Volume, Dim, Lock Volume) they follow its rules, and Auto Ref
+Level its rule in their own Ref Levels; what only the ADI-2 DAC FS is known to do (Source and the clock, the status
+message from its inputs) they do not.
 
 Anything the model does not cover is not silently accepted: it is recorded in SimulatedAdi2.unsimulated,
 and tests assert that list stays empty.
@@ -43,8 +44,8 @@ OUTPUT_RANGES = {
     23: (-180, -40),                             # Low Vol Ref in 0.5 dB steps
 }
 REF_LEVEL_RANGE = {3: (0, 3), 6: (0, 1), 9: (0, 1)}
-# Auto Ref Level, on Line Out and Phones: the Volume of one Ref Level step (Line 6 dB, Phones 15 dB)
-REF_STEP = {3: 60, 6: 150}
+# Auto Ref Level, on Line Out and Phones: each value of Ref Level as a level in dBu (Phones: Lo-Power, Hi-Power)
+REF_DBU = {3: (-5, 1, 7, 13), 6: (7, 22)}
 
 # device settings (address 12), ADI-2 DAC
 DEVICE_RANGES = {
@@ -67,8 +68,10 @@ PRO_OUTPUT = {
     23: (-180, -40, -60),
 }
 PRO_REF_LEVEL = {"line": (0, 3, 2), "phones": (0, 1, 0)}    # +4 .. +24 dBu; Lo-Power, Hi-Power
+PRO_REF_DBU = {3: (4, 13, 19, 24), 9: (7, 22)}   # Auto Ref Level, on Line Out and Phones 3/4: as REF_DBU
 PRO_24_OUTPUT = {**PRO_OUTPUT, 9: (0, 6, 2)}     # DA Filter: SD Sharp .. SD LD, Brickwall, NOS
 PRO_24_REF_LEVEL = {"line": (0, 4, 1), "phones": (0, 2, 1)}  # +1 .. +24 dBu; IEM, Lo-Power, Hi-Power
+PRO_24_REF_DBU = {3: (1, 7, 13, 19, 24), 9: (1, 7, 19)}
 REAR_TRS_SOURCE = {19: (0, 1, 0)}                # ADI-2/4 Pro, Phones 3/4 only: Line 1/2, Ph. 3/4
 EX_SOURCE = (0, 6, 0)                            # ADI-2/4 Pro EX: ADAT 3/4 besides
 SOURCE_IN_DAC_MODE = (0, 6, 0)                   # Auto, AES, SPDIF coax, Optical, Analog, USB 1/2, USB 3/4
@@ -196,6 +199,7 @@ class SimulatedAdi2:
         # the ADI-2/4 Pro SE (0) or EX (1)
         self.revision = (2 if self.dac_fs else 0) if revision is None else revision
         self.tables = tables(model, self.revision)
+        self.ref_dbu = (REF_DBU if self.dac_fs else PRO_REF_DBU if model.id == models.PRO.id else PRO_24_REF_DBU)
         self.header = codec.header(model.id)
         self.state = dict(state)
         self.layout = layout                     # [[(address, index), ...] per 0x01 message] as in a real dump
@@ -306,9 +310,10 @@ class SimulatedAdi2:
         load_bt = self.state.get((left, 27)) == 1
         self.state.update({k: v for k, v in bank.items() if not (k[0] == left and k[1] in BT_INDICES) or load_bt})
 
-    def _ref_step(self):
-        """Auto Ref Level is modelled on the ADI-2 DAC FS only."""
-        return REF_STEP if self.dac_fs else {}
+    def _active(self, a):
+        """Whether output a is active: on the ADI-2 Pro and ADI-2/4 Pro Line Out (Phones 1/2 is not modelled) and
+        Phones 3/4."""
+        return a == self.active if self.dac_fs else a in (3, 9)
 
     def _dac_mode(self):
         """ADI-2 Pro and ADI-2/4 Pro in Basic Mode DAC: Source has its seven choices."""
@@ -536,7 +541,7 @@ class SimulatedAdi2:
         # B/T Enable and a value that was already there leave it
         if v != before and (i in BAND_INDICES or (i in BT_INDICES and self.state.get((left, 27)) == 1)):
             self._source_edited(left, (written, i))
-        if (i in BAND_INDICES or i in (2, 20, 21, 22, 24, 25)) and LEFT_EQ[left] == self.active:
+        if (i in BAND_INDICES or i in (2, 20, 21, 22, 24, 25)) and self._active(LEFT_EQ[left]):
             # also when a band frequency moves, and EQ Enable and B/T Enable, which decide what counts; a band of an
             # output that is not active does not start it
             self._follow_ref_level(LEFT_EQ[left], volume=True)
@@ -603,7 +608,7 @@ class SimulatedAdi2:
         self._apply(left, bands)                                    # Dual EQ comes with the source
         self.state[(left, 28)] = v
         out = LEFT_EQ[left]
-        changed = out == self.active and self._auto_ref_level(out)
+        changed = self._active(out) and self._auto_ref_level(out)
         self._report_changes(before, skip={(left, 28)}, also=[(out, 12)] if changed else [])   # every source choice
 
     def _set_output(self, a, i, v):
@@ -655,8 +660,9 @@ class SimulatedAdi2:
     def _set_auto_ref_level(self, a, v):
         """Switching Auto Ref Level keeps the level: on, Volume is relative to the highest Ref Level (dBr); off, to
         the Ref Level that is set, which stays. The device reports the new Volume."""
-        if v != self.state.get((a, 3)) and a in self._ref_step():
-            shift = (self.tables.outputs[a][2][1] - self.state[(a, 2)]) * REF_STEP[a]
+        if v != self.state.get((a, 3)) and a in self.ref_dbu:
+            levels = self.ref_dbu[a]
+            shift = (levels[-1] - levels[self.state[(a, 2)]]) * 10
             self._report_volume(a, self.state[(a, 12)] + (-shift if v else shift))
         self.state[(a, 3)] = v
         self._follow_ref_level(a)
@@ -694,23 +700,25 @@ class SimulatedAdi2:
 
     def _set_ref_level(self, a, v):
         old = self.state.get((a, 2), v)
-        if a in self._ref_step() and self.state.get((a, 3)) == 1 and v != old:
-            # with Auto Ref Level on, writing Ref Level moves Volume a step's worth, both directions, unreported
-            vol = self.state[(a, 12)] + REF_STEP[a] * (v - old)
+        if a in self.ref_dbu and self.state.get((a, 3)) == 1 and v != old:
+            # with Auto Ref Level on, writing Ref Level moves Volume by the difference, both directions, unreported
+            vol = self.state[(a, 12)] + (self.ref_dbu[a][v] - self.ref_dbu[a][old]) * 10
             self.state[(a, 12)] = _clamp(vol, self.tables.outputs[a][12])
         self.state[(a, 2)] = v
 
     def _auto_ref_level(self, a):
         """With Auto Ref Level on, the device picks Ref Level from Volume plus the positive gain at the low or the
-        high end, whichever is more, per channel; True when it moved. Line Out: 0 up to -18 dB, 1 up to -12 dB, 2 up
-        to -6 dB, else 3. Phones: Lo-Power up to -15 dB, else Hi-Power. Counted: a band below 400 Hz (390 counts,
-        400 not) or from 5000 Hz (4000 not), peak and shelf alike, while the EQ of its channel is on; Bass and
-        Treble by the same rule on their frequency, while B/T Enable is on, the EQ on or off. At either end the
-        positive gains add up: a band and Bass together, measured; two bands together, assumed. Between 4000 and
+        high end, whichever is more, per channel; True when it moved. It is the lowest Ref Level at which that level,
+        counted from it, stays at 0 dB or below (ref_dbu): on the ADI-2 DAC FS Line Out 0 up to -18 dB, 1 up to
+        -12 dB, 2 up to -6 dB, else 3; Phones Lo-Power up to -15 dB, else Hi-Power. Counted: a band below 400 Hz
+        (390 counts, 400 not) or from 5000 Hz (4000 not), peak and shelf alike, while the EQ of its channel is on;
+        Bass and Treble by the same rule on their frequency, while B/T Enable is on, the EQ on or off. At either end
+        the positive gains add up: a band and Bass together, measured; two bands together, assumed. Between 4000 and
         5000 Hz it is not modelled. A Volume write and switching Auto Ref Level on start it on any output; a band,
         Bass/Treble, EQ Enable or B/T Enable change and a source choice only on the active output, and an output
-        becoming active starts it there; one becoming inactive keeps its Ref Level."""
-        if a not in self._ref_step() or self.state.get((a, 3)) != 1:
+        becoming active starts it there; one becoming inactive keeps its Ref Level. On the ADI-2 Pro and ADI-2/4 Pro
+        Line Out and Phones 3/4 are both active."""
+        if a not in self.ref_dbu or self.state.get((a, 3)) != 1:
             return False
         left, right = EQ_PAIRS[a]
 
@@ -735,10 +743,8 @@ class SimulatedAdi2:
                      if self.state.get((x, 2)) == 1]
             gain = max([gain, *ends(bands + tone)])
         level = self.state[(a, 12)] / 10 + gain / 2
-        if a == 3:
-            ref = 0 if level <= -18 else 1 if level <= -12 else 2 if level <= -6 else 3
-        else:
-            ref = 0 if level <= -15 else 1
+        levels = self.ref_dbu[a]
+        ref = next(k for k, dbu in enumerate(levels) if level + levels[-1] - dbu <= 0 or dbu == levels[-1])
         if ref == self.state.get((a, 2)):
             return False
         self.state[(a, 2)] = ref

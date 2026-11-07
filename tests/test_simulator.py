@@ -699,12 +699,35 @@ class OtherModels(unittest.TestCase):
         self.dump()
         clock_source = sim.state[(12, 15)]
         self.send((3, 1, 4))                                        # Source on one output, nothing else
-        self.send((3, 12, 60), (6, 2, 0), (6, 12, 0))               # Auto Ref Level is on: Ref Level stays
+        self.send((6, 2, 0), (6, 12, 0))                            # Phones 1/2: Auto Ref Level on, Ref Level stays
         self.send((7, 27, 1))                                       # Load B/T: B/T Enable stays on
         self.clock.sleep(0.1)
         self.assertEqual([m for m in sim.poll() if m[5] != 0x07], [])
-        self.assertEqual([sim.state[k] for k in [(6, 1), (9, 1), (12, 15), (3, 2), (6, 2), (7, 20)]],
-                         [0, 0, clock_source, 1, 0, 1])
+        self.assertEqual([sim.state[k] for k in [(6, 1), (9, 1), (12, 15), (6, 2), (7, 20)]],
+                         [0, 0, clock_source, 0, 1])
+
+    def test_auto_ref_level_in_their_own_ref_levels(self):
+        """The lowest Ref Level at which Volume, counted from it, stays at 0 dB or below. Line Out of the Pro: +4,
+        +13, +19, +24 dBu; of the ADI-2/4 Pro +1, +7, +13, +19, +24 dBu. Phones 3/4: Lo-Power +7, Hi-Power +22 dBu;
+        IEM +1, Lo-Power +7, Hi-Power +19 dBu."""
+        for name, volumes in (("Pro", {3: [(-200, 0), (-190, 1), (-110, 1), (-100, 2), (-50, 2), (-40, 3)],
+                                       9: [(-150, 0), (-140, 1)]}),
+                              ("2/4 SE", {3: [(-230, 0), (-210, 1), (-110, 2), (-50, 3), (-40, 4)],
+                                          9: [(-180, 0), (-170, 1), (-120, 1), (-110, 2)]})):
+            for out, pairs in volumes.items():
+                for volume, ref in pairs:
+                    with self.subTest(name, out=out, volume=volume):
+                        sim = self.use(name)
+                        self.send((out, 3, 1), (out, 12, volume))
+                        self.assertEqual(sim.state[(out, 2)], ref)
+
+    def test_writing_ref_level_moves_volume_by_the_difference(self):
+        sim = self.use("Pro")
+        self.send((3, 3, 1), (3, 12, -50))                          # +19 dBu
+        self.send((3, 2, 1))                                        # +13 dBu: 6 dB less
+        self.assertEqual(sim.state[(3, 12)], -110)
+        self.send((3, 2, 0))                                        # +4 dBu: 9 dB less
+        self.assertEqual(sim.state[(3, 12)], -200)
 
     def test_the_input_eq_is_not_simulated_yet(self):
         sim = self.use("Pro")
