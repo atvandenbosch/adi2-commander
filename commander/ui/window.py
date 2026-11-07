@@ -65,6 +65,7 @@ ACTIVE_TIP = "Active on the device: its display and volume knob are on this outp
 ACTIVE = "Active on the device"                 # the ADI-2 Pro and ADI-2/4 Pro
 ALWAYS_ACTIVE = "Always active on the device"
 NOT_YET = "Not yet available for the %s"          # with the model's name
+SEPARATE = "Settings of its own with Dual Phones and Mute v. TRS 1/2 on:\nSETUP › Options › Phones on the device"
 # the kinds of file Save writes
 APO_FILES = "Equalizer APO (*.txt)"
 REMOTE_FILES = "ADI-2 Remote preset (*.adieqpr)"
@@ -228,6 +229,7 @@ class MainWindow(QMainWindow):
 
         # top: output tabs; the connection is in the status bar
         self.model = models.DAC                          # the model the window is laid out for: the last connected
+        self.status_shown = None                         # the device's status message the tabs show: show_tabs
         self.tabs = QTabBar()
         for name in self.model.outputs:
             self.tabs.addTab(name)
@@ -568,18 +570,14 @@ class MainWindow(QMainWindow):
             self.follow_preview(self.pointer())
 
     def set_model(self, model):
-        """Lay the window out for a model: the names of the outputs; an output, and the panels of the input and the
-        output's other settings, that Commander does not control on it are grey and cannot be opened."""
+        """Lay the window out for a model: the names of the outputs; the panels of the input and the output's other
+        settings, that Commander does not control on it, are grey and cannot be opened; the tabs: show_tabs."""
         self.model = model
         self.graph.no_bt_from = self.loudness_graph.no_bt_from = self.preview.no_bt_from = model.no_bt_from
-        why = NOT_YET % model.name
-        for i, (name, (_, out, _, _)) in enumerate(zip(model.outputs, P.OUTPUTS)):
+        for i, name in enumerate(model.outputs):
             self.tabs.setTabText(i, name)
-            self.tabs.setTabEnabled(i, out in model.controlled)
         for tab in (self.input_tab, self.output_tab):
-            tab.set_available(not model.eq_only, why)
-        if self.output[1] not in model.controlled:
-            self.tabs.setCurrentIndex(next(i for i, o in enumerate(P.OUTPUTS) if o[1] in model.controlled))
+            tab.set_available(not model.eq_only, NOT_YET % model.name)
         self.on_device_status(self.session.device_status)
 
     def on_connection(self, status, detail):
@@ -602,17 +600,28 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def on_device_status(self, status):
-        """An output the device has active gets a dot on its tab, in the colour of the lamp: a fact of the device,
-        not a choice here; also on an output Commander does not control."""
+        self.status_shown = status
+        self.refresh()                                   # DSD bypasses the DSP: the switches, curves and cells follow
+
+    def show_tabs(self):
+        """An output Commander does not control now has a grey tab that cannot be opened; Phones 1/2 of an ADI-2 Pro
+        and ADI-2/4 Pro follows the device's settings (Session.controls). An output the device has active gets a dot
+        on its tab, in the colour of the lamp: a fact of the device, not a choice here; also on an output Commander
+        does not control."""
+        status = self.status_shown
         active = self.model.active[status.output] if status is not None else ()
         always = set.intersection(*map(set, self.model.active))
         for i, (_, out, _, _) in enumerate(P.OUTPUTS):
+            controlled = out in self.model.controlled or self.session.controls(out)
+            self.tabs.setTabEnabled(i, controlled)
             on = out in active
             self.tabs.setTabIcon(i, self.dot if on else self.no_dot)
             tip = ACTIVE_TIP if not self.model.eq_only else ALWAYS_ACTIVE if out in always else ACTIVE
-            tips = ([] if self.tabs.isTabEnabled(i) else [NOT_YET % self.model.name]) + ([tip] if on else [])
+            why = SEPARATE if out in dict(self.model.separate) else NOT_YET % self.model.name
+            tips = ([] if controlled else [why]) + ([tip] if on else [])
             self.tabs.setTabToolTip(i, "\n".join(tips))
-        self.refresh()                                   # DSD bypasses the DSP: the switches, curves and cells follow
+        if not self.tabs.isTabEnabled(self.tabs.currentIndex()):
+            self.tabs.setCurrentIndex(next(i for i in range(self.tabs.count()) if self.tabs.isTabEnabled(i)))
 
     def save_backup(self):
         """The state as connected, with the preset slots once all are read, as a copy in the backups folder."""
@@ -1269,7 +1278,8 @@ class MainWindow(QMainWindow):
         editing = None if d is None else (d.slot, d.name, ready and not d.locked and d.changed(), self.edit_warning(),
                                           "Nothing to write: the preset is unchanged" if not d.changed() else
                                           "" if ready else "OK waits for the device: it is not connected")
-        tags = {o: tag for tag, (_, o, _, _) in zip(self.model.tags, P.OUTPUTS) if o in self.model.controlled}
+        tags = {o: tag for tag, (_, o, _, _) in zip(self.model.tags, P.OUTPUTS)
+                if o in self.model.controlled or self.session.controls(o)}
         self.presets.refresh(s, (self.output_name(),) + self.output[1:], self.session.slots, ready,
                              self.session.operation(), self.slot_issues, editing, tags)
         self.source.copy(self.presets.rows.get(s.get((left, P.EQ_PRESET_SELECT))) if ready and not editing else None,
@@ -1296,6 +1306,7 @@ class MainWindow(QMainWindow):
             self.preset_name.setText(d.name)
 
     def refresh(self):
+        self.show_tabs()                                 # Phones 1/2 can come and go with the device's settings
         eq, (_, out, left, _) = self.eq(), self.output
         s, ready, editing = eq.state, eq.ready(), self.draft is not None
         dual = not ready or s.get((out, P.DUAL_EQ)) == 1

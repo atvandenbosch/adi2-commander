@@ -170,9 +170,13 @@ class Session:
         return self.state.get((left, P.EQ_ENABLE)) == 1 or dual and self.state.get((right, P.EQ_ENABLE)) == 1
 
     def controls(self, out):
-        """Whether Commander controls output out of the device connected: on an ADI-2 Pro and ADI-2/4 Pro not
-        Phones 1/2 (models.py)."""
-        return self.model is not None and out in self.model.controlled
+        """Whether Commander controls output out of the device connected: on an ADI-2 Pro and ADI-2/4 Pro Phones 1/2
+        only while it has settings of its own (models.py)."""
+        if self.model is None:
+            return False
+        need = dict(self.model.separate).get(out)
+        return out in self.model.controlled or need is not None and all(
+            self.state.get((12, i)) == 1 for i in need)
 
     def writable(self, key):
         a, i = key

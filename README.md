@@ -9,7 +9,8 @@ A personal project, shared as is.
 ## Features
 
 - **Device control:** EQ, Bass/Treble, Loudness and the output settings of Line Out, Phones and IEM. On the ADI-2 Pro
-  and ADI-2/4 Pro: EQ, Bass/Treble and Loudness of Line Out and Phones 3/4.
+  and ADI-2/4 Pro: EQ, Bass/Treble and Loudness of Line Out and Phones 3/4, and of Phones 1/2 with Dual Phones and
+  Mute v. TRS 1/2 on.
 - **In-graph editing:** the EQ as a response curve, edited in place.
 - **Table input:** every value entered or stepped directly, by keyboard or mouse.
 - **Device-accurate curves:** curves and conversions follow the device implementation.

@@ -27,7 +27,7 @@ from commander.conversion import setupfile
 from commander.ui import simulated, theme
 from commander.ui.tables import FLASH_TIME, KEY_ROLE
 from commander.ui.untested import UntestedBox
-from commander.ui.window import MainWindow
+from commander.ui.window import SEPARATE, MainWindow
 from commander.ui.widgets import FRAME, SIDE, label_color, placement
 from tests.gui import Clock, WindowTest, tooltip_color
 from tests.support import DUMP, PRESETS
@@ -688,7 +688,7 @@ class ProWindow(WindowTest):
         self.assertEqual(self.start_again(simulated=True), [])
 
     def test_the_outputs_it_controls(self):
-        tabs, why = self.win.tabs, "Not yet available for the ADI-2 Pro"
+        tabs = self.win.tabs
         self.assertEqual([tabs.tabText(i) for i in range(3)], ["Line Out", "Phones 1/2", "Phones 3/4"])
         self.assertEqual([tabs.isTabEnabled(i) for i in range(3)], [True, False, True])
         self.win.next_tab(1)
@@ -699,10 +699,29 @@ class ProWindow(WindowTest):
         self.assertEqual(tabs.currentIndex(), 2)
         self.assertEqual(self.win.presets.output_title.text(), "PHONES 3/4")
 
+    def test_phones_1_2_with_settings_of_its_own(self):
+        """Dual Phones (12/8) and Mute v. TRS 1/2 (12/11) on: Phones 1/2 has settings of its own, and Commander
+        controls its EQ; one of them off again: its tab grey, and the window on another output."""
+        tabs = self.win.tabs
+        self.assertEqual(tabs.tabToolTip(1), SEPARATE)
+        self.sim.state[(12, 8)] = 1                                   # read back by the idle refresh
+        self.spin(4000)
+        self.assertEqual([tabs.isTabEnabled(i) for i in range(3)], [True, True, True])
+        self.assertEqual(tabs.tabToolTip(1), "")
+        tabs.setCurrentIndex(1)
+        self.assertTrue(self.session.writable((7, 4)) and not self.session.writable((6, 12)))   # a gain, Volume
+        self.win.eq_switches[0].click()
+        self.spin(1500)
+        self.assertEqual(self.sim.state[(7, 2)], 1)
+        self.sim.state[(12, 11)] = 0
+        self.spin(4000)
+        self.assertEqual((tabs.isTabEnabled(1), tabs.currentIndex() == 1), (False, False))
+        self.assertFalse(self.session.writable((7, 4)))
+
     def test_the_outputs_the_device_has_active(self):
         """Line Out or Phones 1/2, which share a signal, or neither; Phones 3/4 always. A dot also on Phones 1/2,
         which Commander does not control."""
-        tabs, why = self.win.tabs, "Not yet available for the ADI-2 Pro"
+        tabs, why = self.win.tabs, SEPARATE
 
         def dots():
             return [tabs.tabIcon(i).cacheKey() == self.win.dot.cacheKey() for i in range(3)]
@@ -797,7 +816,7 @@ class Pro24Window(WindowTest):
     bypassed_by_the_input = ProWindow.bypassed_by_the_input
 
     def test_the_eq_of_the_input_bypasses_that_of_the_outputs_from_705_6_khz(self):
-        self.assertEqual(self.win.tabs.tabToolTip(1), "Not yet available for the ADI-2/4 Pro")
+        self.assertEqual(self.win.tabs.tabToolTip(1), SEPARATE)
         self.sim.state.update({(4, 2): 1, (1, 2): 1, (12, 16): 7})   # 384 kHz: no Bass/Treble, the EQ as before
         self.assertEqual(self.bypassed_by_the_input(), (False, False, False, True))
         self.sim.state[(12, 16)] = 8                                  # 705.6 kHz

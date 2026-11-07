@@ -2,8 +2,8 @@
 proof, so a connection asks under each ID in turn, the hinted one first.
 
 Commander controls all of an ADI-2 DAC FS. Of an ADI-2 Pro and ADI-2/4 Pro it controls the EQ (bands, Bass/Treble,
-presets, Loudness) of Line Out and Phones 3/4. Phones 1/2 shares the signal of Line Out, and has settings of its
-own only with Dual Phones on (ADI-2 Pro manual, 8.2): what its addresses do otherwise is not known."""
+presets, Loudness) of Line Out and Phones 3/4, and of Phones 1/2 while it has settings of its own: Phones 1/2 shares
+the signal of Line Out, and has its own settings with Dual Phones and Mute v. TRS 1/2 on (ADI-2 Pro manual, 14.1.4)."""
 
 from collections import namedtuple
 
@@ -17,6 +17,7 @@ from . import MODEL
 # outputs: the names of Line Out, Phones 1/2 and Phones 3/4, in the order of params.OUTPUTS
 # tags: their marks on a preset that is selected there
 # controlled: the output addresses Commander controls
+# separate: (output address, indices on address 12): an output Commander controls while those settings are on
 # eq_only: of those Commander controls only the EQ, and none of the device's other settings
 # no_bt_from: from this rate on there is no Bass/Treble and no Loudness (manuals, 8.8)
 # one_eq_from: from this rate on the EQ of the input, while it is on, bypasses the EQ of the outputs; None when it
@@ -24,13 +25,13 @@ from . import MODEL
 # active: per value of the active output in the status message (status.Status.output), the output addresses the
 #   device has active. The DAC FS has one at a time. The Pro and ADI-2/4 Pro have Line Out or Phones 1/2, which share
 #   a signal, or neither; and Phones 3/4 always
-Model = namedtuple("Model", "id name port supported tested outputs tags controlled eq_only no_bt_from one_eq_from "
-                             "active")
+Model = namedtuple("Model", "id name port supported tested outputs tags controlled separate eq_only no_bt_from "
+                             "one_eq_from active")
 
 DAC = Model(0x71, MODEL, "ADI-2 DAC", True, True, ("Line Out", "Phones 1/2", "Phones 3/4 · IEM"), ("L", "P", "I"),
-            (3, 6, 9), False, 705600, None, ((3,), (6,), (9,), ()))
+            (3, 6, 9), (), False, 705600, None, ((3,), (6,), (9,), ()))
 PRO = Model(0x72, "ADI-2 Pro", "ADI-2 Pro", True, False, ("Line Out", "Phones 1/2", "Phones 3/4"),
-            ("L", "P12", "P34"), (3, 9), True, 352800, 352800, ((9,), (3, 9), (6, 9), (6, 9)))
+            ("L", "P12", "P34"), (3, 9), ((6, (8, 11)),), True, 352800, 352800, ((9,), (3, 9), (6, 9), (6, 9)))
 PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", one_eq_from=705600)
 MODELS = (DAC, PRO, PRO_24)
 BY_ID = {m.id: m for m in MODELS}

@@ -9,7 +9,8 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 ### Added
 
 - ADI-2 Pro (all versions, including EX) and ADI-2/4 Pro (SE and EX): the EQ of Line Out and Phones 3/4, with
-  Bass/Treble, Loudness, presets, Load and Save. Phones 1/2 and the other settings are not yet available. Not tested
+  Bass/Treble, Loudness, presets, Load and Save; also of Phones 1/2 while it has settings of its own (Dual Phones and
+  Mute v. TRS 1/2 on). The other settings are not yet available. Not tested
   with an actual device; a notice says so when one is connected.
 - Simulated mode asks which ADI-2 to simulate: ADI-2 DAC FS, ADI-2 Pro, ADI-2/4 Pro SE or EX. The choice made last
   is preselected.
