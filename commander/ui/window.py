@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QFrame, QHBox
                                QWidget)
 
 from .. import __version__
+from .. import backup
+from ..conversion import setupfile
 from ..conversion import eqfile as E
 from ..conversion import eqimport as I
 from ..conversion import presetfile as R
@@ -204,12 +206,15 @@ class MainWindow(QMainWindow):
     PRESETS_WIDTH = 260
     LOUDNESS_WIDTHS = [88, 88, 88]
 
-    def __init__(self, session, simulated=False, settings=None):
+    def __init__(self, session, simulated=False, settings=None, backups=None):
         """simulated: the session talks to the simulator; settings: a QSettings for what the app remembers (default
-        the user's, untested.ORGANIZATION and APPLICATION)."""
+        the user's, untested.ORGANIZATION and APPLICATION); backups: the folder for a copy of the device's state at
+        each connection (backup.keep), or None for none."""
         super().__init__()
         self.session = session
         self.simulated = simulated
+        self.backups = backups
+        self.taken = None                            # the state as connected, (state, model), until saved
         self.settings = settings if settings is not None else QSettings(untested.ORGANIZATION, untested.APPLICATION)
         self.warned = set()                          # the untested models the notice was shown for in this run
         self.marks = Marks()
@@ -521,6 +526,7 @@ class MainWindow(QMainWindow):
         session.on_changed.append(self.on_changed)
         session.on_verified.append(self.on_verified)
         session.on_slots.append(lambda numbers: self.refresh_slots())
+        session.on_slots.append(lambda numbers: self.save_backup())
         session.on_stale.append(lambda outputs: self.refresh_presets())
         session.on_operation.append(self.on_operation)
         session.on_device_status.append(self.on_device_status)
@@ -585,7 +591,11 @@ class MainWindow(QMainWindow):
         if status == "ready" and self.session.model != self.model:
             self.set_model(self.session.model)
         if status == "ready":
+            if self.backups is not None:             # before anything can be written
+                self.taken = (dict(self.session.state), self.session.model)
             QTimer.singleShot(0, self.warn_untested)    # after this event: the notice is modal
+        else:
+            self.taken = None
         color, text = LAMP[status]
         if status == "unsupported":
             text %= self.session.model.name
@@ -608,6 +618,17 @@ class MainWindow(QMainWindow):
             tips = ([] if self.tabs.isTabEnabled(i) else [NOT_YET % self.model.name]) + ([tip] if on else [])
             self.tabs.setTabToolTip(i, "\n".join(tips))
         self.refresh()                                   # DSD bypasses the DSP: the switches, curves and cells follow
+
+    def save_backup(self):
+        """The state as connected, with the preset slots once all are read, as a copy in the backups folder."""
+        if self.taken is None or any(n not in self.session.slots for n in setupfile.SLOTS):
+            return
+        (state, model), self.taken = self.taken, None
+        try:
+            text = setupfile.write(state, self.session.slots, model, self.session.revision())
+            backup.keep(self.backups, model, text)
+        except (OSError, ValueError) as e:
+            self.note("Backup not saved: %s" % e, theme.WARN)
 
     def warn_untested(self):
         """A model Commander has not been tested with: say so before anything is done, once per run. Quit closes

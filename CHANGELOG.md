@@ -15,6 +15,8 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
   is preselected.
 - Save as an ADI-2 Remote preset (.adieqpr), to store it to a preset slot with ADI-2 Remote's EQ Preset Editor,
   also from Simulated mode.
+- At each connection, a copy of the device's state as an ADI-2 Remote setup file, in
+  %LOCALAPPDATA%\ADI-2 Commander\Backups: the last five per model that differ.
 
 ### Fixed
 

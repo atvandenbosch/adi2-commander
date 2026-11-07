@@ -17,6 +17,7 @@ from PySide6.QtCore import QSettings
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
+from . import backup
 from .device import models
 from .device.connection import WinmmPort, warm_up
 from .device.simulator import DEMO_DUMP, DEMO_PRESETS, SimPort, SimulatedAdi2
@@ -86,7 +87,7 @@ def main(argv=None):
         sim = None
         open_port = WinmmPort
     session = Session(open_port)
-    win = MainWindow(session, simulated=sim is not None)
+    win = MainWindow(session, simulated=sim is not None, backups=None if sim is not None else backup.folder())
     if sim is not None:
         win.setWindowTitle(win.windowTitle() + "  —  SIMULATED DEVICE")
         win.simulator = sim

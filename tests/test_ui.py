@@ -23,12 +23,13 @@ from commander.session import Session
 from commander import app as commander_app
 from commander.ui import about
 from commander.ui import loudness as L
+from commander.conversion import setupfile
 from commander.ui import simulated, theme
 from commander.ui.tables import FLASH_TIME, KEY_ROLE
 from commander.ui.untested import UntestedBox
 from commander.ui.window import MainWindow
 from commander.ui.widgets import FRAME, SIDE, label_color, placement
-from tests.gui import WindowTest, tooltip_color
+from tests.gui import Clock, WindowTest, tooltip_color
 from tests.support import DUMP, PRESETS
 
 
@@ -828,6 +829,73 @@ class SimulatedModel(unittest.TestCase):
             return d.result() == d.DialogCode.Accepted
         self.assertIsNone(self.choose(escape))
         self.assertEqual(self.settings.value(simulated.KEY), "pro")             # not remembered
+
+
+class Backup(unittest.TestCase):
+    """A copy of the device's state at each connection: taken before anything can be written, saved once the preset
+    slots are read."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.folder = os.path.join(self.dir.name, "Backups")
+        self.clock = Clock()
+        self.sim = SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=self.clock)
+        self.settings = QSettings(os.path.join(self.dir.name, "settings.ini"), QSettings.IniFormat)
+
+    def window(self, **kw):
+        session = Session(lambda: SimPort(self.sim), clock=self.clock)
+        win = MainWindow(session, settings=self.settings, **kw)
+        win.timer.setInterval(24 * 3600 * 1000)
+        win.ask = lambda dialog: True
+        self.addCleanup(session.close)
+        self.addCleanup(win.close)
+        return win, session
+
+    def run_for(self, win, seconds, until=lambda: False):
+        end = self.clock.t + seconds
+        while self.clock.t < end and not until():
+            self.clock.t += 0.05
+            win.tick()
+            QApplication.processEvents()
+
+    def copies(self):
+        return sorted(os.listdir(self.folder)) if os.path.isdir(self.folder) else []
+
+    def test_the_state_as_connected(self):
+        win, session = self.window(backups=self.folder)
+        self.run_for(win, 5, session.ready)
+        taken = dict(session.state)
+        self.assertNotIn(20, session.slots)                                 # the slots still to read
+        session.set((4, 7), taken[(4, 7)] + 4)                              # written before the copy is saved
+        self.run_for(win, 6)
+        [name] = self.copies()
+        self.assertTrue(name.startswith("ADI-2 DAC FS "))
+        with open(os.path.join(self.folder, name), encoding="ascii", newline="") as f:
+            self.assertEqual(f.read(), setupfile.write(taken, session.slots, session.model, session.revision()))
+        self.assertEqual(self.sim.state[(4, 7)], taken[(4, 7)] + 4)
+
+    def test_a_new_copy_only_when_the_state_differs(self):
+        win, session = self.window(backups=self.folder)
+        self.run_for(win, 8)
+        self.sim.power(False)
+        self.run_for(win, 1)
+        self.sim.power(True)
+        self.run_for(win, 8)
+        self.assertEqual(len(self.copies()), 1)
+
+    def test_gone_before_the_slots_are_read(self):
+        win, session = self.window(backups=self.folder)
+        self.run_for(win, 5, session.ready)
+        self.sim.power(False)
+        self.run_for(win, 4)
+        self.assertEqual(self.copies(), [])
+
+    def test_none_without_a_folder(self):
+        win, session = self.window()
+        self.run_for(win, 8)
+        self.assertEqual(self.copies(), [])
+        self.assertIsNone(win.backups)
 
 
 if __name__ == "__main__":
