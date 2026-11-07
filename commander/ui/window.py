@@ -56,8 +56,9 @@ from .scrim import RISE, Scrim
 from . import untested
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, LOUDNESS_COLUMNS, CellDelegate, Marks,
                      ParamModel, ParamView, band_address, band_rows, bt_rows, loudness_rows)
-from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE, Action, MoreButton, Option,
-                      Switch, Choice, dot_icon, dot_pixmap, dropped_file, head, label_color, pulse, switch_tip)
+from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, DSD_BYPASS, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE, Action,
+                      MoreButton, Option, Switch, Choice, dot_icon, dot_pixmap, dropped_file, head, input_eq_bypass,
+                      label_color, pulse, switch_tip)
 
 FS_TIP = "Sample rate the curves are computed at"
 ACTIVE_TIP = "Active on the device: its display and volume knob are on this output."
@@ -68,9 +69,6 @@ NOT_YET = "Not yet available for the %s"          # with the model's name
 APO_FILES = "Equalizer APO (*.txt)"
 REMOTE_FILES = "ADI-2 Remote preset (*.adieqpr)"
 REMOTE_SUFFIX = ".adieqpr"
-ONE_EQ = "EQ on one stereo channel only"
-ONE_EQ_TIP = ("From %g kHz the %s runs the EQ on one stereo channel only: the input, Line Out or Phones 3/4.\n"
-              "It may not be this output.")
 LAMP = {"searching": (theme.SECONDARY, "Waiting for the device"), "busy": (theme.WARN, "Port in use"),
         "loading": (theme.WARN, "Reading"), "ready": (theme.GOOD, "Connected"),
         "unsupported": (theme.WARN, "%s not currently supported")}      # with the model's name
@@ -260,12 +258,8 @@ class MainWindow(QMainWindow):
         signal_lay = QHBoxLayout(self.signal_info)
         signal_lay.setContentsMargins(INNER_GAP, 0, 0, 0)
         signal_lay.setSpacing(INNER_GAP)
-        self.one_eq = QLabel(ONE_EQ)                     # ADI-2 Pro and ADI-2/4 Pro at a high rate: show_own_rate
-        self.one_eq.setStyleSheet(label_color(theme.WARN))
-        self.one_eq.hide()
         signal_lay.addWidget(self.input_text)
         signal_lay.addWidget(self.rate_text)
-        signal_lay.addWidget(self.one_eq)
         bar.addWidget(self.signal_info)
         self.file_note = QLabel()                        # what the last Save or Load did
         self.file_note.setContentsMargins(0, 0, 8, 0)    # as far from the edge as the lamp on the left
@@ -676,7 +670,6 @@ class MainWindow(QMainWindow):
             self.show_own_rate()
             return
         self.input_text.show()
-        self.one_eq.hide()
         st = self.session.device_status
         known = self.session.ready() and st is not None
         self.signal_info.setVisible(known)
@@ -695,8 +688,7 @@ class MainWindow(QMainWindow):
         self.rate_text.setStyleSheet(label_color(color))
 
     def show_own_rate(self):
-        """ADI-2 Pro and ADI-2/4 Pro: beside the connection only the rate; from the rate on which the EQ runs on one
-        stereo channel only, a note."""
+        """ADI-2 Pro and ADI-2/4 Pro: beside the connection only the rate."""
         rate = self.live_rate()
         self.signal_info.setVisible(rate is not None)
         self.input_text.hide()
@@ -704,9 +696,6 @@ class MainWindow(QMainWindow):
             return
         self.rate_text.setText("%g kHz" % (rate / 1000))
         self.rate_text.setStyleSheet(label_color(theme.LABEL))
-        one = self.model.one_eq_from is not None and rate >= self.model.one_eq_from
-        self.one_eq.setVisible(one)
-        self.one_eq.setToolTip(ONE_EQ_TIP % (self.model.one_eq_from / 1000, self.model.name) if one else "")
 
     def show_live_rate(self):
         """The chosen fs in amber when the device runs at another rate; as always when it runs at this one, or when
@@ -1314,6 +1303,8 @@ class MainWindow(QMainWindow):
         bt_on = ready and s.get((left, P.BT_ENABLE)) == 1
         loudness_on = ready and s.get((out, P.LOUDNESS_ENABLE)) == 1
         bypassed = ready and eq.bypassed()
+        dsd = DSD_BYPASS if bypassed else None
+        eq_bypass = dsd or (input_eq_bypass(eq) if ready and eq.eq_bypassed(out) else None)
         for side, name in enumerate(("left", "right")):
             switch = self.eq_switches[side]
             switch.name = EQ_OWN[side] if dual else EQ_SHARED[side]           # its own channel first
@@ -1324,7 +1315,7 @@ class MainWindow(QMainWindow):
             else:
                 switch.show_state(eq_on[side], ready, switch_tip("EQ of the %s channel" % name, eq_on[side]) if dual
                                   else "Dual EQ off: one EQ for both channels\n" + switch_tip("EQ", eq_on[side]),
-                                  bypassed)
+                                  eq_bypass)
             self.band_delegates[side].color = side_color(side, dual)
             act = self.dual_actions[side]
             act.setEnabled(ready and self.editable())
@@ -1342,9 +1333,8 @@ class MainWindow(QMainWindow):
         else:
             self.bt_switch.show_state(bt_on, ready, switch_tip("Bass/Treble, both channels", bt_on) + "\n" + (
                 "Loaded with a preset: Load Bass/Treble with preset is on." if load_bt else
-                "Not loaded with a preset: Load Bass/Treble with preset is off."), bypassed)
-        self.loudness_switch.show_state(loudness_on, ready, switch_tip("Loudness, both channels", loudness_on),
-                                        bypassed)
+                "Not loaded with a preset: Load Bass/Treble with preset is off."), dsd)
+        self.loudness_switch.show_state(loudness_on, ready, switch_tip("Loudness, both channels", loudness_on), dsd)
         self.load_bt.show_state(load_bt, live and not editing, "Load Bass/Treble with preset: %s\n"
                                 "On: selecting a preset brings its Bass/Treble too, and changing Bass/Treble on a\n"
                                 "preset makes it Temp.%s" % ("on" if load_bt else "off", "" if self.model.eq_only else

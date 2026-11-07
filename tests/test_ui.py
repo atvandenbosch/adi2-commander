@@ -731,14 +731,39 @@ class ProWindow(WindowTest):
     def test_the_status_bar_and_the_rate(self):
         self.assertEqual(self.win.lamp_text.text(), "Connected")
         self.assertTrue(self.win.input_text.isHidden())
-        self.assertEqual((self.win.rate_text.text(), self.win.one_eq.isHidden()), ("48 kHz", True))
+        self.assertEqual(self.win.rate_text.text(), "48 kHz")
         self.sim.state[(12, 16)] = 6                                  # 352.8 kHz, read back by the idle refresh
         self.spin(4000)
-        self.assertEqual((self.win.rate_text.text(), self.win.one_eq.isHidden()), ("352.8 kHz", False))
-        self.assertIn("From 352.8 kHz the ADI-2 Pro runs the EQ on one stereo channel only", self.win.one_eq.toolTip())
+        self.assertEqual(self.win.rate_text.text(), "352.8 kHz")
         self.win.fs_box.setCurrentIndex(P.SAMPLE_RATES.index(352800))
         self.assertEqual(self.win.graph_note.text(), "No Bass/Treble at 352.8 kHz")
         self.assertNotIn("Phones and IEM", self.win.load_bt.toolTip())
+
+    def bypassed_by_the_input(self):
+        """Line Out, read back by the idle refresh: its left EQ switch dashed, and says why; Band 1 inactive in the
+        table; a band active in the graph."""
+        self.spin(4000)
+        left = self.win.eq_switches[0]
+        model = self.win.band_models[0]
+        return ("dashed" in left.styleSheet(), "the EQ of the input is on" in left.toolTip(),
+                model.inactive(model.cell(model.index(0, 2))),
+                any(p.flt.active for p in self.win.graph.points if p.flt.band is not None))
+
+    def test_the_eq_of_the_input_bypasses_that_of_the_outputs_from_352_8_khz(self):
+        self.sim.state.update({(4, 2): 1, (1, 2): 1})                 # EQ on: Line Out and the input
+        self.assertEqual(self.bypassed_by_the_input(), (False, False, False, True))      # 48 kHz
+        self.sim.state[(12, 16)] = 6                                  # 352.8 kHz
+        self.assertEqual(self.bypassed_by_the_input(), (True, True, True, False))
+        self.assertIn("Bypassed at 352.8 kHz while the EQ of the input is on: the ADI-2 Pro then runs that EQ only.",
+                      self.win.eq_switches[0].toolTip())
+        band = next(p for p in self.win.graph.points if p.flt.band is not None)
+        self.assertIn("EQ of the input on at 352.8 kHz: not in the signal path", self.win.graph._describe(band))
+        self.sim.state.update({(1, 2): 0, (2, 2): 1})                 # the right channel's, with Dual EQ off
+        self.assertEqual(self.bypassed_by_the_input(), (False, False, False, True))
+        self.sim.state[(0, 8)] = 1                                    # and on
+        self.assertEqual(self.bypassed_by_the_input(), (True, True, True, False))
+        self.sim.state[(4, 2)] = 0                                    # Line Out's EQ off: off, as always
+        self.assertEqual(self.bypassed_by_the_input()[:3], (False, False, True))
 
     def test_a_preset_shows_where_it_is_selected(self):
         self.sim.front_panel([(7, 28, 3), (10, 28, 3)])               # Preset 2 on Phones 1/2 and Phones 3/4
@@ -769,14 +794,15 @@ class ProWindow(WindowTest):
 class Pro24Window(WindowTest):
     model = PRO_24
 
-    def test_the_eq_on_one_channel_from_705_6_khz(self):
+    bypassed_by_the_input = ProWindow.bypassed_by_the_input
+
+    def test_the_eq_of_the_input_bypasses_that_of_the_outputs_from_705_6_khz(self):
         self.assertEqual(self.win.tabs.tabToolTip(1), "Not yet available for the ADI-2/4 Pro")
-        self.sim.state[(12, 16)] = 7                                  # 384 kHz: no Bass/Treble, the EQ as before
-        self.spin(4000)
-        self.assertTrue(self.win.one_eq.isHidden())
+        self.sim.state.update({(4, 2): 1, (1, 2): 1, (12, 16): 7})   # 384 kHz: no Bass/Treble, the EQ as before
+        self.assertEqual(self.bypassed_by_the_input(), (False, False, False, True))
         self.sim.state[(12, 16)] = 8                                  # 705.6 kHz
-        self.spin(4000)
-        self.assertFalse(self.win.one_eq.isHidden())
+        self.assertEqual(self.bypassed_by_the_input(), (True, True, True, False))
+        self.assertIn("the ADI-2/4 Pro then runs that EQ only.", self.win.eq_switches[0].toolTip())
 
 
 class Placement(unittest.TestCase):

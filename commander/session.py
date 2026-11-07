@@ -157,6 +157,18 @@ class Session:
         """True while the device plays DSD: it has no DSP for DSD, so whatever is on is bypassed."""
         return self.device_status is not None and self.device_status.dsd
 
+    def eq_bypassed(self, out):
+        """True while the EQ of output out is bypassed for the EQ of the input: on an ADI-2 Pro and ADI-2/4 Pro from
+        one_eq_from on (models.py), the device runs the input's EQ while it is on, instead of those of the outputs."""
+        if self.model is None or self.model.one_eq_from is None or out not in P.OUTPUT_ADDRESSES:
+            return False
+        index = self.state.get(P.SAMPLE_RATE)
+        if index not in range(len(P.SAMPLE_RATES)) or P.SAMPLE_RATES[index] < self.model.one_eq_from:
+            return False
+        left, right = P.INPUT_EQ
+        dual = self.state.get(P.INPUT_DUAL_EQ) == 1
+        return self.state.get((left, P.EQ_ENABLE)) == 1 or dual and self.state.get((right, P.EQ_ENABLE)) == 1
+
     def controls(self, out):
         """Whether Commander controls output out of the device connected: on an ADI-2 Pro and ADI-2/4 Pro not
         Phones 1/2 (models.py)."""

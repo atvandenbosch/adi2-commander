@@ -43,6 +43,9 @@ class Draft:
     def bypassed(self):
         return False
 
+    def eq_bypassed(self, out):
+        return False
+
     def dual(self, out):
         return self.state.get((out, P.DUAL_EQ), 1) == 1
 

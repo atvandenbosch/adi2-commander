@@ -568,6 +568,9 @@ class Shown:
     def bypassed(self):
         return False
 
+    def eq_bypassed(self, out):
+        return False
+
     def writable(self, key):
         return False
 

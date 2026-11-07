@@ -19,8 +19,8 @@ from . import MODEL
 # controlled: the output addresses Commander controls
 # eq_only: of those Commander controls only the EQ, and none of the device's other settings
 # no_bt_from: from this rate on there is no Bass/Treble and no Loudness (manuals, 8.8)
-# one_eq_from: from this rate on the EQ runs on one stereo channel only: the input, Line Out or Phones 3/4; None when
-#   it never does
+# one_eq_from: from this rate on the EQ of the input, while it is on, bypasses the EQ of the outputs; None when it
+#   never does
 # active: per value of the active output in the status message (status.Status.output), the output addresses the
 #   device has active. The DAC FS has one at a time. The Pro and ADI-2/4 Pro have Line Out or Phones 1/2, which share
 #   a signal, or neither; and Phones 3/4 always

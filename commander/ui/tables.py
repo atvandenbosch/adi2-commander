@@ -138,6 +138,8 @@ class ParamModel(QAbstractTableModel):
             return True
         if cell.band is not None and s.get((a, P.EQ_ENABLE)) == 0:      # this channel's EQ is off
             return True
+        if cell.band is not None and self.session.eq_bypassed(self.out[1]):
+            return True
         if cell.band in P.NO_GAIN_TYPES and i == P.BANDS[cell.band][1]:
             return s.get((a, P.BANDS[cell.band][0])) in P.NO_GAIN_TYPES[cell.band]
         return False

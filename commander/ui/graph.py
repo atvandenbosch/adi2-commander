@@ -382,6 +382,7 @@ class ResponseGraph(pg.PlotWidget):
         self._off = {(None, f.name) for f in bt if not f.active}     # set, but out of the path
         bypassed = ready and self.session.bypassed()
         bt = [f._replace(active=False) for f in bt] if bypassed else bt
+        bands_bypassed = bypassed or ready and self.session.eq_bypassed(out)
         shown = set()
         self.points = []
         for side, address in sides:
@@ -389,7 +390,7 @@ class ResponseGraph(pg.PlotWidget):
             if not bands:
                 continue
             self._off |= {(side, f.name) for f in bands if not f.active}
-            bands = [f._replace(active=False) for f in bands] if bypassed else bands
+            bands = [f._replace(active=False) for f in bands] if bands_bypassed else bands
             ch = CHANNEL_KEY[side]
             color = side_color(side, dual)
             for flt in bands:
@@ -552,6 +553,9 @@ class ResponseGraph(pg.PlotWidget):
             lines.append("Not available at %g kHz" % (self.fs / 1000))
         elif self.session.bypassed():
             lines.append("DSD input: no DSP, not in the signal path")
+        elif f.band is not None and (pt.side, f.name) not in self._off and self.session.eq_bypassed(self.output[1]):
+            lines.append("EQ of the input on at %g kHz: not in the signal path"
+                         % (P.SAMPLE_RATES[self.session.state[P.SAMPLE_RATE]] / 1000))
         elif not f.active:
             lines.append("%s off: not in the signal path" % ("Bass/Treble" if f.band is None else "EQ"))
         lines.append("Drag: frequency · Wheel: Q" if self.hovered_by_label else "Wheel: Q")

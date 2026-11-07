@@ -11,6 +11,7 @@ from PySide6.QtGui import QColor, QFontMetricsF, QIcon, QPainter, QPalette, QPen
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QMenu, QPushButton, QStyle, QStyleOptionComboBox,
                                QStylePainter, QWidget)
 
+from ..device import params as P
 from . import theme
 
 TITLE_STYLE = "color: %s; letter-spacing: 1px;" % theme.LABEL.name()
@@ -31,7 +32,7 @@ ACTION_STYLE = ("QPushButton { color: %(text)s; background: %(raised)s; border: 
 
 
 def switch_style(on, color=theme.LEFT, bypassed=False):
-    """A switch as a rounded outline: in its colour when on, dim when off; on but bypassed (DSD) faded and dashed,
+    """A switch as a rounded outline: in its colour when on, dim when off; on but bypassed faded and dashed,
     as a curve out of the signal path. Under the mouse only its background lights up: the colour and the dot say
     what it is and whether it is on, and stay as they are."""
     color = theme.faded(color) if on and bypassed else color
@@ -48,6 +49,15 @@ def switch_tip(what, on):
     """What the switch is for and what a click does; the settings stay, off is bypassed, not erased."""
     return "%s: %s\nClick to switch %s; the settings stay as they are." % (what, "on" if on else "off",
                                                                          "off" if on else "on")
+
+
+DSD_BYPASS = "Bypassed while the input is DSD: the device has no DSP for DSD."
+
+
+def input_eq_bypass(session):
+    """Why the EQ of an output is bypassed while Session.eq_bypassed() says so."""
+    return ("Bypassed at %g kHz while the EQ of the input is on: the %s then runs that EQ only."
+            % (P.SAMPLE_RATES[session.state[P.SAMPLE_RATE]] / 1000, session.model.name))
 
 
 def label_color(color):
@@ -148,15 +158,15 @@ class Switch(QPushButton):
         self.setIconSize(QSize(DOT + DOT_GAP, DOT))
         self.setFixedHeight(SWITCH_HEIGHT)
 
-    def show_state(self, on, enabled, tip, bypassed=False):
+    def show_state(self, on, enabled, tip, bypassed=None):
+        """bypassed: why what it switches is bypassed (DSD_BYPASS, input_eq_bypass()), or None."""
         self.on = on
         self.setText(self.name)
         color = theme.faded(self.color) if bypassed else self.color
         self.setIcon(dot_icon(theme.DISABLED if not enabled else color if on else theme.OFF, on))
         self.setEnabled(enabled)
-        self.setToolTip(tip + ("\nBypassed while the input is DSD: the device has no DSP for DSD." if on and bypassed
-                               else ""))
-        self.setStyleSheet(switch_style(enabled and on, self.color, bypassed))
+        self.setToolTip(tip + ("\n" + bypassed if on and bypassed else ""))
+        self.setStyleSheet(switch_style(enabled and on, self.color, bool(bypassed)))
         self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.ClickFocus)
         self.adjustSize()                                # as wide as its name
