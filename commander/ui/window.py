@@ -639,7 +639,7 @@ class MainWindow(QMainWindow):
                 or not untested.due(self.settings, model)):
             return
         self.warned.add(model)
-        box = untested.UntestedBox(self, model)
+        box = untested.UntestedBox(self, model, self.open_backups if self.backups is not None else None)
         self.ask(box)
         if box.keep.isChecked():
             self.settings.setValue(untested.key(model), __version__)
@@ -917,7 +917,7 @@ class MainWindow(QMainWindow):
 
     def more_menu(self):
         m = QMenu(self)
-        folder = m.addAction("Open backups folder")
+        folder = m.addAction("View backups")
         folder.setEnabled(self.backups is not None)
         folder.triggered.connect(self.open_backups)
         m.addSeparator()

@@ -17,7 +17,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
   also from Simulated mode.
 - At each connection, a copy of the device's state as an ADI-2 Remote setup file, in
   %LOCALAPPDATA%\ADI-2 Commander\Backups: the last five per model that differ.
-- A menu at the top right (⋮): Open backups folder, and About (F1).
+- A menu at the top right (⋮): View backups, and About (F1).
 
 ### Fixed
 

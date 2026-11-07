@@ -39,7 +39,7 @@ class Window(WindowTest):
         self.win.ask = lambda dialog: opened.append(dialog) or True
         self.assertEqual(self.win.more.toolTip(), "More options")
         menu = self.win.more_menu()
-        self.assertEqual([a.text() for a in menu.actions()], ["Open backups folder", "", "About ADI-2 Commander"])
+        self.assertEqual([a.text() for a in menu.actions()], ["View backups", "", "About ADI-2 Commander"])
         self.assertFalse(menu.actions()[0].isEnabled())                       # no folder given
         menu.actions()[2].trigger()
         QTest.keyClick(self.win, Qt.Key_F1)
@@ -652,8 +652,8 @@ class ProWindow(WindowTest):
         self.assertIn(box.title, box.heading.text().replace("\u00a0", " "))
         self.assertEqual(box.body.text().replace("\u00a0", " "),                   # names kept whole
                          "Commander has not been tested with an actual ADI-2 Pro.\n\n"
-                         "It is recommended to save the device's state with ADI-2 Remote before continuing: "
-                         "File → Save Setup As…\n\n"
+                         "Commander keeps a copy of the device's state as it was when connected, in the backups "
+                         "folder. Restore it with ADI-2 Remote: File → Open Setup File…\n\n"
                          "To explore the app first, or to convert filter sets and curves for your ADI-2 Pro, no "
                          "device is needed: start ADI-2 Commander (simulated) from the Start menu.")
         self.assertEqual([box.go.text(), box.quit.text()], ["Continue", "Quit"])
@@ -661,6 +661,7 @@ class ProWindow(WindowTest):
         QTest.keyClick(box, Qt.Key_Escape)                                     # Escape: Continue
         self.assertFalse(box.quitting)
         self.assertEqual(box.keep.text(), "Don't show this again")
+        self.assertIsNone(box.folder)                                          # no backups folder given
         self.assertTrue(self.win.isVisible())                                  # Continue
         self.sim.power(False)
         self.spin(1000)
@@ -893,6 +894,20 @@ class Backup(unittest.TestCase):
         self.sim.power(False)
         self.run_for(win, 4)
         self.assertEqual(self.copies(), [])
+
+    def test_the_folder_from_the_notice(self):
+        self.sim = SimulatedAdi2.factory(PRO, presets=PRESETS, clock=self.clock)
+        win, session = self.window(backups=self.folder)
+        shown = []
+        win.ask = lambda dialog: shown.append(dialog) or True
+        self.run_for(win, 5, session.ready)
+        self.run_for(win, 0.5)
+        [box] = [d for d in shown if isinstance(d, UntestedBox)]
+        self.assertEqual(box.folder.text(), "View backups")
+        with mock.patch("commander.ui.window.QDesktopServices.openUrl") as opened:
+            box.folder.click()
+        self.assertEqual(opened.call_args[0][0].toLocalFile(), self.folder.replace("\\", "/"))
+        self.assertEqual(box.result(), 0)                                      # the notice stays
 
     def test_none_in_simulated_mode(self):
         win, session = self.window(backups=self.folder, simulated=True)

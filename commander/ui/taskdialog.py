@@ -12,7 +12,6 @@ MARGINS = (10, 10, 11, 10)                       # left, top, right, bottom
 ICON_GAP = 10                                    # from the icon to the column
 WIDTH = 287                                      # of the column
 HEADING_PT = 12                                  # over text of 9 pt
-CHECK_INDENT = 2                                 # a check box at the left of the buttons: its square under the icon's
 
 
 class TaskDialog(QDialog):
@@ -39,7 +38,6 @@ class TaskDialog(QDialog):
         self.buttons = QDialogButtonBox()
         self.bottom = QHBoxLayout()
         self.bottom.setSpacing(self.style().pixelMetric(QStyle.PM_LayoutHorizontalSpacing))
-        self.bottom.setContentsMargins(CHECK_INDENT, 0, 0, 0)
         self.bottom.addStretch()
         self.bottom.addWidget(self.buttons)
 

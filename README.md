@@ -44,8 +44,8 @@ Commander makes no internet connections and collects no data.
 
 ## Before first use
 
-Back up your device with RME's ADI-2 Remote first: File → Save Setup as… keeps everything, presets included, and
-restores it.
+Commander keeps a copy of the device's state at each connection, presets included, in the backups folder (menu ⋮).
+Restore it with ADI-2 Remote: File → Open Setup File…
 
 Commander writes every change to the device at once. Try Simulated mode first to get to know it: start
 ADI-2 Commander (simulated) from the Start menu.
