@@ -34,11 +34,14 @@ from tests.support import DUMP, PRESETS
 
 
 class Window(WindowTest):
-    def test_about_from_the_ring_and_f1(self):
+    def test_about_from_the_menu_and_f1(self):
         opened = []
         self.win.ask = lambda dialog: opened.append(dialog) or True
-        self.assertEqual(self.win.info.toolTip(), "About ADI-2 Commander (F1)")
-        QTest.mouseClick(self.win.info, Qt.LeftButton)
+        self.assertEqual(self.win.more.toolTip(), "More options")
+        menu = self.win.more_menu()
+        self.assertEqual([a.text() for a in menu.actions()], ["Open backups folder", "", "About ADI-2 Commander"])
+        self.assertFalse(menu.actions()[0].isEnabled())                       # no folder given
+        menu.actions()[2].trigger()
         QTest.keyClick(self.win, Qt.Key_F1)
         self.assertEqual([d.windowTitle() for d in opened], ["About ADI-2 Commander"] * 2)
         text = " ".join(label.text() for label in opened[0].findChildren(QLabel))
@@ -66,7 +69,7 @@ class Window(WindowTest):
             self.spin(100)
             self.assertEqual(self.win.sound.verticalScrollBar().isVisible(), height == 500)
             self.assertEqual(edges(self.win.input_tab)[0], SIDE)
-            self.assertEqual([edges(w)[1] for w in (self.win.band_views[0], self.win.load_action, self.win.info)],
+            self.assertEqual([edges(w)[1] for w in (self.win.band_views[0], self.win.load_action, self.win.more)],
                              [SIDE] * 3)
             self.assertEqual(edges(self.win.sound)[1], 0)              # its scroll bar against the edge
 
@@ -890,6 +893,21 @@ class Backup(unittest.TestCase):
         self.sim.power(False)
         self.run_for(win, 4)
         self.assertEqual(self.copies(), [])
+
+    def test_none_in_simulated_mode(self):
+        win, session = self.window(backups=self.folder, simulated=True)
+        self.run_for(win, 8)
+        self.assertEqual(self.copies(), [])
+
+    def test_the_folder_from_the_menu(self):
+        for simulated in (False, True):
+            win, session = self.window(backups=self.folder, simulated=simulated)
+            menu = win.more_menu()
+            self.assertTrue(menu.actions()[0].isEnabled())
+            with mock.patch("commander.ui.window.QDesktopServices.openUrl") as opened:
+                menu.actions()[0].trigger()
+            self.assertTrue(os.path.isdir(self.folder))                       # made when missing
+            self.assertEqual(opened.call_args[0][0].toLocalFile(), self.folder.replace("\\", "/"))
 
     def test_none_without_a_folder(self):
         win, session = self.window()

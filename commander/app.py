@@ -87,7 +87,7 @@ def main(argv=None):
         sim = None
         open_port = WinmmPort
     session = Session(open_port)
-    win = MainWindow(session, simulated=sim is not None, backups=None if sim is not None else backup.folder())
+    win = MainWindow(session, simulated=sim is not None, backups=backup.folder())
     if sim is not None:
         win.setWindowTitle(win.windowTitle() + "  —  SIMULATED DEVICE")
         win.simulator = sim

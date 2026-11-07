@@ -26,10 +26,11 @@ writing."""
 import datetime
 import os
 
-from PySide6.QtCore import QModelIndex, QPoint, QRect, QRectF, QSettings, QSize, QStandardPaths, Qt, QTimer
-from PySide6.QtGui import QColor, QCursor, QFont, QIcon, QKeySequence, QPainter, QPalette, QShortcut
+from PySide6.QtCore import QModelIndex, QPoint, QRect, QRectF, QSettings, QSize, QStandardPaths, Qt, QTimer, QUrl
+from PySide6.QtGui import (QColor, QCursor, QDesktopServices, QFont, QIcon, QKeySequence, QPainter, QPalette,
+                           QShortcut)
 from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
-                               QMainWindow, QMessageBox, QScrollArea, QStackedWidget, QTabBar, QVBoxLayout,
+                               QMainWindow, QMenu, QMessageBox, QScrollArea, QStackedWidget, QTabBar, QVBoxLayout,
                                QWidget)
 
 from .. import __version__
@@ -55,7 +56,7 @@ from .scrim import RISE, Scrim
 from . import untested
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, LOUDNESS_COLUMNS, CellDelegate, Marks,
                      ParamModel, ParamView, band_address, band_rows, bt_rows, loudness_rows)
-from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE, Action, InfoButton, Option,
+from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE, Action, MoreButton, Option,
                       Switch, Choice, dot_icon, dot_pixmap, dropped_file, head, label_color, pulse, switch_tip)
 
 FS_TIP = "Sample rate the curves are computed at"
@@ -209,7 +210,7 @@ class MainWindow(QMainWindow):
     def __init__(self, session, simulated=False, settings=None, backups=None):
         """simulated: the session talks to the simulator; settings: a QSettings for what the app remembers (default
         the user's, untested.ORGANIZATION and APPLICATION); backups: the folder for a copy of the device's state at
-        each connection (backup.keep), or None for none."""
+        each connection to a device (backup.keep), or None for none."""
         super().__init__()
         self.session = session
         self.simulated = simulated
@@ -240,10 +241,10 @@ class MainWindow(QMainWindow):
         top = QHBoxLayout()
         top.addWidget(self.tabs)
         top.addStretch()
-        self.info = InfoButton(self.tabs)                # about the app; F1 too
-        self.info.setToolTip("About ADI-2 Commander (F1)")
-        self.info.clicked.connect(self.show_about)
-        top.addWidget(self.info)
+        self.more = MoreButton(self.tabs)                # the backups folder and About; About on F1 too
+        self.more.setToolTip("More options")
+        self.more.clicked.connect(self.show_more)
+        top.addWidget(self.more)
         QShortcut(QKeySequence(Qt.Key_F1), self, self.show_about)
         self.lamp = Lamp()
         self.lamp_text = QLabel()
@@ -591,7 +592,7 @@ class MainWindow(QMainWindow):
         if status == "ready" and self.session.model != self.model:
             self.set_model(self.session.model)
         if status == "ready":
-            if self.backups is not None:             # before anything can be written
+            if self.backups is not None and not self.simulated:     # before anything can be written
                 self.taken = (dict(self.session.state), self.session.model)
             QTimer.singleShot(0, self.warn_untested)    # after this event: the notice is modal
         else:
@@ -913,6 +914,28 @@ class MainWindow(QMainWindow):
 
     def ask(self, dialog):
         return dialog.exec() == QDialog.Accepted
+
+    def more_menu(self):
+        m = QMenu(self)
+        folder = m.addAction("Open backups folder")
+        folder.setEnabled(self.backups is not None)
+        folder.triggered.connect(self.open_backups)
+        m.addSeparator()
+        m.addAction("About ADI-2 Commander").triggered.connect(self.show_about)
+        return m
+
+    def show_more(self):
+        """The menu below the button, against its right edge."""
+        m = self.more_menu()
+        m.exec(self.more.mapToGlobal(QPoint(self.more.width() - m.sizeHint().width(), self.more.height())))
+
+    def open_backups(self):
+        try:
+            os.makedirs(self.backups, exist_ok=True)
+        except OSError as e:
+            self.note("Backups folder not opened: %s" % e, theme.WARN)
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(self.backups))
 
     def show_about(self):
         self.ask(AboutDialog(self, QApplication.windowIcon()))

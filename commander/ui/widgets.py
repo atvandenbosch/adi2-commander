@@ -84,22 +84,22 @@ def dot_icon(color, filled):
     return QIcon(dot_pixmap(color, filled, gap=DOT_GAP))
 
 
-class InfoButton(QPushButton):
-    """A ring with an i: about the app, not the device. Neutral grey as the status bar, lighter under the mouse. Drawn,
-    as the dots are: the app's font has no such sign. Sized and placed by the font of the tab bar beside it: Windows
-    pairs 9 pt text with 16 px icons, and draws its own information sign as a ring of 14 within them; the ring is
-    centred on the tabs' capitals, as an icon beside text is."""
+class MoreButton(QPushButton):
+    """Three dots one above the other: the menu of the app's own commands. Neutral grey as the status bar, lighter
+    under the mouse. Drawn, as the dots on the tabs are. Sized and placed by the font of the tab bar beside it: Windows
+    pairs 9 pt text with 16 px icons, and draws its signs within 14 of them; the dots are centred on the tabs'
+    capitals, as an icon beside text is."""
 
     def __init__(self, tabs):
         super().__init__()
         fm = QFontMetricsF(tabs.font())
-        self.ring = round(fm.height()) - 2                # 16 - 2 at Segoe UI 9 pt
+        self.box = round(fm.height()) - 2                # 16 - 2 at Segoe UI 9 pt
         height = tabs.sizeHint().height()
         # a tab's text is centred above its line, as Qt centres a line of text: the baseline follows; the capitals
         # as drawn, on whole pixels, rounded up
         baseline = (height - theme.TAB_LINE - fm.height()) / 2 + fm.ascent()
         self.middle = baseline - math.ceil(fm.capHeight()) / 2
-        self.setFixedSize(self.ring + 1, height)
+        self.setFixedSize(self.box + 1, height)
         self.setCursor(Qt.PointingHandCursor)
         self.setFlat(True)
         self.setFocusPolicy(Qt.NoFocus)
@@ -109,15 +109,11 @@ class InfoButton(QPushButton):
         c = theme.TEXT if self.underMouse() else theme.SECONDARY
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        d = self.ring
-        x, top = (self.width() - d) / 2, self.middle - d / 2
-        p.setPen(QPen(c, 1.0))
-        p.setBrush(Qt.NoBrush)
-        p.drawEllipse(QRectF(x + 0.5, top + 0.5, d - 1.0, d - 1.0))
+        d = self.box
         p.setPen(Qt.NoPen)
         p.setBrush(c)
-        p.drawEllipse(QPointF(x + d / 2, top + d * 0.29), d * 0.065, d * 0.065)          # the dot of the i
-        p.drawRect(QRectF(x + d * 0.45, top + d * 0.43, d * 0.10, d * 0.33))             # its stem
+        for k in (-1, 0, 1):
+            p.drawEllipse(QPointF(self.width() / 2, self.middle + k * d * 0.33), d * 0.09, d * 0.09)
         p.end()
 
 
