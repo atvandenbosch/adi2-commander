@@ -66,8 +66,14 @@ def apply(app):
         QTableCornerButton::section { background: %(background)s; border: none; }
         QStatusBar { background: %(panel)s; color: %(label)s; border-top: 1px solid %(grid)s; }
         QStatusBar::item { border: none; }
+        QRadioButton { spacing: 3px; }
+        QRadioButton::indicator { width: 12px; height: 12px; border-radius: 7px; border: 1px solid %(border)s;
+                                  background: %(cell)s; }
+        QRadioButton::indicator:hover { border-color: %(label)s; }
+        QRadioButton::indicator:checked { background: qradialgradient(cx: 0.5, cy: 0.5, radius: 0.5, fx: 0.5, fy: 0.5,
+            stop: 0 %(accent)s, stop: 0.45 %(accent)s, stop: 0.55 %(cell)s, stop: 1 %(cell)s); }
     """ % dict(text=TEXT.name(), panel=PANEL.name(), grid=GRID.name(), label=LABEL.name(), accent=ACCENT.name(),
-               secondary=SECONDARY.name(),
+               secondary=SECONDARY.name(), border=BORDER.name(), cell=CELL.name(),
                background=BACKGROUND.name(), pad=HEADER_PADDING, tab_line=TAB_LINE))
 
 

@@ -10,7 +10,7 @@ import unittest
 from unittest import mock
 
 import numpy as np
-from PySide6.QtCore import QPoint, QPointF, QRect, QSize, Qt
+from PySide6.QtCore import QPoint, QPointF, QRect, QSettings, QSize, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel
 
@@ -20,9 +20,10 @@ from commander.device import params as P
 from commander.device.models import PRO, PRO_24
 from commander.device.simulator import SimPort, SimulatedAdi2
 from commander.session import Session
+from commander import app as commander_app
 from commander.ui import about
 from commander.ui import loudness as L
-from commander.ui import theme
+from commander.ui import simulated, theme
 from commander.ui.tables import FLASH_TIME, KEY_ROLE
 from commander.ui.untested import UntestedBox
 from commander.ui.window import MainWindow
@@ -785,6 +786,48 @@ class Placement(unittest.TestCase):
     def test_maximized_where_it_does_not_fit(self):
         self.assertIsNone(placement(QSize(1199, 594), QRect(0, 0, 1024, 720)))          # too wide
         self.assertIsNone(placement(QSize(1000, 700), QRect(0, 0, 1280, 720)))          # too high with its frame
+
+
+class SimulatedModel(unittest.TestCase):
+    """The model Simulated mode simulates, chosen in a dialog; the choice made last chosen again."""
+
+    def setUp(self):
+        self.folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self.folder.cleanup)
+        self.settings = QSettings(os.path.join(self.folder.name, "settings.ini"), QSettings.IniFormat)
+        self.shown = []
+
+    def choose(self, answer):
+        """What the dialog gives, answer(dialog) choosing in it and telling whether it was accepted."""
+        return simulated.choose(self.settings, commander_app.SIMULATED_NAMES,
+                                lambda dialog: self.shown.append(dialog) or answer(dialog))
+
+    def test_the_dialog(self):
+        self.assertEqual(self.choose(lambda d: True), "dac")                  # the first time: the DAC FS
+        [d] = self.shown
+        self.assertEqual(d.windowTitle(), "ADI-2 Commander (simulated)")
+        self.assertIn("Choose the ADI-2 to simulate", d.heading.text())
+        self.assertEqual([b.text() for b in d.group.buttons()],
+                         ["ADI-2 DAC FS", "ADI-2 Pro", "ADI-2/4 Pro SE", "ADI-2/4 Pro EX"])
+        self.assertTrue(d.start.isDefault())
+
+    def test_the_choice_made_last(self):
+        self.assertEqual(self.choose(lambda d: d.group.button(2).click() or True), "24se")
+        self.assertEqual(self.settings.value(simulated.KEY), "24se")
+        self.assertEqual(self.choose(lambda d: True), "24se")                 # chosen again
+        self.assertTrue(self.shown[-1].group.button(2).isChecked())
+        self.settings.setValue(simulated.KEY, "other")                          # not a model: the first
+        self.assertEqual(self.choose(lambda d: True), "dac")
+
+    def test_cancel(self):
+        self.settings.setValue(simulated.KEY, "pro")
+
+        def escape(d):
+            d.group.button(3).click()
+            QTest.keyClick(d, Qt.Key_Escape)
+            return d.result() == d.DialogCode.Accepted
+        self.assertIsNone(self.choose(escape))
+        self.assertEqual(self.settings.value(simulated.KEY), "pro")             # not remembered
 
 
 if __name__ == "__main__":

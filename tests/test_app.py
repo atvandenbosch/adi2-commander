@@ -31,6 +31,16 @@ class Start(unittest.TestCase):
         sim = app.simulator(app.DEMO_DUMP, "pro")
         self.assertEqual((sim.model, sim.state), (models.PRO, SimulatedAdi2.from_dump(app.DEMO_DUMP).state))
 
+    def test_the_model_to_simulate(self):
+        asked = []
+        choose = lambda: asked.append(1) or "24se"                              # noqa: E731
+        self.assertEqual(app.simulated_model("", "pro", choose), "pro")          # --model: not asked
+        self.assertEqual(app.simulated_model("dump.txt", None, choose), "dac")   # a dump: the DAC FS
+        self.assertEqual(asked, [])
+        self.assertEqual(app.simulated_model("", None, choose), "24se")          # neither: asked
+        self.assertIsNone(app.simulated_model("", None, lambda: None))           # cancelled
+        self.assertEqual([k for k, _ in app.SIMULATED_NAMES], list(app.SIMULATED_MODELS))
+
     def test_model_only_with_simulate(self):
         with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
             app.main(["--model", "pro"])
@@ -43,7 +53,7 @@ class Start(unittest.TestCase):
 
     def test_simulate_runs_without_errors(self):
         env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
-        proc = subprocess.Popen([sys.executable, "-m", "commander.app", "--simulate"], cwd=ROOT, env=env,
+        proc = subprocess.Popen([sys.executable, "-m", "commander.app", "--simulate", "--model", "dac"], cwd=ROOT, env=env,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         time.sleep(3)
         running = proc.poll() is None
