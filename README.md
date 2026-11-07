@@ -1,20 +1,23 @@
 # ADI-2 Commander
 
-A Windows app to control the RME ADI-2 DAC FS[^rme], and to load and convert externally generated filter sets.
+A Windows app to control the RME ADI-2 DAC FS[^rme] and the EQ of the ADI-2 Pro and ADI-2/4 Pro, and to load and
+convert externally generated filter sets.
 A personal project, shared as is.
 
 ![ADI-2 Commander: the main window, the panels, Load, presets and Loudness](docs/feature-tour.gif)
 
 ## Features
 
-- **Device control:** EQ, Bass/Treble, Loudness and the output settings of Line Out, Phones and IEM.
+- **Device control:** EQ, Bass/Treble, Loudness and the output settings of Line Out, Phones and IEM. On the ADI-2 Pro
+  and ADI-2/4 Pro: EQ, Bass/Treble and Loudness of Line Out and Phones 3/4.
 - **In-graph editing:** the EQ as a response curve, edited in place.
 - **Table input:** every value entered or stepped directly, by keyboard or mouse.
 - **Device-accurate curves:** curves and conversions follow the device implementation.
 - **Filter set and curve conversion** from AutoEQ, squig.link, REW, Equalizer APO and others.
 - **Loudness view:** what Loudness does at the current settings and volume.
 - **Preset management:** preview, edit and store.
-- **Simulated mode:** explore Commander without a device, and convert filter sets and curves for any ADI-2 model.
+- **Simulated mode:** explore Commander with a simulated ADI-2 DAC FS, ADI-2 Pro or ADI-2/4 Pro, and convert filter
+  sets and curves for any ADI-2 model.
 
 ## Also
 
@@ -27,7 +30,8 @@ A personal project, shared as is.
 ## Requirements
 
 - Windows 10 (1809) or later, 64-bit.
-- An ADI-2 DAC FS over USB, with MIDI Control set to ON (menu Remap Keys/Diag). Simulated mode needs no device.
+- An ADI-2 DAC FS, ADI-2 Pro (all versions, including EX) or ADI-2/4 Pro over USB, with MIDI Control set to ON (menu
+  Remap Keys/Diag on the ADI-2 DAC FS, Device Mode on the ADI-2 Pro and ADI-2/4 Pro). Simulated mode needs no device.
 - Windows' built-in USB MIDI class driver, or RME's MADIface driver (tested with 1.015).
 - A screen of at least 1280×720.
 
@@ -64,6 +68,9 @@ then run `.venv\Scripts\python tools\build.py`.
 - ADI-2 DAC FS, firmware DSP 62, USB 81
 - RME MADIface driver 1.015, and Windows' built-in USB MIDI class driver
 - Windows 11 Pro 26H2 (build 26300)
+
+The ADI-2 Pro and ADI-2/4 Pro have not been tested with an actual device. Their support is built on RME's MIDI
+documentation and manuals, and on how RME's ADI-2 Remote handles them.
 
 ## License
 

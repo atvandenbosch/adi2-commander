@@ -19,7 +19,6 @@ ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 sys.path.insert(0, ROOT)
 from commander import __version__                           # noqa: E402
 from commander.app import APP_ID, SIMULATED_APP_ID          # noqa: E402
-from commander.device import DEVICE, MODEL                  # noqa: E402
 from make_icon import draw                                  # noqa: E402  (beside this script)
 
 DIST = os.path.join(ROOT, "dist")
@@ -31,9 +30,9 @@ WIZARD = os.path.join(ROOT, "build", "wizard")
 LARGE = [(202, 386), (269, 515), (336, 643), (430, 824)]
 SMALL = [58, 77, 97, 124]
 
-DESCRIPTION = "Control the %s from your computer: input, EQ, presets and output settings" % DEVICE
-SIMULATED_DESCRIPTION = ("ADI-2 Commander with a simulated %s: work out EQ settings, fit filter files, "
-                         "see the curves" % MODEL)
+DESCRIPTION = "Control the EQ and presets of an RME ADI-2 from your computer"
+SIMULATED_DESCRIPTION = ("ADI-2 Commander with a simulated ADI-2: explore the app, work out EQ settings, "
+                         "fit filter files, see the curves")
 
 NOTICE = """\
 ADI-2 Commander {version} is free software under the GNU General Public License, version 3 or later (LICENSE.txt).
