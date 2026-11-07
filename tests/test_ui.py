@@ -643,16 +643,18 @@ class ProWindow(WindowTest):
         [box] = self.notices(self.dialogs)
         self.assertEqual(box.windowTitle(), "ADI-2 Commander")
         self.assertEqual(box.title, "Not tested with the ADI-2 Pro")              # over the text, larger
-        self.assertIn("font-size: 12pt", box.text())
-        self.assertIn(box.title, box.text().replace("\u00a0", " "))
-        self.assertEqual(box.informativeText().replace("\u00a0", " "),             # names kept whole
+        self.assertIn("font-size: 12pt", box.heading.text())
+        self.assertIn(box.title, box.heading.text().replace("\u00a0", " "))
+        self.assertEqual(box.body.text().replace("\u00a0", " "),                   # names kept whole
                          "Commander has not been tested with an actual ADI-2 Pro.\n\n"
                          "It is recommended to save the device's state with ADI-2 Remote before continuing: "
                          "File → Save Setup As…\n\n"
                          "To explore the app first, or to convert filter sets and curves for your ADI-2 Pro, no "
                          "device is needed: start ADI-2 Commander (simulated) from the Start menu.")
-        self.assertEqual([b.text() for b in box.buttons()], ["Continue", "Quit"])
-        self.assertIs(box.escapeButton(), box.go)
+        self.assertEqual([box.go.text(), box.quit.text()], ["Continue", "Quit"])
+        self.assertTrue(box.go.isDefault())
+        QTest.keyClick(box, Qt.Key_Escape)                                     # Escape: Continue
+        self.assertFalse(box.quitting)
         self.assertEqual(box.keep.text(), "Don't show this again")
         self.assertTrue(self.win.isVisible())                                  # Continue
         self.sim.power(False)

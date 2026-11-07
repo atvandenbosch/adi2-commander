@@ -616,7 +616,7 @@ class MainWindow(QMainWindow):
         self.ask(box)
         if box.keep.isChecked():
             self.settings.setValue(untested.key(model), __version__)
-        if box.clickedButton() is box.quit:
+        if box.quitting:
             self.close()
 
     def heard(self):
