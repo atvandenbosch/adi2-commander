@@ -13,6 +13,8 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
   with an actual device; a notice says so when one is connected.
 - Simulated mode asks which ADI-2 to simulate: ADI-2 DAC FS, ADI-2 Pro, ADI-2/4 Pro SE or EX. The choice made last
   is preselected.
+- Save as an ADI-2 Remote preset (.adieqpr), to store it to a preset slot with ADI-2 Remote's EQ Preset Editor,
+  also from Simulated mode.
 
 ### Fixed
 

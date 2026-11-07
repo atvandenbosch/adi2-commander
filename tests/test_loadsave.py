@@ -5,17 +5,20 @@ is neither a filter file nor a curve. Fit at work and curves: test_loadfit."""
 import os
 import tempfile
 import time
+from unittest import mock
 
 from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QUrl
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import QApplication, QDialog, QPushButton
 
 from commander.conversion import eqfile as E
+from commander.conversion import presetfile as R
 from commander.device import codec
 from commander.device import params as P
 from commander.device.models import PRO
 from commander.ui import loaddialog as L
 from commander.ui import theme
+from commander.ui import window as W
 from commander.ui.widgets import INNER_GAP, SIDE
 from tests.gui import WindowTest
 from tests.support import TEN_FILTERS
@@ -183,6 +186,26 @@ class LoadSave(LoadTest):
         dialog.toggle_block(1)
         self.assertIn("Nothing to load into the device", dialog.status.text())
         self.assertFalse(dialog.ok.isEnabled())
+
+    def test_save_for_adi2_remote(self):
+        path = os.path.join(self.dir.name, "HD 800 S (Harman).adieqpr")
+        self.win.save_file(path)
+        self.assertEqual(self.win.file_note.text(), "Saved HD 800 S (Harman).adieqpr")
+        with open(path, "rb") as f:
+            raw = f.read()
+        self.assertNotIn(b"\r", raw)
+        self.assertEqual(raw.decode("ascii"), R.write(self.session.state, OUT, "HD 800 S (Harm", self.win.model,
+                                                      self.session.revision()))      # named as the file
+        self.assertTrue(raw.startswith(b"\t<ADI-2DAC>"))
+
+    def test_the_kind_of_file_chosen_when_saving(self):
+        for typed, kind, saved in (("a.txt", W.APO_FILES, "a.txt"), ("b.txt", W.REMOTE_FILES, "b.adieqpr"),
+                                   ("c", W.REMOTE_FILES, "c.adieqpr"), ("d.adieqpr", W.REMOTE_FILES, "d.adieqpr")):
+            answer = (os.path.join(self.dir.name, typed), kind)
+            with mock.patch.object(W.QFileDialog, "getSaveFileName", return_value=answer) as dialog:
+                self.win.save_dialog()
+            self.assertTrue(os.path.exists(os.path.join(self.dir.name, saved)), saved)
+            self.assertEqual(dialog.call_args[0][3], "Equalizer APO (*.txt);;ADI-2 Remote preset (*.adieqpr)")
 
     def test_already_on_the_device(self):
         path = os.path.join(self.dir.name, "same.txt")

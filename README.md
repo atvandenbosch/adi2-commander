@@ -21,7 +21,7 @@ A personal project, shared as is.
 
 ## Also
 
-- Save the EQ to a .txt file that is both portable and ADI-2 compatible.
+- Save the EQ to a .txt file that is both portable and ADI-2 compatible, or as a preset file for ADI-2 Remote.
 - Drag and drop filter files and curves to load them.
 - Map filters one to one, or fit them for the closest possible match.
 - Monitor the device's inputs and clock.

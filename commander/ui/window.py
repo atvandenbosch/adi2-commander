@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QFrame, QHBox
 from .. import __version__
 from ..conversion import eqfile as E
 from ..conversion import eqimport as I
+from ..conversion import presetfile as R
 from ..device import models
 from ..device import params as P
 from ..draft import Draft
@@ -60,6 +61,10 @@ ACTIVE_TIP = "Active on the device: its display and volume knob are on this outp
 ACTIVE = "Active on the device"                 # the ADI-2 Pro and ADI-2/4 Pro
 ALWAYS_ACTIVE = "Always active on the device"
 NOT_YET = "Not yet available for the %s"          # with the model's name
+# the kinds of file Save writes
+APO_FILES = "Equalizer APO (*.txt)"
+REMOTE_FILES = "ADI-2 Remote preset (*.adieqpr)"
+REMOTE_SUFFIX = ".adieqpr"
 ONE_EQ = "EQ on one stereo channel only"
 ONE_EQ_TIP = ("From %g kHz the %s runs the EQ on one stereo channel only: the input, Line Out or Phones 3/4.\n"
               "It may not be this output.")
@@ -800,18 +805,27 @@ class MainWindow(QMainWindow):
         what = "Preset %d" % self.draft.slot if self.draft is not None else self.output_name()
         name = "%s %s %s.txt" % (self.model.name.replace("/", "-"), what.replace("·", "-").replace("/", "-"),
                                  datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
-        path, _ = QFileDialog.getSaveFileName(self, "Save EQ - %s" % what,
-                                              os.path.join(self.folder, name), "Equalizer APO (*.txt)")
+        path, kind = QFileDialog.getSaveFileName(self, "Save EQ - %s" % what, os.path.join(self.folder, name),
+                                                 ";;".join((APO_FILES, REMOTE_FILES)))
+        if path and kind == REMOTE_FILES and not path.lower().endswith(REMOTE_SUFFIX):
+            path = (path[:-4] if path.lower().endswith(".txt") else path) + REMOTE_SUFFIX
         if path:
             self.save_file(path)
 
     def save_file(self, path):
-        """The EQ of this output, or the preset being edited, as an Equalizer APO file, at the sample rate of the
-        graph."""
+        """The EQ of this output, or the preset being edited: as a preset file of ADI-2 Remote when path ends in its
+        suffix, named as the preset being edited or else as the file; otherwise as an Equalizer APO file, at the
+        sample rate of the graph."""
         self.folder = os.path.dirname(path)
         try:
-            preset = (self.draft.slot, self.draft.name) if self.draft is not None else None
-            E.save(path, E.write(self.eq().state, self.output[1], self.graph.fs, preset=preset, model=self.model))
+            if path.lower().endswith(REMOTE_SUFFIX):
+                name = (self.draft.name if self.draft is not None else None) or R.name_of(
+                    os.path.splitext(os.path.basename(path))[0]) or R.name_of(self.output_name())
+                R.save(path, R.write(self.eq().state, self.output[1], name, self.model, self.session.revision()))
+            else:
+                preset = (self.draft.slot, self.draft.name) if self.draft is not None else None
+                E.save(path, E.write(self.eq().state, self.output[1], self.graph.fs, preset=preset,
+                                     model=self.model))
         except (OSError, ValueError) as e:
             self.note("Not saved: %s" % e, theme.WARN)
             return

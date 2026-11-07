@@ -11,6 +11,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QToolTip
 
 from commander.conversion import eqfile as E
+from commander.conversion import presetfile as R
 from commander.device import params as P
 from commander.ui import theme
 from commander.ui.presets import NAME_RULE
@@ -217,6 +218,18 @@ class EditStand(WindowTest):
         self.assertEqual(d.state[(4, 7)], 6)
         self.assertEqual(self.sim.state[(4, 7)], self.session.state[(4, 7)])  # the device heard nothing
         self.assertEqual(self.session.pending, {})
+
+    def test_saved_for_adi2_remote_under_the_presets_name(self):
+        d = self.edit()
+        self.win.write((4, 7), 6, False)
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "file.adieqpr")
+            self.win.save_file(path)
+            with open(path, encoding="ascii") as f:
+                text = f.read()
+        self.assertEqual(text, R.write(d.state, 3, d.name, self.win.model, self.session.revision()))
+        self.assertIn('v="%s"' % d.name, text)
+        self.assertIn('<val e="EQBand2Gain" v="3.00,"/>', text)                # the preset, not the output
 
     def test_what_ok_changes_beyond_the_preset(self):
         self.session.set((4, 28), 3)                                          # Line Out, active: Preset 2
