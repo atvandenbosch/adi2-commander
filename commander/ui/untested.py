@@ -1,12 +1,10 @@
 """The notice when a model Commander has not been tested with is connected: once per run, unless the user chose
 not to see it again in this version of Commander. Not in Simulated mode."""
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QLayout, QStyle,
-                               QVBoxLayout)
+from PySide6.QtWidgets import QApplication, QCheckBox, QDialogButtonBox, QLabel, QStyle
 
 from .. import __version__
-from . import theme
+from .taskdialog import WIDTH, TaskDialog
 
 ORGANIZATION, APPLICATION = "ADI-2 Commander", "Commander"   # where QSettings keeps what the app remembers
 TITLE = "Not tested with the %(name)s"
@@ -18,16 +16,8 @@ TEXT = ("Commander has not been tested with an actual %(name)s.\n\n"
 # kept on one line each when the text wraps
 WHOLE = ("ADI-2 Remote", "File → Save Setup As…", "ADI-2 Commander (simulated)")
 NBSP = " "
-TITLE_PT = 12                                    # a dialog's title on Windows, over text of 9 pt
-# the layout of a Windows task dialog, in pixels at 100 %: the icon in the corner, title and text beside it in one
-# column, the check box at the left of the row of buttons
-ICON = 32
-MARGINS = (10, 10, 11, 10)                       # left, top, right, bottom
-ICON_GAP = 10                                    # from the icon to the column of title and text
-TEXT_WIDTH = 287
-TITLE_GAP = 14                                   # from the title to the text
+TEXT_GAP = 14                                    # from the title to the text
 BUTTONS_GAP = 24                                 # from the text to the row of buttons
-CHECK_INDENT = 2                                 # the check box's square under the icon's
 
 
 def _whole(text, name):
@@ -46,54 +36,25 @@ def due(settings, model):
     return not model.tested and settings.value(key(model)) != __version__
 
 
-class UntestedBox(QDialog):
-    """Not tested with the model, laid out as a Windows task dialog, with the app's name in the title bar. Continue
-    or Quit, and Don't show this again. Escape and closing the window are Continue."""
+class UntestedBox(TaskDialog):
+    """Not tested with the model, with the app's name in the title bar. Continue or Quit, and Don't show this again.
+    Escape and closing the window are Continue."""
 
     def __init__(self, parent, model):
-        super().__init__(parent)
-        self.setWindowTitle("ADI-2 Commander")
+        title = TITLE % {"name": model.name}
+        warning = QApplication.style().standardIcon(QStyle.SP_MessageBoxWarning)
+        super().__init__(parent, "ADI-2 Commander", warning, _whole(title, model.name), TEXT_GAP, BUTTONS_GAP)
+        self.title = title
         self.quitting = False
-        self.title = TITLE % {"name": model.name}
-
-        icon = QLabel()
-        icon.setPixmap(self.style().standardIcon(QStyle.SP_MessageBoxWarning, None, self).pixmap(ICON, ICON))
-        icon.setFixedSize(ICON, ICON)
-        self.heading = QLabel('<span style="font-size: %dpt; color: %s;">%s</span>'
-                              % (TITLE_PT, theme.TEXT.name(), _whole(self.title, model.name)))
         self.body = QLabel(_whole(TEXT % {"name": model.name}, model.name))
-        for label in (self.heading, self.body):
-            label.setWordWrap(True)
-            label.setFixedWidth(TEXT_WIDTH)
-        column = QVBoxLayout()
-        column.setSpacing(TITLE_GAP)
-        column.addWidget(self.heading)
-        column.addWidget(self.body)
-        top = QHBoxLayout()
-        top.setSpacing(ICON_GAP)
-        top.addWidget(icon, 0, Qt.AlignTop)
-        top.addLayout(column)
-
+        self.body.setWordWrap(True)
+        self.body.setFixedWidth(WIDTH)
+        self.column.addWidget(self.body)
         self.keep = QCheckBox("Don't show this again")
-        buttons = QDialogButtonBox()
-        self.go = buttons.addButton("Continue", QDialogButtonBox.AcceptRole)
-        self.quit = buttons.addButton("Quit", QDialogButtonBox.RejectRole)
+        self.bottom.insertWidget(0, self.keep)
+        self.go = self.add_button("Continue", QDialogButtonBox.AcceptRole, self.accept)
+        self.quit = self.add_button("Quit", QDialogButtonBox.RejectRole, self.leave)
         self.go.setDefault(True)
-        self.go.clicked.connect(self.accept)
-        self.quit.clicked.connect(self.leave)
-        bottom = QHBoxLayout()
-        bottom.setSpacing(self.style().pixelMetric(QStyle.PM_LayoutHorizontalSpacing))
-        bottom.setContentsMargins(CHECK_INDENT, 0, 0, 0)
-        bottom.addWidget(self.keep)
-        bottom.addStretch()
-        bottom.addWidget(buttons)
-
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(*MARGINS)
-        lay.setSpacing(BUTTONS_GAP)
-        lay.setSizeConstraint(QLayout.SetFixedSize)
-        lay.addLayout(top)
-        lay.addLayout(bottom)
         self.go.setFocus()
 
     def leave(self):
