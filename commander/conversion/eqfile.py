@@ -1,4 +1,4 @@
-"""EQ settings as a file, in the format of Equalizer APO. No Qt.
+"""EQ settings as a file, in the format of Equalizer APO.
 
 Commander writes a file for people and for APO: first, as comments, a table of the settings as the device
 holds them, from which Commander loads back exactly; then the same as APO filters (PK, LSC, HSC, HPQ, LPQ)

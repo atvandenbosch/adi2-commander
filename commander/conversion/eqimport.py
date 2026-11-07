@@ -1,4 +1,4 @@
-"""From a file to the device: what Load proposes, and what OK writes. No Qt.
+"""From a file to the device: what Load proposes, and what OK writes.
 
 A file is read by eqfile. Its lines that can be used become Items, in the convention of their Origin: 'External'
 (a Cookbook biquad, as filter files usually mean it) or 'ADI-2' (the numbers as the device has them). In a

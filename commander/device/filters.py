@@ -1,4 +1,4 @@
-"""The EQ filters as the device runs them, and their response. No Qt.
+"""The EQ filters as the device runs them, and their response.
 
 Every band and the Bass and Treble shelves are one biquad in the form of the Audio EQ Cookbook (RBJ), with
 f0 and gain exactly as set. Only alpha, the term that holds Q, differs: the ADI-2 uses sin(w0 / 2Q) where

@@ -1,5 +1,5 @@
 """The EQ parameters of an ADI-2 DAC FS: addresses, ranges, grid and steps, in device increments and in
-units. No Qt, no I/O.
+units. No I/O.
 
 Increments: gain x2 (0.5 dB), Q x10 (0.1), frequency in Hz. The device clamps silently to exactly the limits
 below.

@@ -1,4 +1,4 @@
-"""A correction curve as a table: the frequency in the first column, curves in dB beside it. No Qt.
+"""A correction curve as a table: the frequency in the first column, curves in dB beside it.
 
 A table is read for what it holds: a column can serve as EQ when its data can, whatever it is called. A curve is
 a correction, carried out as it stands; its level does not matter (a fit has a free level).

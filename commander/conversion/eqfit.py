@@ -1,4 +1,4 @@
-"""From a curve to the device setting that comes closest to it, all bands together. No Qt.
+"""From a curve to the device setting that comes closest to it, all bands together.
 
 The curve is dB at filters.FREQS. The device: five bands (a choice of type only on band 1 and 5), optionally Bass
 and Treble, each a biquad as filters.coefficients computes it, on the device's grid. The error is the RMS difference

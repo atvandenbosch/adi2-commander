@@ -1,5 +1,5 @@
 """The status message (0x07) of an ADI-2 DAC FS: the active output, the plugs, what the inputs receive and the
-rate the device runs at. No Qt, no I/O.
+rate the device runs at. No I/O.
 
 The device sends it about once a second, from the first valid message of a remote on: 14 data bytes, d0..d13.
 Only the bits a remote needs are read here.
