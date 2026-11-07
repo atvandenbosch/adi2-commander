@@ -1,0 +1,1358 @@
+	<ADI-24PROSE>
+		<General>
+			<val e="Version" v="2"/>
+			<val e="Revision" v="1"/>
+		</General>
+		<Input>
+			<val e="AutoRef" v="0.00,"/>
+			<val e="RefLevel" v="2.00,"/>
+			<val e="TrimGainLeft" v="0.00,"/>
+			<val e="TrimGainRight" v="0.00,"/>
+			<val e="Polarity" v="0.00,"/>
+			<val e="MSProcessing" v="0.00,"/>
+			<val e="ADFilter" v="2.00,"/>
+			<val e="ADConversion" v="0.00,"/>
+			<val e="DCFilter" v="0.00,"/>
+			<val e="RIAAMode" v="0.00,"/>
+			<val e="RIAAMonoBass" v="0.00,"/>
+			<val e="BalImpedance" v="0.00,"/>
+		</Input>
+		<EQInput>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+			<val e="BassTrebleEn" v="1.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="0.00,"/>
+		</EQInput>
+		<EQInputR>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+		</EQInputR>
+		<Output1>
+			<val e="Source" v="0.00,"/>
+			<val e="AutoRef" v="1.00,"/>
+			<val e="RefLevel" v="1.00,"/>
+			<val e="Mono" v="0.00,"/>
+			<val e="Width" v="1.00,"/>
+			<val e="Polarity" v="0.00,"/>
+			<val e="MSProcessing" v="0.00,"/>
+			<val e="Crossfeed" v="0.00,"/>
+			<val e="DAFilter" v="2.00,"/>
+			<val e="Deemphasis" v="0.00,"/>
+			<val e="Volume" v="-10.00,"/>
+			<val e="LockVolume" v="0.00,"/>
+			<val e="Balance" v="0.00,"/>
+			<val e="Mute" v="0.00,"/>
+			<val e="Dim" v="0.00,"/>
+			<val e="LoopBack" v="0.00,"/>
+			<val e="DCProtection" v="2.00,"/>
+			<val e="RearTRSSource" v="0.00,"/>
+			<val e="LoudnessEn" v="0.00,"/>
+			<val e="LDBassGain" v="7.00,"/>
+			<val e="LDTrebleGain" v="7.00,"/>
+			<val e="LDVolumeRef" v="-30.00,"/>
+			<val e="LinkVolume" v="0.00,"/>
+			<val e="RecallVolume" v="-20.00,"/>
+			<val e="VolumeLimit" v="120.00,"/>
+		</Output1>
+		<EQOut1>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+			<val e="BassTrebleEn" v="1.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="0.00,"/>
+		</EQOut1>
+		<EQOut1 R>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+		</EQOut1 R>
+		<Output2>
+			<val e="Source" v="0.00,"/>
+			<val e="AutoRef" v="1.00,"/>
+			<val e="RefLevel" v="1.00,"/>
+			<val e="Mono" v="0.00,"/>
+			<val e="Width" v="1.00,"/>
+			<val e="Polarity" v="0.00,"/>
+			<val e="MSProcessing" v="0.00,"/>
+			<val e="Crossfeed" v="0.00,"/>
+			<val e="DAFilter" v="2.00,"/>
+			<val e="Deemphasis" v="0.00,"/>
+			<val e="Volume" v="-10.00,"/>
+			<val e="LockVolume" v="0.00,"/>
+			<val e="Balance" v="0.00,"/>
+			<val e="Mute" v="0.00,"/>
+			<val e="Dim" v="0.00,"/>
+			<val e="LoopBack" v="0.00,"/>
+			<val e="DCProtection" v="2.00,"/>
+			<val e="RearTRSSource" v="0.00,"/>
+			<val e="LoudnessEn" v="0.00,"/>
+			<val e="LDBassGain" v="7.00,"/>
+			<val e="LDTrebleGain" v="7.00,"/>
+			<val e="LDVolumeRef" v="-30.00,"/>
+			<val e="LinkVolume" v="0.00,"/>
+			<val e="RecallVolume" v="-20.00,"/>
+			<val e="VolumeLimit" v="120.00,"/>
+		</Output2>
+		<EQOut2>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+			<val e="BassTrebleEn" v="1.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="0.00,"/>
+		</EQOut2>
+		<EQOut2 R>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+		</EQOut2 R>
+		<Output3>
+			<val e="Source" v="0.00,"/>
+			<val e="AutoRef" v="1.00,"/>
+			<val e="RefLevel" v="1.00,"/>
+			<val e="Mono" v="0.00,"/>
+			<val e="Width" v="1.00,"/>
+			<val e="Polarity" v="0.00,"/>
+			<val e="MSProcessing" v="0.00,"/>
+			<val e="Crossfeed" v="0.00,"/>
+			<val e="DAFilter" v="2.00,"/>
+			<val e="Deemphasis" v="0.00,"/>
+			<val e="Volume" v="-10.00,"/>
+			<val e="LockVolume" v="0.00,"/>
+			<val e="Balance" v="0.00,"/>
+			<val e="Mute" v="0.00,"/>
+			<val e="Dim" v="0.00,"/>
+			<val e="LoopBack" v="0.00,"/>
+			<val e="DCProtection" v="2.00,"/>
+			<val e="RearTRSSource" v="0.00,"/>
+			<val e="LoudnessEn" v="0.00,"/>
+			<val e="LDBassGain" v="7.00,"/>
+			<val e="LDTrebleGain" v="7.00,"/>
+			<val e="LDVolumeRef" v="-30.00,"/>
+			<val e="LinkVolume" v="0.00,"/>
+			<val e="RecallVolume" v="-20.00,"/>
+			<val e="VolumeLimit" v="120.00,"/>
+		</Output3>
+		<EQOut3>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+			<val e="BassTrebleEn" v="1.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="0.00,"/>
+		</EQOut3>
+		<EQOut3 R>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+		</EQOut3 R>
+		<DevSettings>
+			<val e="BasicMode" v="0.00,"/>
+			<val e="DigitalOutSource" v="0.00,"/>
+			<val e="" v="0.00,"/>
+			<val e="AutoStandBy" v="0.00,"/>
+			<val e="DSDDetection" v="1.00,"/>
+			<val e="" v="0.00,"/>
+			<val e="" v="0.00,"/>
+			<val e="DualPhones" v="0.00,"/>
+			<val e="BalancedMode" v="0.00,"/>
+			<val e="TogglePhonesLine" v="0.00,"/>
+			<val e="MuteVsPh12" v="1.00,"/>
+			<val e="MuteVsPh34" v="1.00,"/>
+			<val e="ClockSource" v="0.00,"/>
+			<val e="SampleRate" v="1.00,"/>
+			<val e="SPDIFIn" v="0.00,"/>
+			<val e="SRCMode" v="2.00,"/>
+			<val e="SRCGain" v="0.00,"/>
+			<val e="OpticalOut" v="0.00,"/>
+			<val e="RemapKeys" v="2.00,"/>
+			<val e="RemapVol" v="51.00,"/>
+			<val e="RemapIO" v="48.00,"/>
+			<val e="RemapEQ" v="53.00,"/>
+			<val e="RemapSetup" v="42.00,"/>
+			<val e="RemapIR5" v="49.00,"/>
+			<val e="RemapIR6" v="50.00,"/>
+			<val e="RemapIR7" v="52.00,"/>
+			<val e="DisplayMode" v="0.00,"/>
+			<val e="MeterColor" v="0.00,"/>
+			<val e="HorMeter" v="0.00,"/>
+			<val e="AutoDark" v="0.00,"/>
+			<val e="ShowVolScreen" v="1.00,"/>
+			<val e="LockUI" v="0.00,"/>
+			<val e="LoadVolume" v="0.00,"/>
+		</DevSettings>
+		<EQPreset1Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-6.00,"/>
+			<val e="EQBand1Freq" v="38.00,"/>
+			<val e="EQBand1Q" v="4.50,"/>
+			<val e="EQBand2Gain" v="-4.50,"/>
+			<val e="EQBand2Freq" v="57.00,"/>
+			<val e="EQBand2Q" v="5.00,"/>
+			<val e="EQBand3Gain" v="-3.00,"/>
+			<val e="EQBand3Freq" v="112.00,"/>
+			<val e="EQBand3Q" v="3.50,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="1.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset1Left>
+		<EQPreset1Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-4.50,"/>
+			<val e="EQBand1Freq" v="41.00,"/>
+			<val e="EQBand1Q" v="4.00,"/>
+			<val e="EQBand2Gain" v="-5.50,"/>
+			<val e="EQBand2Freq" v="57.00,"/>
+			<val e="EQBand2Q" v="5.50,"/>
+			<val e="EQBand3Gain" v="-2.00,"/>
+			<val e="EQBand3Freq" v="118.00,"/>
+			<val e="EQBand3Q" v="3.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+		</EQPreset1Right>
+		<EQPreset2Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-6.00,"/>
+			<val e="EQBand1Freq" v="38.00,"/>
+			<val e="EQBand1Q" v="4.50,"/>
+			<val e="EQBand2Gain" v="-4.50,"/>
+			<val e="EQBand2Freq" v="57.00,"/>
+			<val e="EQBand2Q" v="5.00,"/>
+			<val e="EQBand3Gain" v="-3.00,"/>
+			<val e="EQBand3Freq" v="112.00,"/>
+			<val e="EQBand3Q" v="3.50,"/>
+			<val e="EQBand4Gain" v="2.50,"/>
+			<val e="EQBand4Freq" v="2500.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-1.50,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.70,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="-4.00,"/>
+			<val e="EQBassFreq" v="120.00,"/>
+			<val e="EQBassQ" v="0.70,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="1.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset2Left>
+		<EQPreset2Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-4.50,"/>
+			<val e="EQBand1Freq" v="41.00,"/>
+			<val e="EQBand1Q" v="4.00,"/>
+			<val e="EQBand2Gain" v="-5.50,"/>
+			<val e="EQBand2Freq" v="57.00,"/>
+			<val e="EQBand2Q" v="5.50,"/>
+			<val e="EQBand3Gain" v="-2.00,"/>
+			<val e="EQBand3Freq" v="118.00,"/>
+			<val e="EQBand3Q" v="3.00,"/>
+			<val e="EQBand4Gain" v="2.50,"/>
+			<val e="EQBand4Freq" v="2500.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-1.50,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.70,"/>
+		</EQPreset2Right>
+		<EQPreset3Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-4.00,"/>
+			<val e="EQBand1Freq" v="80.00,"/>
+			<val e="EQBand1Q" v="3.00,"/>
+			<val e="EQBand2Gain" v="2.00,"/>
+			<val e="EQBand2Freq" v="160.00,"/>
+			<val e="EQBand2Q" v="2.00,"/>
+			<val e="EQBand3Gain" v="-2.50,"/>
+			<val e="EQBand3Freq" v="1800.00,"/>
+			<val e="EQBand3Q" v="2.50,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-2.00,"/>
+			<val e="EQBand5Freq" v="8000.00,"/>
+			<val e="EQBand5Q" v="0.70,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset3Left>
+		<EQPreset3Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-4.00,"/>
+			<val e="EQBand1Freq" v="80.00,"/>
+			<val e="EQBand1Q" v="3.00,"/>
+			<val e="EQBand2Gain" v="2.00,"/>
+			<val e="EQBand2Freq" v="160.00,"/>
+			<val e="EQBand2Q" v="2.00,"/>
+			<val e="EQBand3Gain" v="-2.50,"/>
+			<val e="EQBand3Freq" v="1800.00,"/>
+			<val e="EQBand3Q" v="2.50,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-2.00,"/>
+			<val e="EQBand5Freq" v="8000.00,"/>
+			<val e="EQBand5Q" v="0.70,"/>
+		</EQPreset3Right>
+		<EQPreset4Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-7.00,"/>
+			<val e="EQBand1Freq" v="70.00,"/>
+			<val e="EQBand1Q" v="6.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset4Left>
+		<EQPreset4Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-7.00,"/>
+			<val e="EQBand1Freq" v="70.00,"/>
+			<val e="EQBand1Q" v="6.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+		</EQPreset4Right>
+		<EQPreset5Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="3.00,"/>
+			<val e="EQBand1Freq" v="60.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="-6.50,"/>
+			<val e="EQBand2Freq" v="31.00,"/>
+			<val e="EQBand2Q" v="5.00,"/>
+			<val e="EQBand3Gain" v="-5.00,"/>
+			<val e="EQBand3Freq" v="47.00,"/>
+			<val e="EQBand3Q" v="6.00,"/>
+			<val e="EQBand4Gain" v="-2.00,"/>
+			<val e="EQBand4Freq" v="250.00,"/>
+			<val e="EQBand4Q" v="1.50,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="1.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset5Left>
+		<EQPreset5Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="3.00,"/>
+			<val e="EQBand1Freq" v="60.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="-5.00,"/>
+			<val e="EQBand2Freq" v="33.00,"/>
+			<val e="EQBand2Q" v="4.50,"/>
+			<val e="EQBand3Gain" v="-6.00,"/>
+			<val e="EQBand3Freq" v="47.00,"/>
+			<val e="EQBand3Q" v="6.50,"/>
+			<val e="EQBand4Gain" v="-2.50,"/>
+			<val e="EQBand4Freq" v="240.00,"/>
+			<val e="EQBand4Q" v="1.50,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+		</EQPreset5Right>
+		<EQPreset6Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset6Left>
+		<EQPreset6Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+		</EQPreset6Right>
+		<EQPreset7Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-2.50,"/>
+			<val e="EQBand1Freq" v="125.00,"/>
+			<val e="EQBand1Q" v="0.60,"/>
+			<val e="EQBand2Gain" v="-2.00,"/>
+			<val e="EQBand2Freq" v="3160.00,"/>
+			<val e="EQBand2Q" v="3.80,"/>
+			<val e="EQBand3Gain" v="2.00,"/>
+			<val e="EQBand3Freq" v="6640.00,"/>
+			<val e="EQBand3Q" v="6.60,"/>
+			<val e="EQBand4Gain" v="3.50,"/>
+			<val e="EQBand4Freq" v="8450.00,"/>
+			<val e="EQBand4Q" v="2.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-3.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="6.50,"/>
+			<val e="EQBassFreq" v="105.00,"/>
+			<val e="EQBassQ" v="0.70,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset7Left>
+		<EQPreset7Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-2.50,"/>
+			<val e="EQBand1Freq" v="125.00,"/>
+			<val e="EQBand1Q" v="0.60,"/>
+			<val e="EQBand2Gain" v="-2.00,"/>
+			<val e="EQBand2Freq" v="3160.00,"/>
+			<val e="EQBand2Q" v="3.80,"/>
+			<val e="EQBand3Gain" v="2.00,"/>
+			<val e="EQBand3Freq" v="6640.00,"/>
+			<val e="EQBand3Q" v="6.60,"/>
+			<val e="EQBand4Gain" v="3.50,"/>
+			<val e="EQBand4Freq" v="8450.00,"/>
+			<val e="EQBand4Q" v="2.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-3.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+		</EQPreset7Right>
+		<EQPreset8Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="6.50,"/>
+			<val e="EQBand1Freq" v="105.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="-2.50,"/>
+			<val e="EQBand2Freq" v="142.00,"/>
+			<val e="EQBand2Q" v="0.50,"/>
+			<val e="EQBand3Gain" v="2.50,"/>
+			<val e="EQBand3Freq" v="1959.00,"/>
+			<val e="EQBand3Q" v="0.90,"/>
+			<val e="EQBand4Gain" v="-4.50,"/>
+			<val e="EQBand4Freq" v="5680.00,"/>
+			<val e="EQBand4Q" v="4.80,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-4.50,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset8Left>
+		<EQPreset8Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="6.50,"/>
+			<val e="EQBand1Freq" v="105.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="-2.50,"/>
+			<val e="EQBand2Freq" v="142.00,"/>
+			<val e="EQBand2Q" v="0.50,"/>
+			<val e="EQBand3Gain" v="2.50,"/>
+			<val e="EQBand3Freq" v="1959.00,"/>
+			<val e="EQBand3Q" v="0.90,"/>
+			<val e="EQBand4Gain" v="-4.50,"/>
+			<val e="EQBand4Freq" v="5680.00,"/>
+			<val e="EQBand4Q" v="4.80,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-4.50,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+		</EQPreset8Right>
+		<EQPreset9Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="6.50,"/>
+			<val e="EQBand1Freq" v="105.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="5.50,"/>
+			<val e="EQBand2Freq" v="4700.00,"/>
+			<val e="EQBand2Q" v="3.20,"/>
+			<val e="EQBand3Gain" v="-6.50,"/>
+			<val e="EQBand3Freq" v="6140.00,"/>
+			<val e="EQBand3Q" v="6.70,"/>
+			<val e="EQBand4Gain" v="5.00,"/>
+			<val e="EQBand4Freq" v="9270.00,"/>
+			<val e="EQBand4Q" v="3.90,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-4.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset9Left>
+		<EQPreset9Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="6.50,"/>
+			<val e="EQBand1Freq" v="105.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="5.50,"/>
+			<val e="EQBand2Freq" v="4700.00,"/>
+			<val e="EQBand2Q" v="3.20,"/>
+			<val e="EQBand3Gain" v="-6.50,"/>
+			<val e="EQBand3Freq" v="6140.00,"/>
+			<val e="EQBand3Q" v="6.70,"/>
+			<val e="EQBand4Gain" v="5.00,"/>
+			<val e="EQBand4Freq" v="9270.00,"/>
+			<val e="EQBand4Q" v="3.90,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-4.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+		</EQPreset9Right>
+		<EQPreset10Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-2.50,"/>
+			<val e="EQBand1Freq" v="99.00,"/>
+			<val e="EQBand1Q" v="0.50,"/>
+			<val e="EQBand2Gain" v="5.00,"/>
+			<val e="EQBand2Freq" v="1825.00,"/>
+			<val e="EQBand2Q" v="1.80,"/>
+			<val e="EQBand3Gain" v="-3.00,"/>
+			<val e="EQBand3Freq" v="3010.00,"/>
+			<val e="EQBand3Q" v="3.40,"/>
+			<val e="EQBand4Gain" v="-4.00,"/>
+			<val e="EQBand4Freq" v="4830.00,"/>
+			<val e="EQBand4Q" v="4.50,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-3.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="6.00,"/>
+			<val e="EQBassFreq" v="105.00,"/>
+			<val e="EQBassQ" v="0.70,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset10Left>
+		<EQPreset10Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-2.50,"/>
+			<val e="EQBand1Freq" v="99.00,"/>
+			<val e="EQBand1Q" v="0.50,"/>
+			<val e="EQBand2Gain" v="5.00,"/>
+			<val e="EQBand2Freq" v="1825.00,"/>
+			<val e="EQBand2Q" v="1.80,"/>
+			<val e="EQBand3Gain" v="-3.00,"/>
+			<val e="EQBand3Freq" v="3010.00,"/>
+			<val e="EQBand3Q" v="3.40,"/>
+			<val e="EQBand4Gain" v="-4.00,"/>
+			<val e="EQBand4Freq" v="4830.00,"/>
+			<val e="EQBand4Q" v="4.50,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-3.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+		</EQPreset10Right>
+		<EQPreset11Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="6.50,"/>
+			<val e="EQBand1Freq" v="105.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="-2.00,"/>
+			<val e="EQBand2Freq" v="127.00,"/>
+			<val e="EQBand2Q" v="0.50,"/>
+			<val e="EQBand3Gain" v="6.50,"/>
+			<val e="EQBand3Freq" v="2009.00,"/>
+			<val e="EQBand3Q" v="3.00,"/>
+			<val e="EQBand4Gain" v="-4.50,"/>
+			<val e="EQBand4Freq" v="4090.00,"/>
+			<val e="EQBand4Q" v="1.20,"/>
+			<val e="EQBand5Type" v="0.00,"/>
+			<val e="EQBand5Gain" v="2.50,"/>
+			<val e="EQBand5Freq" v="7580.00,"/>
+			<val e="EQBand5Q" v="0.70,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset11Left>
+		<EQPreset11Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="6.50,"/>
+			<val e="EQBand1Freq" v="105.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="-2.00,"/>
+			<val e="EQBand2Freq" v="127.00,"/>
+			<val e="EQBand2Q" v="0.50,"/>
+			<val e="EQBand3Gain" v="6.50,"/>
+			<val e="EQBand3Freq" v="2009.00,"/>
+			<val e="EQBand3Q" v="3.00,"/>
+			<val e="EQBand4Gain" v="-4.50,"/>
+			<val e="EQBand4Freq" v="4090.00,"/>
+			<val e="EQBand4Q" v="1.20,"/>
+			<val e="EQBand5Type" v="0.00,"/>
+			<val e="EQBand5Gain" v="2.50,"/>
+			<val e="EQBand5Freq" v="7580.00,"/>
+			<val e="EQBand5Q" v="0.70,"/>
+		</EQPreset11Right>
+		<EQPreset12Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="8.00,"/>
+			<val e="EQBand1Freq" v="105.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="-11.00,"/>
+			<val e="EQBand2Freq" v="49.00,"/>
+			<val e="EQBand2Q" v="0.50,"/>
+			<val e="EQBand3Gain" v="7.00,"/>
+			<val e="EQBand3Freq" v="205.00,"/>
+			<val e="EQBand3Q" v="2.20,"/>
+			<val e="EQBand4Gain" v="5.50,"/>
+			<val e="EQBand4Freq" v="3600.00,"/>
+			<val e="EQBand4Q" v="3.20,"/>
+			<val e="EQBand5Type" v="0.00,"/>
+			<val e="EQBand5Gain" v="-4.50,"/>
+			<val e="EQBand5Freq" v="5960.00,"/>
+			<val e="EQBand5Q" v="1.10,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset12Left>
+		<EQPreset12Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="8.00,"/>
+			<val e="EQBand1Freq" v="105.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="-11.00,"/>
+			<val e="EQBand2Freq" v="49.00,"/>
+			<val e="EQBand2Q" v="0.50,"/>
+			<val e="EQBand3Gain" v="7.00,"/>
+			<val e="EQBand3Freq" v="205.00,"/>
+			<val e="EQBand3Q" v="2.20,"/>
+			<val e="EQBand4Gain" v="5.50,"/>
+			<val e="EQBand4Freq" v="3600.00,"/>
+			<val e="EQBand4Q" v="3.20,"/>
+			<val e="EQBand5Type" v="0.00,"/>
+			<val e="EQBand5Gain" v="-4.50,"/>
+			<val e="EQBand5Freq" v="5960.00,"/>
+			<val e="EQBand5Q" v="1.10,"/>
+		</EQPreset12Right>
+		<EQPreset13Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset13Left>
+		<EQPreset13Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+		</EQPreset13Right>
+		<EQPreset14Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="2.50,"/>
+			<val e="EQBand1Freq" v="105.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="-2.00,"/>
+			<val e="EQBand2Freq" v="3080.00,"/>
+			<val e="EQBand2Q" v="3.60,"/>
+			<val e="EQBand3Gain" v="4.00,"/>
+			<val e="EQBand3Freq" v="9600.00,"/>
+			<val e="EQBand3Q" v="3.30,"/>
+			<val e="EQBand4Gain" v="3.00,"/>
+			<val e="EQBand4Freq" v="10000.00,"/>
+			<val e="EQBand4Q" v="1.30,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-8.50,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset14Left>
+		<EQPreset14Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="2.50,"/>
+			<val e="EQBand1Freq" v="105.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="-2.00,"/>
+			<val e="EQBand2Freq" v="3080.00,"/>
+			<val e="EQBand2Q" v="3.60,"/>
+			<val e="EQBand3Gain" v="4.00,"/>
+			<val e="EQBand3Freq" v="9600.00,"/>
+			<val e="EQBand3Q" v="3.30,"/>
+			<val e="EQBand4Gain" v="3.00,"/>
+			<val e="EQBand4Freq" v="10000.00,"/>
+			<val e="EQBand4Q" v="1.30,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-8.50,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+		</EQPreset14Right>
+		<EQPreset15Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-2.00,"/>
+			<val e="EQBand1Freq" v="199.00,"/>
+			<val e="EQBand1Q" v="1.50,"/>
+			<val e="EQBand2Gain" v="-2.00,"/>
+			<val e="EQBand2Freq" v="3160.00,"/>
+			<val e="EQBand2Q" v="3.80,"/>
+			<val e="EQBand3Gain" v="1.50,"/>
+			<val e="EQBand3Freq" v="6320.00,"/>
+			<val e="EQBand3Q" v="6.20,"/>
+			<val e="EQBand4Gain" v="3.50,"/>
+			<val e="EQBand4Freq" v="4840.00,"/>
+			<val e="EQBand4Q" v="1.90,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-4.50,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset15Left>
+		<EQPreset15Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-2.00,"/>
+			<val e="EQBand1Freq" v="199.00,"/>
+			<val e="EQBand1Q" v="1.50,"/>
+			<val e="EQBand2Gain" v="-2.00,"/>
+			<val e="EQBand2Freq" v="3160.00,"/>
+			<val e="EQBand2Q" v="3.80,"/>
+			<val e="EQBand3Gain" v="1.50,"/>
+			<val e="EQBand3Freq" v="6320.00,"/>
+			<val e="EQBand3Q" v="6.20,"/>
+			<val e="EQBand4Gain" v="3.50,"/>
+			<val e="EQBand4Freq" v="4840.00,"/>
+			<val e="EQBand4Q" v="1.90,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-4.50,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+		</EQPreset15Right>
+		<EQPreset16Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="-2.50,"/>
+			<val e="EQBand1Freq" v="105.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="-3.00,"/>
+			<val e="EQBand2Freq" v="1727.00,"/>
+			<val e="EQBand2Q" v="1.20,"/>
+			<val e="EQBand3Gain" v="3.50,"/>
+			<val e="EQBand3Freq" v="5860.00,"/>
+			<val e="EQBand3Q" v="6.40,"/>
+			<val e="EQBand4Gain" v="5.00,"/>
+			<val e="EQBand4Freq" v="4370.00,"/>
+			<val e="EQBand4Q" v="1.30,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-7.50,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="1.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset16Left>
+		<EQPreset16Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="-2.50,"/>
+			<val e="EQBand1Freq" v="105.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="-3.00,"/>
+			<val e="EQBand2Freq" v="1727.00,"/>
+			<val e="EQBand2Q" v="1.20,"/>
+			<val e="EQBand3Gain" v="3.50,"/>
+			<val e="EQBand3Freq" v="5860.00,"/>
+			<val e="EQBand3Q" v="6.40,"/>
+			<val e="EQBand4Gain" v="7.00,"/>
+			<val e="EQBand4Freq" v="4370.00,"/>
+			<val e="EQBand4Q" v="1.30,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="-5.50,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+		</EQPreset16Right>
+		<EQPreset17Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-3.50,"/>
+			<val e="EQBand1Freq" v="164.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="2.00,"/>
+			<val e="EQBand2Freq" v="745.00,"/>
+			<val e="EQBand2Q" v="1.50,"/>
+			<val e="EQBand3Gain" v="1.50,"/>
+			<val e="EQBand3Freq" v="8660.00,"/>
+			<val e="EQBand3Q" v="7.30,"/>
+			<val e="EQBand4Gain" v="1.00,"/>
+			<val e="EQBand4Freq" v="3090.00,"/>
+			<val e="EQBand4Q" v="2.90,"/>
+			<val e="EQBand5Type" v="0.00,"/>
+			<val e="EQBand5Gain" v="4.50,"/>
+			<val e="EQBand5Freq" v="6190.00,"/>
+			<val e="EQBand5Q" v="2.40,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset17Left>
+		<EQPreset17Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-3.50,"/>
+			<val e="EQBand1Freq" v="164.00,"/>
+			<val e="EQBand1Q" v="0.70,"/>
+			<val e="EQBand2Gain" v="2.00,"/>
+			<val e="EQBand2Freq" v="745.00,"/>
+			<val e="EQBand2Q" v="1.50,"/>
+			<val e="EQBand3Gain" v="1.50,"/>
+			<val e="EQBand3Freq" v="8660.00,"/>
+			<val e="EQBand3Q" v="7.30,"/>
+			<val e="EQBand4Gain" v="1.00,"/>
+			<val e="EQBand4Freq" v="3090.00,"/>
+			<val e="EQBand4Q" v="2.90,"/>
+			<val e="EQBand5Type" v="0.00,"/>
+			<val e="EQBand5Gain" v="4.50,"/>
+			<val e="EQBand5Freq" v="6190.00,"/>
+			<val e="EQBand5Q" v="2.40,"/>
+		</EQPreset17Right>
+		<EQPreset18Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-1.50,"/>
+			<val e="EQBand1Freq" v="164.00,"/>
+			<val e="EQBand1Q" v="0.60,"/>
+			<val e="EQBand2Gain" v="2.50,"/>
+			<val e="EQBand2Freq" v="806.00,"/>
+			<val e="EQBand2Q" v="1.10,"/>
+			<val e="EQBand3Gain" v="-3.50,"/>
+			<val e="EQBand3Freq" v="1623.00,"/>
+			<val e="EQBand3Q" v="0.50,"/>
+			<val e="EQBand4Gain" v="6.50,"/>
+			<val e="EQBand4Freq" v="6980.00,"/>
+			<val e="EQBand4Q" v="1.20,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="1.50,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="5.50,"/>
+			<val e="EQBassFreq" v="105.00,"/>
+			<val e="EQBassQ" v="0.70,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset18Left>
+		<EQPreset18Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="0.00,"/>
+			<val e="EQBand1Gain" v="-1.50,"/>
+			<val e="EQBand1Freq" v="164.00,"/>
+			<val e="EQBand1Q" v="0.60,"/>
+			<val e="EQBand2Gain" v="2.50,"/>
+			<val e="EQBand2Freq" v="806.00,"/>
+			<val e="EQBand2Q" v="1.10,"/>
+			<val e="EQBand3Gain" v="-3.50,"/>
+			<val e="EQBand3Freq" v="1623.00,"/>
+			<val e="EQBand3Q" v="0.50,"/>
+			<val e="EQBand4Gain" v="6.50,"/>
+			<val e="EQBand4Freq" v="6980.00,"/>
+			<val e="EQBand4Q" v="1.20,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="1.50,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="0.90,"/>
+		</EQPreset18Right>
+		<EQPreset19Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset19Left>
+		<EQPreset19Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+		</EQPreset19Right>
+		<EQPreset20Left>
+			<val e="EQEnable" v="15.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+			<val e="BassTrebleEn" v="0.00,"/>
+			<val e="EQBassGain" v="0.00,"/>
+			<val e="EQBassFreq" v="85.00,"/>
+			<val e="EQBassQ" v="0.90,"/>
+			<val e="EQTrebleGain" v="0.00,"/>
+			<val e="EQTrebleFreq" v="6500.00,"/>
+			<val e="EQTrebleQ" v="0.70,"/>
+			<val e="DualEQ" v="0.00,"/>
+			<val e="EQ Preset Select" v="0.00,"/>
+			<val e="Load BT w. EQ" v="1.00,"/>
+		</EQPreset20Left>
+		<EQPreset20Right>
+			<val e="EQEnable" v="0.00,"/>
+			<val e="EQBand1Type" v="1.00,"/>
+			<val e="EQBand1Gain" v="0.00,"/>
+			<val e="EQBand1Freq" v="100.00,"/>
+			<val e="EQBand1Q" v="1.00,"/>
+			<val e="EQBand2Gain" v="0.00,"/>
+			<val e="EQBand2Freq" v="500.00,"/>
+			<val e="EQBand2Q" v="1.00,"/>
+			<val e="EQBand3Gain" v="0.00,"/>
+			<val e="EQBand3Freq" v="1000.00,"/>
+			<val e="EQBand3Q" v="1.00,"/>
+			<val e="EQBand4Gain" v="0.00,"/>
+			<val e="EQBand4Freq" v="5000.00,"/>
+			<val e="EQBand4Q" v="1.00,"/>
+			<val e="EQBand5Type" v="1.00,"/>
+			<val e="EQBand5Gain" v="0.00,"/>
+			<val e="EQBand5Freq" v="10000.00,"/>
+			<val e="EQBand5Q" v="1.00,"/>
+		</EQPreset20Right>
+		<PresetNames>
+			<val e="EQPresetName1" v="Living Neutral"/>
+			<val e="EQPresetName2" v="Living Speech"/>
+			<val e="EQPresetName3" v="Desk Nearfield"/>
+			<val e="EQPresetName4" v="Bedroom"/>
+			<val e="EQPresetName5" v="Home Cinema"/>
+			<val e="EQPresetName6" v="EQ Preset 6"/>
+			<val e="EQPresetName7" v="HD 600"/>
+			<val e="EQPresetName8" v="HD 800 S"/>
+			<val e="EQPresetName9" v="Focal Clear MG"/>
+			<val e="EQPresetName10" v="Arya Stealth"/>
+			<val e="EQPresetName11" v="Sundara"/>
+			<val e="EQPresetName12" v="DT 770 Pro 80"/>
+			<val e="EQPresetName13" v="EQ Preset 13"/>
+			<val e="EQPresetName14" v="Blessing 3"/>
+			<val e="EQPresetName15" v="Truthear Hexa"/>
+			<val e="EQPresetName16" v="IE 600"/>
+			<val e="EQPresetName17" v="Aria 2"/>
+			<val e="EQPresetName18" v="ER4XR"/>
+			<val e="EQPresetName19" v="EQ Preset 19"/>
+			<val e="EQPresetName20" v="EQ Preset 20"/>
+		</PresetNames>
+	</ADI-24PROSE>

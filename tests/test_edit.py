@@ -229,7 +229,7 @@ class EditStand(WindowTest):
                 text = f.read()
         self.assertEqual(text, R.write(d.state, 3, d.name, self.win.model, self.session.revision()))
         self.assertIn('v="%s"' % d.name, text)
-        self.assertIn('<val e="EQBand2Gain" v="3.00,"/>', text)                # the preset, not the output
+        self.assertIn('<val e="EQBand2Gain" v="3.00,"/>', text)                # band 2 of the preset as edited
 
     def test_what_ok_changes_beyond_the_preset(self):
         self.session.set((4, 28), 3)                                          # Line Out, active: Preset 2
