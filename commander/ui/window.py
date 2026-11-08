@@ -584,7 +584,6 @@ class MainWindow(QMainWindow):
         self.graph.no_bt_from = self.loudness_graph.no_bt_from = self.preview.no_bt_from = model.no_bt_from
         for i, name in enumerate(model.outputs):
             self.tabs.setTabText(i, name)
-        self.output_tab.set_available(not model.eq_only, NOT_YET % model.name)
         self.on_device_status(self.session.device_status)
 
     def on_connection(self, status, detail):
@@ -634,7 +633,7 @@ class MainWindow(QMainWindow):
                                                 for o in (out, user) if o is not None))
             on = out in active or user in active
             self.tabs.setTabIcon(i, self.dot if on else self.no_dot)
-            tip = ACTIVE_TIP if not self.model.eq_only else ALWAYS_ACTIVE if out in always else ACTIVE
+            tip = ACTIVE_TIP if not always else ALWAYS_ACTIVE if out in always else ACTIVE
             if user is not None:
                 why = PHONES_1_2[self.session.phones_1_2(user)]
             elif out in dict(self.model.separate):
@@ -690,7 +689,7 @@ class MainWindow(QMainWindow):
         """The rate the device runs at, or None where it does not apply: no device, DSD (no DSP), or nothing on
         the SPDIF input. Of the ADI-2 Pro and ADI-2/4 Pro: Sample Rate as the device reports it (12/16)."""
         st = self.session.device_status
-        if self.session.ready() and self.model.eq_only:
+        if self.session.ready() and self.model.sources is not None:      # an ADI-2 Pro or ADI-2/4 Pro
             index = self.session.state.get(P.SAMPLE_RATE)
             return P.SAMPLE_RATES[index] if index in range(len(P.SAMPLE_RATES)) else None
         if not self.session.ready() or st is None or st.dsd:
@@ -702,7 +701,7 @@ class MainWindow(QMainWindow):
         """Beside the connection: the input, then the rate and PCM, or DSD. A chosen SPDIF input without a signal,
         or with non-audio data, says so in amber instead: nothing plays."""
         self.show_live_rate()
-        if self.model.eq_only:
+        if self.model.sources is not None:                   # an ADI-2 Pro or ADI-2/4 Pro
             self.show_own_rate()
             return
         self.input_text.show()
@@ -1377,7 +1376,7 @@ class MainWindow(QMainWindow):
         self.loudness_switch.show_state(loudness_on, ready, switch_tip("Loudness, both channels", loudness_on), dsd)
         tip = ("Load Bass/Treble with preset: %s\n"
                "On: selecting a preset brings its Bass/Treble too, and changing Bass/Treble on a\n"
-               "preset makes it Temp.%s" % ("on" if load_bt else "off", "" if self.model.eq_only else
+               "preset makes it Temp.%s" % ("on" if load_bt else "off", "" if self.model.id != models.DAC.id else
                                             " Switching it on switches Bass/Treble off on Phones and"
                                             " IEM\n(the device does so)."))
         shared = shared_tip(self.session, (left, P.LOAD_BT)) if live else None
@@ -1385,8 +1384,7 @@ class MainWindow(QMainWindow):
         self.refresh_presets()
         self.refresh_edit()
         self.input_panel.refresh()
-        if not self.model.eq_only:                       # else closed
-            self.output_panel.refresh()
+        self.output_panel.refresh()
         for m in self.band_models + [self.bt_model, self.loudness_model]:
             m.refresh()
         rate = self.live_rate()                          # compared: the rate the device runs at, when it is another

@@ -357,14 +357,6 @@ class SideTab(QWidget):
         if e.button() == Qt.LeftButton:
             self.set_open(not self.open)
 
-    def set_available(self, on, why=""):
-        """Not available: grey, closed and not to be opened, with why as its tooltip."""
-        if not on and self.open:
-            self.set_open(False)
-        self.setEnabled(on)
-        self.setCursor(Qt.PointingHandCursor if on else Qt.ArrowCursor)
-        self.setToolTip("Show or hide the %s" % self.text.lower() if on else why)
-
     def set_open(self, on):
         self.open = on
         self.update()

@@ -814,8 +814,9 @@ class StoreWrite(Harness):
         self.assertFalse(self.session.operating())
 
 
-class EqOnly(Harness):
-    """An ADI-2 Pro: Commander writes the EQ of Line Out and Phones 3/4, and of their other settings only Source."""
+class ProOutputs(Harness):
+    """An ADI-2 Pro: Commander writes the EQ and the other settings of Line Out and Phones 3/4, and of Phones 1/2 while
+    it has settings of its own."""
 
     def setUp(self):
         super().setUp()
@@ -830,10 +831,12 @@ class EqOnly(Harness):
                 for t in codec.parameter_triplets([m])]
 
     def test_what_it_writes(self):
-        writable = [k for k in [(4, 4), (5, 4), (10, 4), (4, 21), (4, 28), (3, 20), (3, 23), (9, 21)]
-                    if self.session.writable(k)]
-        self.assertEqual(writable, [(4, 4), (10, 4), (4, 21), (4, 28), (3, 20), (3, 23), (9, 21)])  # right: Dual EQ off
-        for key in [(7, 4), (8, 4), (6, 20), (3, 1), (3, 2), (3, 12), (3, 15), (9, 9), (0, 1), (1, 4), (12, 6)]:
+        writable = [k for k in [(4, 4), (5, 4), (10, 4), (4, 21), (4, 28), (3, 20), (3, 23), (9, 21), (3, 3), (3, 12),
+                                (3, 15), (9, 9), (9, 17)] if self.session.writable(k)]
+        self.assertEqual(writable, [(4, 4), (10, 4), (4, 21), (4, 28), (3, 20), (3, 23), (9, 21), (3, 3), (3, 12),
+                                    (3, 15), (9, 9), (9, 17)])                  # right: Dual EQ off
+        # Phones 1/2 off; Source: not in Basic Mode USB; Ref Level: with Auto Ref Level on
+        for key in [(7, 4), (8, 4), (6, 20), (6, 12), (3, 1), (3, 2), (9, 2), (0, 1), (1, 4), (12, 6)]:
             self.assertFalse(self.session.writable(key), key)
         self.assertEqual((self.session.controls(3), self.session.controls(6), self.session.controls(9)),
                          (True, False, True))
@@ -851,6 +854,14 @@ class EqOnly(Harness):
         self.assertEqual(seen, [("off", None, False, False), ("own", None, True, True), ("shared", 3, False, False),
                                 ("balanced", 9, False, False)])
         self.assertEqual([self.session.phones_1_2(out) for out in (3, 9)], [None, None])
+
+    def test_lock_volume_of_line_out_holds_volume_of_phones_1_2_too(self):
+        self.sim.front_panel([(12, 8, 1)])                              # Phones 1/2 with settings of its own
+        self.run_for(1.5)
+        self.assertTrue(self.session.writable((6, P.VOLUME)))
+        self.sim.front_panel([(3, P.LOCK_VOLUME, 1)])
+        self.run_for(1.5)
+        self.assertEqual([self.session.writable((out, P.VOLUME)) for out in (3, 6, 9)], [False, False, True])
 
     def test_phones_1_2_has_some_settings_of_line_out(self):
         """At Line Out's address, and of both: Mute and the other settings of the D/A converter, and Load B/T. Of an

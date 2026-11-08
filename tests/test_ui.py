@@ -709,7 +709,7 @@ class ProWindow(WindowTest):
         self.assertEqual([tabs.isTabEnabled(i) for i in range(3)], [True, True, True])
         self.assertEqual(tabs.tabToolTip(1), "")
         tabs.setCurrentIndex(1)
-        self.assertTrue(self.session.writable((7, 4)) and not self.session.writable((6, 12)))   # a gain, Volume
+        self.assertTrue(self.session.writable((7, 4)) and self.session.writable((6, 12)))       # a gain, Volume
         self.win.eq_switches[0].click()
         self.spin(1500)
         self.assertEqual(self.sim.state[(7, 2)], 1)
@@ -717,6 +717,35 @@ class ProWindow(WindowTest):
         self.spin(4000)
         self.assertEqual((tabs.isTabEnabled(1), tabs.currentIndex() == 1), (False, False))
         self.assertFalse(self.session.writable((7, 4)))
+
+    def test_phones_1_2_with_some_settings_of_line_out(self):
+        """With settings of its own, Phones 1/2 shows and writes Mute and the other settings of the D/A converter at
+        Line Out's address, and says so, as Line Out does; Volume is its own. Dim where Line Out or Phones 1/2 is
+        active."""
+        panel, sim = self.win.output_panel, self.sim
+        sim.state[(12, 8)] = 1
+        self.spin(4000)
+        QTest.mouseClick(self.win.output_tab, Qt.LeftButton)
+        self.win.tabs.setCurrentIndex(1)
+        volume = sim.state[(6, P.VOLUME)], sim.state[(3, P.VOLUME)]
+        QTest.mouseClick(panel.options[P.MUTE], Qt.LeftButton)
+        s = panel.volume
+        QTest.mouseClick(s, Qt.LeftButton, pos=QPoint(4, s.height() // 2))
+        self.spin(1500)
+        self.assertEqual((sim.state[(3, P.MUTE)], (6, P.MUTE) in sim.state), (1, False))
+        self.assertEqual((sim.state[(6, P.VOLUME)], sim.state[(3, P.VOLUME)]), (volume[0] - 5, volume[1]))
+        shared = "One setting for Line Out and Phones 1/2"
+        self.assertIn(shared, panel.options[P.MUTE].toolTip())
+        self.assertIn(shared, panel.steppers[P.DA_FILTER].toolTip())
+        self.assertNotIn(shared, panel.steppers[P.CROSSFEED].toolTip())
+        self.assertTrue(panel.options[P.DIM].isEnabled())                      # Line Out is active
+        self.session.device_status = self.session.device_status._replace(output=0)
+        self.win.refresh()
+        self.assertFalse(panel.options[P.DIM].isEnabled())
+        self.win.tabs.setCurrentIndex(0)
+        self.assertIn(shared, panel.options[P.MUTE].toolTip())
+        self.win.tabs.setCurrentIndex(2)
+        self.assertNotIn(shared, panel.options[P.MUTE].toolTip())
 
     def test_load_bt_of_phones_1_2_is_that_of_line_out(self):
         """With settings of its own, Phones 1/2 shows and switches Load B/T of Line Out, and says so; so does Line
@@ -793,12 +822,21 @@ class ProWindow(WindowTest):
         self.win.on_device_status(None)
         self.assertEqual(dots(), [False, False, False])
 
-    def test_the_output_panel_grey_the_input_panel_open(self):
-        tab, area = self.win.output_tab, self.win.output_area
-        self.assertFalse(tab.isEnabled())
-        self.assertEqual(tab.toolTip(), "Not yet available for the ADI-2 Pro")
+    def test_the_output_panel(self):
+        """Open, on the settings of the output shown, with the names of the model."""
+        tab, area, panel = self.win.output_tab, self.win.output_area, self.win.output_panel
         QTest.mouseClick(tab, Qt.LeftButton)
-        self.assertTrue(area.isHidden())
+        self.assertFalse(area.isHidden())
+        self.assertEqual(panel.steppers[P.REF_LEVEL].text(panel.steppers[P.REF_LEVEL].value), "+19 dBu")
+        self.assertEqual(panel.volume_label.text(), "Volume (dBr)")                  # Auto Ref Level on
+        QTest.mouseClick(panel.options[P.MUTE], Qt.LeftButton)
+        self.spin(1500)
+        self.assertEqual(self.sim.state[(3, P.MUTE)], 1)
+        self.win.tabs.setCurrentIndex(2)
+        QTest.mouseClick(panel.options[P.AUTO_REF_LEVEL], Qt.LeftButton)
+        self.spin(1500)
+        self.assertEqual((self.sim.state[(9, P.AUTO_REF_LEVEL)], panel.volume_label.text()), (0, "Volume (dB)"))
+        self.assertTrue(panel.steppers[P.REF_LEVEL].isEnabled())
         QTest.mouseClick(self.win.input_tab, Qt.LeftButton)
         self.assertFalse(self.win.input_area.isHidden())
         QTest.mouseClick(self.win.presets_tab, Qt.LeftButton)

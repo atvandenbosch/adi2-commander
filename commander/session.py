@@ -251,8 +251,7 @@ class Session:
         if not self.ready() or self._op is not None or key not in self.state:
             return False
         if a in P.OUTPUT_ADDRESSES:
-            settings = self.model.settings
-            if not self.controls(a) or (settings is not None and i not in settings):
+            if not self.controls(a):
                 return False
             if i == P.SOURCE and self.model.sources is not None and not self._source_choosable(key):
                 return False
