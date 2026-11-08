@@ -65,7 +65,15 @@ ACTIVE_TIP = "Active on the device: its display and volume knob are on this outp
 ACTIVE = "Active on the device"                 # the ADI-2 Pro and ADI-2/4 Pro
 ALWAYS_ACTIVE = "Always active on the device"
 NOT_YET = "Not yet available for the %s"          # with the model's name
-SEPARATE = "Settings of its own with Dual Phones and Mute v. TRS 1/2 on:\nSETUP › Options › Phones on the device"
+# Phones 1/2 of an ADI-2 Pro and ADI-2/4 Pro, as the device uses it (Session.phones_1_2); None: not known yet. Grey,
+# its own tab says why; using the settings of another output, it shares that output's tab, which says how
+PHONES_MENU = "SETUP › Options › Phones on the device"
+PHONES_1_2 = {None: "Active with Dual Phones on: " + PHONES_MENU,
+              "off": "Dual Phones is off: " + PHONES_MENU,
+              "shared": "Phones 1/2 uses the settings of Line Out.\nSettings of its own with Mute v. TRS 1/2 on: "
+                        + PHONES_MENU,
+              "balanced": "Balanced Phones mode: Phones 3/4 and Phones 1/2 form one balanced output,\n"
+                          "with the settings of Phones 3/4"}
 # the kinds of file Save writes
 APO_FILES = "Equalizer APO (*.txt)"
 REMOTE_FILES = "ADI-2 Remote preset (*.adieqpr)"
@@ -603,24 +611,44 @@ class MainWindow(QMainWindow):
         self.refresh()                                   # DSD bypasses the DSP: the switches, curves and cells follow
 
     def show_tabs(self):
-        """An output Commander does not control now has a grey tab that cannot be opened; Phones 1/2 of an ADI-2 Pro
-        and ADI-2/4 Pro follows the device's settings (Session.controls). An output the device has active gets a dot
-        on its tab, in the colour of the lamp: a fact of the device, not a choice here; also on an output Commander
-        does not control."""
+        """An output Commander does not control now has a grey tab that cannot be opened. Phones 1/2 of an ADI-2 Pro
+        and ADI-2/4 Pro follows how the device uses it (Session.phones_1_2): its own tab with settings of its own,
+        grey while it is off; using the settings of Line Out or, in Balanced Phones mode, of Phones 3/4, it shares
+        that output's tab, named after both, the owner of the settings first. An output the device has active gets a
+        dot on its tab, in the colour of the lamp: a fact of the device, not a choice here; also on an output
+        Commander does not control."""
         status = self.status_shown
         active = self.model.active[status.output] if status is not None else ()
         always = set.intersection(*map(set, self.model.active))
+        here = P.OUTPUTS[self.tabs.currentIndex()][1]   # before a hidden tab moves the window on
+        users = {}                                       # owner of the settings -> the output that uses them
+        for _, out, _, _ in P.OUTPUTS:
+            if self.session.follows(out) is not None:
+                users[self.session.follows(out)] = out
         for i, (_, out, _, _) in enumerate(P.OUTPUTS):
+            user = users.get(out)
             controlled = out in self.model.controlled or self.session.controls(out)
+            self.tabs.setTabVisible(i, out not in users.values())
             self.tabs.setTabEnabled(i, controlled)
-            on = out in active
+            self.tabs.setTabText(i, " · ".join(self.model.outputs[P.OUTPUT_ADDRESSES.index(o)]
+                                                for o in (out, user) if o is not None))
+            on = out in active or user in active
             self.tabs.setTabIcon(i, self.dot if on else self.no_dot)
             tip = ACTIVE_TIP if not self.model.eq_only else ALWAYS_ACTIVE if out in always else ACTIVE
-            why = SEPARATE if out in dict(self.model.separate) else NOT_YET % self.model.name
-            tips = ([] if controlled else [why]) + ([tip] if on else [])
-            self.tabs.setTabToolTip(i, "\n".join(tips))
-        if not self.tabs.isTabEnabled(self.tabs.currentIndex()):
-            self.tabs.setCurrentIndex(next(i for i in range(self.tabs.count()) if self.tabs.isTabEnabled(i)))
+            if user is not None:
+                why = PHONES_1_2[self.session.phones_1_2(user)]
+            elif out in dict(self.model.separate):
+                why = None if controlled else PHONES_1_2[self.session.phones_1_2(out)]
+            else:
+                why = None if controlled else NOT_YET % self.model.name
+            self.tabs.setTabToolTip(i, "\n".join(t for t in (why, tip if on else None) if t))
+        if here in users.values():                       # its settings are on the tab of their owner
+            self.tabs.setCurrentIndex(P.OUTPUT_ADDRESSES.index(self.session.follows(here)))
+        elif not self.tabs.isTabEnabled(self.tabs.currentIndex()):
+            self.tabs.setCurrentIndex(next(i for i in range(self.tabs.count()) if self.open_tab(i)))
+
+    def open_tab(self, i):
+        return self.tabs.isTabVisible(i) and self.tabs.isTabEnabled(i)
 
     def save_backup(self):
         """The state as connected, with the preset slots once all are read, as a copy in the backups folder."""
@@ -762,7 +790,7 @@ class MainWindow(QMainWindow):
         if self.draft is None:
             n, i = self.tabs.count(), self.tabs.currentIndex()
             self.tabs.setCurrentIndex(next(j % n for j in range(i + step, i + step * n, step)
-                                           if self.tabs.isTabEnabled(j % n)))
+                                           if self.open_tab(j % n)))
 
     def set_output(self, i):
         self.output = P.OUTPUTS[i]

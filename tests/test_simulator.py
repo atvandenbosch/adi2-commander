@@ -717,6 +717,15 @@ class OtherModels(unittest.TestCase):
         sim = self.use("2/4 SE")
         self.assertTrue(all((6, i) in sim.state for i in line_only))
 
+    def test_the_status_message_reports_balanced_phones(self):
+        sim = self.use("Pro")
+        seen = []
+        for bal in (1, 2, 0):                                       # On, Auto (no plugs), Off
+            self.send((12, 9, bal))
+            self.clock.sleep(1.1)
+            seen.append(status.decode([m for m in sim.poll() if m[5] == 0x07][-1][6:-1]).balanced)
+        self.assertEqual(seen, [True, False, False])
+
     def test_what_only_the_dac_fs_is_known_to_do_it_does_not(self):
         sim = self.use("2/4 SE")
         self.dump()

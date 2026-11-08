@@ -2,9 +2,10 @@
 proof, so a connection asks under each ID in turn, the hinted one first.
 
 Commander controls all of an ADI-2 DAC FS. Of an ADI-2 Pro and ADI-2/4 Pro it controls the EQ (bands, Bass/Treble,
-presets, Loudness) of Line Out and Phones 3/4, and of Phones 1/2 while it has settings of its own: Phones 1/2 shares
-the signal of Line Out, and has its own settings with Dual Phones and Mute v. TRS 1/2 on (ADI-2 Pro manual, 14.1.4).
-It also controls their Source, as far as the Basic Mode in use allows."""
+presets, Loudness) of Line Out and Phones 3/4, and of Phones 1/2 while it has settings of its own. Phones 1/2 shares
+the signal of Line Out and is active with Dual Phones on; with Mute v. TRS 1/2 on as well it has settings of its own,
+otherwise it uses those of Line Out (ADI-2 Pro manual, 14.1.4, 21.4). In Balanced Phones mode it is the right channel
+of Phones 3/4 (chapter 18). Commander also controls their Source, as far as the Basic Mode in use allows."""
 
 from collections import namedtuple
 
@@ -19,7 +20,8 @@ from . import params as P
 # outputs: the names of Line Out, Phones 1/2 and Phones 3/4, in the order of params.OUTPUTS
 # tags: their marks on a preset that is selected there
 # controlled: the output addresses Commander controls
-# separate: (output address, indices on address 12): an output Commander controls while those settings are on
+# separate: (output address, (Dual Phones, Mute v. TRS 1/2) indices on address 12): Phones 1/2, which has settings of
+#   its own while both are on (Session.phones_1_2)
 # eq_only: of those Commander controls only the EQ, and none of the device's other settings
 # no_bt_from: from this rate on there is no Bass/Treble and no Loudness (manuals, 8.8)
 # one_eq_from: from this rate on the EQ of the input, while it is on, bypasses the EQ of the outputs; None when it

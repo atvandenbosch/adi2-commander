@@ -79,6 +79,7 @@ REAR_TRS_SOURCE = {19: (0, 1, 0)}                # ADI-2/4 Pro, Phones 3/4 only:
 EX_SOURCE = (0, 6, 0)                            # ADI-2/4 Pro EX: ADAT 3/4 besides
 SOURCE_IN_DAC_MODE = (0, 6, 0)                   # Auto, AES, SPDIF coax, Optical, Analog, USB 1/2, USB 3/4
 BASIC_MODE, BASIC_MODE_DAC = 6, 5                # on address 12
+BAL_PHONES = 9                                   # on address 12: Off, On, Auto (with a plug in both phones jacks)
 # Basic Mode: Auto, AD/DA, USB, Preamp, Dig Thru, DAC. The status message reports the mode in use, numbered as
 # Basic Mode; Auto takes USB when USB is connected, as it is for MIDI over USB
 BASIC_MODE_AUTO, BASIC_MODE_USB = 0, 2
@@ -921,12 +922,13 @@ class SimulatedAdi2:
     def _own_status_body(self):
         """ADI-2 Pro and ADI-2/4 Pro: the status message as the table describes it, in the layout of the ADI-2 DAC FS:
         14 data bytes. Line Out active (and Phones 3/4, always), no signal on any input, no plug, the internal clock
-        at the rate of USB, and the Basic Mode in use (d9 bits 2..0)."""
+        at the rate of USB, the Basic Mode in use (d9 bits 2..0) and Balanced Phones mode (d9 bit 3): with Bal Phones
+        On; Auto needs a plug in both jacks."""
         rate = self._rate()
         d2 = 0x0F << 1 | 0x03 << 5                    # AES and SPDIF: no rate
         d3 = SAMPLE_RATES.index(rate) << 3 | (_family(rate)[0] == 44100) << 2 | 0x03
         mode = self.state.get((12, BASIC_MODE), BASIC_MODE_AUTO)
-        d9 = BASIC_MODE_USB if mode == BASIC_MODE_AUTO else mode
+        d9 = (BASIC_MODE_USB if mode == BASIC_MODE_AUTO else mode) | (self.state.get((12, BAL_PHONES)) == 1) << 3
         usb_base, usb_n = _family(self.usb_rate)
         return [self.revision << 2 | 1, 0, d2, d3, 0, 0, 0, 0, 0, d9, 0x02, SPDIF_FAMILY[usb_base] | usb_n << 2, 0, 0]
 

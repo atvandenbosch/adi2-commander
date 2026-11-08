@@ -838,6 +838,20 @@ class EqOnly(Harness):
         self.assertEqual((self.session.controls(3), self.session.controls(6), self.session.controls(9)),
                          (True, False, True))
 
+    def test_how_phones_1_2_is_used(self):
+        """Dual Phones (12/8) off: off. On, with Mute v. TRS 1/2 (12/11) on: settings of its own, which Commander
+        controls; with it off: those of Line Out, which Phones 1/2 follows. Balanced Phones mode active: the right
+        channel of Phones 3/4, whose settings it follows, whatever the others."""
+        seen = []
+        for change in ([], [(12, 8, 1)], [(12, 11, 0)], [(12, 9, 1)]):
+            self.sim.front_panel(change)
+            self.run_for(1.5)                                           # and a status message
+            s = self.session
+            seen.append((s.phones_1_2(6), s.follows(6), s.controls(6), s.writable((7, 4))))
+        self.assertEqual(seen, [("off", None, False, False), ("own", None, True, True), ("shared", 3, False, False),
+                                ("balanced", 9, False, False)])
+        self.assertEqual([self.session.phones_1_2(out) for out in (3, 9)], [None, None])
+
     def test_dual_eq_store_and_source_only_where_it_controls(self):
         self.session.set_dual(3, True)
         self.run_for(2.0)

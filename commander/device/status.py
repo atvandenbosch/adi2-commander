@@ -17,8 +17,10 @@ Spdif = namedtuple("Spdif", "lock sync rate dsd non_audio")
 # own clock (internal, or USB); rate: the rate the device runs at; usb_rate: the rate set for USB on the
 # computer; usb_dsd: DSD over USB (DoP); dsd: DSD is played, with the DSP bypassed; coax, optical: Spdif;
 # revision: the device revision, which tells its D/A converter (params.da_filters); mode: on an ADI-2 Pro and
-# ADI-2/4 Pro the Basic Mode in use, an index into params.BASIC_MODES (with Auto, the mode it took)
-Status = namedtuple("Status", "output phones iem clock rate usb_rate usb_dsd dsd coax optical revision mode")
+# ADI-2/4 Pro the Basic Mode in use, an index into params.BASIC_MODES (with Auto, the mode it took); balanced: on an
+# ADI-2 Pro and ADI-2/4 Pro, Balanced Phones mode is active, with Phones 1/2 as the right channel of Phones 3/4
+Status = namedtuple("Status", "output phones iem clock rate usb_rate usb_dsd dsd coax optical revision mode "
+                              "balanced")
 
 SPDIF_FAMILIES = (32000, 44100, 48000, None)    # the fourth: no signal seen since power-on
 USB_FAMILIES = (None, 44100, 48000, None)
@@ -53,4 +55,5 @@ def decode(body):
                       rate=_spdif_rate((d[2] >> 5) & 0x03, d[3] & 0x03),
                       dsd=bool(d[6] & 0x01), non_audio=bool(d[7] & 0x08)),
         revision=(d[0] >> 2) & 0x03,
-        mode=d[9] & 0x07)
+        mode=d[9] & 0x07,
+        balanced=bool(d[9] & 0x08))

@@ -27,7 +27,7 @@ from commander.conversion import setupfile
 from commander.ui import simulated, theme
 from commander.ui.tables import FLASH_TIME, KEY_ROLE
 from commander.ui.untested import UntestedBox
-from commander.ui.window import SEPARATE, MainWindow
+from commander.ui.window import PHONES_1_2, MainWindow
 from commander.ui.widgets import FRAME, SIDE, label_color, placement
 from tests.gui import Clock, WindowTest, tooltip_color
 from tests.support import DUMP, PRESETS
@@ -701,9 +701,9 @@ class ProWindow(WindowTest):
 
     def test_phones_1_2_with_settings_of_its_own(self):
         """Dual Phones (12/8) and Mute v. TRS 1/2 (12/11) on: Phones 1/2 has settings of its own, and Commander
-        controls its EQ; one of them off again: its tab grey, and the window on another output."""
+        controls its EQ; Dual Phones off again: its tab grey, and the window on another output."""
         tabs = self.win.tabs
-        self.assertEqual(tabs.tabToolTip(1), SEPARATE)
+        self.assertEqual(tabs.tabToolTip(1), PHONES_1_2["off"])
         self.sim.state[(12, 8)] = 1                                   # read back by the idle refresh
         self.spin(4000)
         self.assertEqual([tabs.isTabEnabled(i) for i in range(3)], [True, True, True])
@@ -713,15 +713,55 @@ class ProWindow(WindowTest):
         self.win.eq_switches[0].click()
         self.spin(1500)
         self.assertEqual(self.sim.state[(7, 2)], 1)
-        self.sim.state[(12, 11)] = 0
+        self.sim.state[(12, 8)] = 0
         self.spin(4000)
         self.assertEqual((tabs.isTabEnabled(1), tabs.currentIndex() == 1), (False, False))
         self.assertFalse(self.session.writable((7, 4)))
 
+    def shown_tabs(self):
+        tabs = self.win.tabs
+        return [tabs.tabText(i) for i in range(3) if tabs.isTabVisible(i)]
+
+    def test_phones_1_2_with_the_settings_of_line_out(self):
+        """Dual Phones on, Mute v. TRS 1/2 off: Phones 1/2 uses the settings of Line Out, and shares its tab, named
+        after both; the window on Phones 1/2 moves there. Its own EQ is left alone. Mute v. TRS 1/2 on again: two
+        tabs again."""
+        tabs = self.win.tabs
+        self.sim.state[(12, 8)] = 1
+        self.spin(4000)
+        tabs.setCurrentIndex(1)
+        self.sim.state[(12, 11)] = 0
+        self.spin(4000)
+        self.assertEqual(self.shown_tabs(), ["Line Out · Phones 1/2", "Phones 3/4"])
+        self.assertEqual((tabs.currentIndex(), self.win.output[1]), (0, 3))
+        self.assertEqual(tabs.tabToolTip(0), PHONES_1_2["shared"] + "\nActive on the device")
+        self.win.eq_switches[0].click()
+        self.spin(1500)
+        self.assertEqual((self.sim.state[(4, 2)], self.sim.state[(7, 2)]), (1, 0))
+        self.win.next_tab(1)
+        self.assertEqual(tabs.currentIndex(), 2)
+        self.win.next_tab(1)
+        self.assertEqual(tabs.currentIndex(), 0)
+        self.sim.state[(12, 11)] = 1
+        self.spin(4000)
+        self.assertEqual(self.shown_tabs(), ["Line Out", "Phones 1/2", "Phones 3/4"])
+        self.assertEqual(tabs.tabToolTip(0), "Active on the device")
+
+    def test_phones_1_2_in_balanced_phones_mode(self):
+        """Bal Phones on: Phones 1/2 is the right channel of Phones 3/4, whose settings it uses, and shares its tab;
+        also with Dual Phones off."""
+        tabs = self.win.tabs
+        tabs.setCurrentIndex(2)
+        self.sim.state[(12, 9)] = 1
+        self.spin(4000)
+        self.assertEqual(self.shown_tabs(), ["Line Out", "Phones 3/4 · Phones 1/2"])
+        self.assertEqual((tabs.currentIndex(), self.win.output[1]), (2, 9))
+        self.assertEqual(tabs.tabToolTip(2), PHONES_1_2["balanced"] + "\nAlways active on the device")
+
     def test_the_outputs_the_device_has_active(self):
         """Line Out or Phones 1/2, which share a signal, or neither; Phones 3/4 always. A dot also on Phones 1/2,
         which Commander does not control."""
-        tabs, why = self.win.tabs, SEPARATE
+        tabs, why = self.win.tabs, PHONES_1_2["off"]
 
         def dots():
             return [tabs.tabIcon(i).cacheKey() == self.win.dot.cacheKey() for i in range(3)]
@@ -818,7 +858,7 @@ class Pro24Window(WindowTest):
     bypassed_by_the_input = ProWindow.bypassed_by_the_input
 
     def test_the_eq_of_the_input_bypasses_that_of_the_outputs_from_705_6_khz(self):
-        self.assertEqual(self.win.tabs.tabToolTip(1), SEPARATE)
+        self.assertEqual(self.win.tabs.tabToolTip(1), PHONES_1_2["off"])
         self.sim.state.update({(4, 2): 1, (1, 2): 1, (12, 16): 7})   # 384 kHz: no Bass/Treble, the EQ as before
         self.assertEqual(self.bypassed_by_the_input(), (False, False, False, True))
         self.sim.state[(12, 16)] = 8                                  # 705.6 kHz

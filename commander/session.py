@@ -173,12 +173,30 @@ class Session:
 
     def controls(self, out):
         """Whether Commander controls output out of the device connected: on an ADI-2 Pro and ADI-2/4 Pro Phones 1/2
-        only while it has settings of its own (models.py)."""
+        only while it has settings of its own (phones_1_2)."""
         if self.model is None:
             return False
-        need = dict(self.model.separate).get(out)
-        return out in self.model.controlled or need is not None and all(
-            self.state.get((12, i)) == 1 for i in need)
+        return out in self.model.controlled or self.phones_1_2(out) == "own"
+
+    def phones_1_2(self, out):
+        """How the device uses output out when it is Phones 1/2 of an ADI-2 Pro and ADI-2/4 Pro (Model.separate):
+        'balanced' while Balanced Phones mode is active, Phones 1/2 then the right channel of Phones 3/4; 'off' with
+        Dual Phones off; 'own' with settings of its own (Mute v. TRS 1/2 on); 'shared' with those of Line Out, beside
+        which it is active. None for another output, and while the model is not known."""
+        need = None if self.model is None else dict(self.model.separate).get(out)
+        if need is None:
+            return None
+        dual_phones, mute_line = need
+        if self.device_status is not None and self.device_status.balanced:
+            return "balanced"
+        if self.state.get((12, dual_phones)) != 1:
+            return "off"
+        return "own" if self.state.get((12, mute_line)) == 1 else "shared"
+
+    def follows(self, out):
+        """The output whose settings output out uses instead of its own (phones_1_2): Line Out for Phones 1/2 that
+        shares them, Phones 3/4 in Balanced Phones mode; None otherwise."""
+        return {"shared": P.OUTPUT_ADDRESSES[0], "balanced": P.OUTPUT_ADDRESSES[2]}.get(self.phones_1_2(out))
 
     def basic_mode(self):
         """On an ADI-2 Pro and ADI-2/4 Pro the Basic Mode in use as its status message reports it, an index into
