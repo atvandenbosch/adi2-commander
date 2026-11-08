@@ -38,13 +38,14 @@ INPUTS = ["Auto", "SPDIF coax", "Optical", "USB", "USB (Rec coax)", "USB (Rec op
 # the other settings of an output, on its address. IEM has no Ref Level and no Auto Ref Level: both report -1
 REF_LEVEL, MONO, WIDTH, MS_PROC, POLARITY, CROSSFEED, DA_FILTER, DE_EMPHASIS = 2, 4, 5, 6, 7, 8, 9, 10
 LOCK_VOLUME, BALANCE, MUTE, DIM, LOOPBACK, DC_PROTECTION = 13, 14, 15, 16, 17, 18
+REAR_TRS_SOURCE = 19                             # Phones 3/4 of the ADI-2/4 Pro only
 NOT_APPLICABLE = -1
 REF_LEVELS = {3: ["-5 dBu", "+1 dBu", "+7 dBu", "+13 dBu"], 6: ["Lo-Power", "Hi-Power"]}
 REF_DBU = {3: (-5, 1, 7, 13), 6: (7, 22)}        # each Ref Level as a level in dBu
 CHOICES = {MONO: ["Off", "On", "to Left"], POLARITY: ["Off", "Both", "Left", "Right"],
            CROSSFEED: ["Off", "1", "2", "3", "4", "5"],
            DE_EMPHASIS: ["Auto", "On", "Off"], DC_PROTECTION: ["Off", "On", "Filter"], MS_PROC: ["Off", "On"],
-           LOOPBACK: ["Off", "pre FX", "post FX", "post -6 dB"]}
+           LOOPBACK: ["Off", "pre FX", "post FX", "post -6 dB"], REAR_TRS_SOURCE: ["Line 1/2", "Phones 3/4"]}
 # DA Filter: which filters there are depends on the D/A converter, which the device reports as its revision
 # (status.revision): the AK4490 (0) has five, the AK4493 (1) adds SD LD, the ES9028Q2M (2) Brickwall
 DA_FILTERS = {0: ["SD Sharp", "SD Slow", "Sharp", "Slow", "NOS"]}
@@ -146,9 +147,10 @@ def limits(key, revision=None, model=None):
 
 
 def absent(index, value):
-    """True for a setting this output does not have: Ref Level or Auto Ref Level reporting -1. Elsewhere -1 is a
-    value like any other (Balance L 1, Width -0.01)."""
-    return index in (REF_LEVEL, AUTO_REF_LEVEL) and value == NOT_APPLICABLE
+    """True for a setting this output does not have: Ref Level or Auto Ref Level reporting -1, Rear TRS Source not
+    reported. Elsewhere -1 is a value like any other (Balance L 1, Width -0.01)."""
+    return (index in (REF_LEVEL, AUTO_REF_LEVEL) and value == NOT_APPLICABLE
+            or index == REAR_TRS_SOURCE and value is None)
 
 SOURCES = ["Manual", "Temp"] + ["Preset %d" % n for n in range(1, 21)] + ["Clear"]
 

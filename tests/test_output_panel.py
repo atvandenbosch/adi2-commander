@@ -433,6 +433,11 @@ class OutputSettings(WindowTest):
         self.win.tabs.setCurrentIndex(0)                                        # only Phones
         self.assertFalse(self.panel.steppers[P.REF_LEVEL].warned)
 
+    def test_no_rear_trs_source(self):
+        for tab in range(3):
+            self.win.tabs.setCurrentIndex(tab)
+            self.assertFalse(self.panel.rows[P.REAR_TRS_SOURCE].isVisible())
+
     def test_iem_has_no_ref_level(self):
         rows = self.panel.rows
         self.win.tabs.setCurrentIndex(1)

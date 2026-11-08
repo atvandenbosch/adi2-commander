@@ -937,6 +937,18 @@ class Pro24Window(WindowTest):
         self.assertEqual(self.bypassed_by_the_input(), (True, True, True, False))
         self.assertIn("the ADI-2/4 Pro then runs that EQ only.", self.win.eq_switches[0].toolTip())
 
+    def test_rear_trs_source_on_phones_3_4(self):
+        panel = self.win.output_panel
+        QTest.mouseClick(self.win.output_tab, Qt.LeftButton)
+        row, trs = panel.rows[P.REAR_TRS_SOURCE], panel.steppers[P.REAR_TRS_SOURCE]
+        self.assertFalse(row.isVisible())                             # Line Out
+        self.win.tabs.setCurrentIndex(2)
+        self.assertTrue(row.isVisible())
+        self.assertEqual(trs.text(trs.value), "Line 1/2")
+        QTest.mouseClick(trs, Qt.LeftButton, pos=QPoint(trs.width() - 4, trs.height() // 2))
+        self.spin(1500)
+        self.assertEqual(self.sim.state[(9, P.REAR_TRS_SOURCE)], 1)
+
     def test_ref_level_of_phones_1_2_beside_line_out(self):
         """Phones 1/2 with the settings of Line Out keeps a Ref Level of its own: on their tab, beside Line Out's."""
         panel = self.win.output_panel

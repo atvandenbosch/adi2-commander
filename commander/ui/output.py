@@ -1,7 +1,7 @@
 """The settings of one output besides its EQ, Bass/Treble and Loudness, in three groups: Level, Processing and DAC.
 
-A setting the output does not have (IEM: Ref Level and Auto Ref Level) is left out. The input is not here: it is
-the same for all outputs.
+A setting the output does not have (IEM: Ref Level and Auto Ref Level; Rear TRS Source, which only Phones 3/4 of the
+ADI-2/4 Pro has) is left out. The input is in the Input panel.
 
     one of a few values     a stepper (‹ value ›)
     Width, Balance          a stepper too: Swapped .. -0.50 .. Mono .. 0.50 .. Stereo, L 100 .. C .. R 100;
@@ -43,6 +43,8 @@ TIPS = {P.REF_LEVEL: "The output level at full scale",
         P.DA_FILTER: "The reconstruction filter of the DAC",
         P.DE_EMPHASIS: "The de-emphasis filter of the DAC",
         P.DC_PROTECTION: "Digital DC protection",
+        P.REAR_TRS_SOURCE: "What the rear TRS outputs carry: Line Out 1/2,\n"
+                           "or Phones 3/4 with all its settings, Ref Level included",
         P.LOOPBACK: "This output's signal back to the computer over USB:\n"
                     "before the processing (FX), after it, or after it 6 dB lower",
         P.BALANCE: "L 100 left only, C centre, R 100 right only\nSteps of 5; with Ctrl of 1\n"
@@ -536,7 +538,8 @@ class OutputPanel(QWidget):
                   ("PROCESSING", [(P.MONO, "Mono"), (P.WIDTH, "Width"), (P.MS_PROC, "M/S-Proc"),
                                   (P.POLARITY, "Polarity"), (P.CROSSFEED, "Crossfeed")]),
                   ("DAC", [(P.DA_FILTER, "DA Filter"), (P.DE_EMPHASIS, "De-Emphasis"),
-                           (P.DC_PROTECTION, "DC Protection"), (P.LOOPBACK, "Loopback to USB")])]
+                           (P.DC_PROTECTION, "DC Protection"), (P.LOOPBACK, "Loopback to USB"),
+                           (P.REAR_TRS_SOURCE, "Rear TRS Source")])]
         for name, items in groups:
             lay.addSpacing(INNER_GAP)
             group = QLabel(name)
