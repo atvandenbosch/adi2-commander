@@ -60,6 +60,15 @@ class SetupFile(unittest.TestCase):
         with self.assertRaises(ValueError):
             setupfile.write(state, s.slots, s.model)
 
+    def test_phones_1_2_of_the_pro_with_the_settings_of_line_out(self):
+        s = read(DEVICES["pro"])
+        state = {k: v for k, v in s.state.items() if k not in ((6, 5), (6, 15))}   # Width, Mute: Line Out's only
+        state.update({(3, 5): 50, (3, 15): 1, (6, 12): -300})                    # and Volume of its own
+        text = setupfile.write(state, s.slots, s.model)
+        phones = text[text.index("<Output2>"):text.index("</Output2>")]
+        for line in ('"Width" v="0.50,"', '"Mute" v="1.00,"', '"Volume" v="-30.00,"'):
+            self.assertIn(line, phones)
+
 
 if __name__ == "__main__":
     unittest.main()

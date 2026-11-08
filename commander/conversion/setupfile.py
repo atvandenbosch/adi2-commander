@@ -2,9 +2,11 @@
 
 The file holds what a dump and the twenty preset slots hold: the input of an ADI-2 Pro or ADI-2/4 Pro with its EQ,
 the three outputs with their EQ, the device settings, and the presets with their names. ADI-2 Remote restores it
-with File > Open Setup File.... Each output also carries three settings of ADI-2 Remote, with its defaults. Values
-are in units (dB, Hz, Q, or an index), with two decimals and a comma. The device settings stand at fixed places,
-the same for every model; a place the model has no setting for has no name and 0.
+with File > Open Setup File.... Each output also carries three settings of ADI-2 Remote, with its defaults. Phones
+1/2 of an ADI-2 Pro uses some settings of Line Out and has none of its own there (Source, Mono, Width, DA Filter and
+others); for those the file holds Line Out's. Values are in units (dB, Hz, Q, or an index), with two decimals and a
+comma. The device settings stand at fixed places, the same for every model; a place the model has no setting for
+has no name and 0.
 """
 
 from ..device import models
@@ -55,9 +57,10 @@ def _eq(name, state, left, right, dual):
     return lines + ["\t\t</%s>" % right_name]
 
 
-def _settings(name, state, address, table, own=()):
+def _settings(name, state, address, table, own=(), instead=None):
+    """A block of settings; one the device has not on address but on instead: that one's."""
     lines = ["\t\t<%s>" % name]
-    lines += [val(e, state.get((address, i), 0) / scale) for e, i, scale in table]
+    lines += [val(e, state.get((address, i), state.get((instead, i), 0)) / scale) for e, i, scale in table]
     lines += [val(e, v) for e, v in own]
     return lines + ["\t\t</%s>" % name]
 
@@ -99,7 +102,7 @@ def write(state, slots, model=models.DAC, revision=None):
             lines += _settings("Input", state, 0, INPUT)
             lines += _eq("EQInput", state, 1, 2, state[(0, INPUT_DUAL_EQ)])
         for k, (_, out, left, right) in enumerate(P.OUTPUTS, 1):
-            lines += _settings("Output%d" % k, state, out, OUTPUT, REMOTE_OWN)
+            lines += _settings("Output%d" % k, state, out, OUTPUT, REMOTE_OWN, P.OUTPUT_ADDRESSES[0])
             lines += _eq("EQOut%d" % k, state, left, right, state[(out, P.DUAL_EQ)])
         names = {**DEVICE_NAMES, **NAMED.get(model.id, {})}
         lines.append("\t\t<DevSettings>")
