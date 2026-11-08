@@ -30,13 +30,14 @@ from . import params as P
 #   device has active. The DAC FS has one at a time. The Pro and ADI-2/4 Pro have Line Out or Phones 1/2, which share
 #   a signal, or neither; and Phones 3/4 always
 # ref_levels: per output address the names of its Ref Level
+# ref_dbu: per output address each value of its Ref Level as a level in dBu
 # da_filters: per device revision the names of DA Filter
 # choices: the names of the other lists on an output address, where they differ from params.CHOICES
 # settings: the settings on an output address Commander writes besides the EQ; None for all of them
 # sources: the names of Source: of Line Out ("line"), of Phones 3/4 ("phones"; "phones_ex" on an ADI-2/4 Pro EX),
 #   and in Basic Mode DAC ("dac"). None for one input of the whole device, params.INPUTS
 class Model(namedtuple("Model", "id name port supported tested outputs tags controlled separate eq_only no_bt_from "
-                                "one_eq_from active ref_levels da_filters choices settings sources")):
+                                "one_eq_from active ref_levels ref_dbu da_filters choices settings sources")):
     __slots__ = ()
 
     def __hash__(self):                          # a model is its device ID
@@ -45,7 +46,8 @@ class Model(namedtuple("Model", "id name port supported tested outputs tags cont
 
 DAC =Model(0x71, MODEL, "ADI-2 DAC", True, True, ("Line Out", "Phones 1/2", "Phones 3/4 · IEM"), ("L", "P", "I"),
             (3, 6, 9), (), False, 705600, None, ((3,), (6,), (9,), ()),
-            ref_levels=P.REF_LEVELS, da_filters=P.DA_FILTERS, choices={}, settings=None, sources=None)
+            ref_levels=P.REF_LEVELS, ref_dbu=P.REF_DBU, da_filters=P.DA_FILTERS, choices={}, settings=None,
+            sources=None)
 
 _FILTERS = ["SD Sharp", "SD Slow", "Sharp", "Slow"]
 _PHONES = ["Lo-Power", "Hi-Power"]
@@ -56,6 +58,7 @@ _LOOPBACK = ["Off"] + [name % ch for ch in ("1/2", "3/4", "5/6")
 PRO = Model(0x72, "ADI-2 Pro", "ADI-2 Pro", True, False, ("Line Out", "Phones 1/2", "Phones 3/4"),
             ("L", "P12", "P34"), (3, 9), ((6, (8, 11)),), True, 352800, 352800, ((9,), (3, 9), (6, 9), (6, 9)),
             ref_levels={3: ["+4 dBu", "+13 dBu", "+19 dBu", "+24 dBu"], 6: _PHONES, 9: _PHONES},
+            ref_dbu={3: (4, 13, 19, 24), 6: (7, 22), 9: (7, 22)},
             da_filters={0: _FILTERS + ["NOS"], **{r: _FILTERS + ["NOS", "SD LD"] for r in (1, 2, 3)}},
             choices={P.LOOPBACK: _LOOPBACK},
             settings=frozenset({P.LOUDNESS_ENABLE, P.LD_BASS, P.LD_TREBLE, P.LD_LOW_VOL_REF, P.SOURCE}),
@@ -65,6 +68,7 @@ PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", one_eq_from=70
                       sources={**PRO.sources, "phones_ex": _INPUTS + _USB + ["ADAT 3/4"]},
                       ref_levels={3: ["+1 dBu", "+7 dBu", "+13 dBu", "+19 dBu", "+24 dBu"],
                                   6: ["IEM"] + _PHONES, 9: ["IEM"] + _PHONES},
+                      ref_dbu={3: (1, 7, 13, 19, 24), 6: (1, 7, 19), 9: (1, 7, 19)},
                       da_filters={r: _FILTERS + ["SD LD", "Brickwall", "NOS"] for r in range(4)})
 MODELS = (DAC, PRO, PRO_24)
 BY_ID = {m.id: m for m in MODELS}

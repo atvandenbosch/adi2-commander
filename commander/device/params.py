@@ -40,6 +40,7 @@ REF_LEVEL, MONO, WIDTH, MS_PROC, POLARITY, CROSSFEED, DA_FILTER, DE_EMPHASIS = 2
 LOCK_VOLUME, BALANCE, MUTE, DIM, LOOPBACK, DC_PROTECTION = 13, 14, 15, 16, 17, 18
 NOT_APPLICABLE = -1
 REF_LEVELS = {3: ["-5 dBu", "+1 dBu", "+7 dBu", "+13 dBu"], 6: ["Lo-Power", "Hi-Power"]}
+REF_DBU = {3: (-5, 1, 7, 13), 6: (7, 22)}        # each Ref Level as a level in dBu
 CHOICES = {MONO: ["Off", "On", "to Left"], POLARITY: ["Off", "Both", "Left", "Right"],
            CROSSFEED: ["Off", "1", "2", "3", "4", "5"],
            DE_EMPHASIS: ["Auto", "On", "Off"], DC_PROTECTION: ["Off", "On", "Filter"], MS_PROC: ["Off", "On"],
@@ -248,22 +249,24 @@ def step(index, value, direction, size="small"):
     return min(max(value + direction, lo), hi)
 
 
-def volume_offset(state, out):
+def volume_offset(state, out, model=None):
     """How far the device's own scale lies above the Volume an output reports, in 0.1 dB. With Auto Ref Level on,
-    Volume is relative to the highest Ref Level (dBr) and the device's scale to the Ref Level in use: Line 6 dB a step
-    lower, Phones 15 dB at Lo-Power. Otherwise 0."""
-    if state.get((out, AUTO_REF_LEVEL)) != 1:
-        return 0
+    Volume is relative to the highest Ref Level (dBr) and the device's scale to the Ref Level in use: below the
+    highest by the difference in dBu (ref_dbu; on the ADI-2 DAC FS Line 6 dB a step, Phones 15 dB at Lo-Power).
+    Otherwise 0. model: a models.Model, else the ADI-2 DAC FS."""
+    levels = (REF_DBU if model is None else model.ref_dbu).get(out)
     ref = state.get((out, REF_LEVEL), 0)
-    return {3: (3 - ref) * 60, 6: 150 if ref == 0 else 0}.get(out, 0)
+    if state.get((out, AUTO_REF_LEVEL)) != 1 or levels is None or ref not in range(len(levels)):
+        return 0
+    return (levels[-1] - levels[ref]) * 10
 
 
-def volume_floor(state, out):
+def volume_floor(state, out, model=None):
     """The lowest Volume on the device's own scale, as the output reports it: -96.5 dB, with Auto Ref Level on at
-    the lowest Ref Level, which it then uses."""
+    the lowest Ref Level, which it then uses; no lower than Volume goes."""
     lowest = dict(state)
     lowest[(out, REF_LEVEL)] = 0
-    return VOLUME_FLOOR - volume_offset(lowest, out)
+    return max(OUTPUT_RANGES[VOLUME][0], VOLUME_FLOOR - volume_offset(lowest, out, model))
 
 
 def volume_held_step(level):

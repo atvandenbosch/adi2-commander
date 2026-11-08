@@ -107,6 +107,15 @@ class Output(unittest.TestCase):
         state[(3, p.AUTO_REF_LEVEL)] = 0
         self.assertEqual((p.volume_offset(state, 3), p.volume_floor(state, 3)), (0, -965))
 
+    def test_volume_on_the_scale_of_each_model(self):
+        state = {(a, i): v for a in (3, 6, 9) for i, v in ((p.AUTO_REF_LEVEL, 1), (p.REF_LEVEL, 0))}
+        offsets = lambda model: [p.volume_offset(state, o, model) for o in (3, 6, 9)]          # noqa: E731
+        self.assertEqual(offsets(PRO), [200, 150, 150])          # +4 dBu, Lo-Power
+        self.assertEqual(offsets(PRO_24), [230, 180, 180])       # +1 dBu, IEM
+        self.assertEqual(p.volume_floor(state, 3, PRO_24), -1145)   # no lower than Volume goes
+        state[(9, p.REF_LEVEL)] = 1
+        self.assertEqual(p.volume_offset(state, 9, PRO_24), 120)  # Lo-Power, +7 dBu
+
 
 class Steps(unittest.TestCase):
     def test_frequency(self):

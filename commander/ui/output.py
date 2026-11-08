@@ -505,7 +505,7 @@ class OutputPanel(QWidget):
         self.out = None
         self.steppers, self.options, self.rows = {}, {}, {}
         self.volume = VolumeStepper(lambda: (self.out[1], P.VOLUME) not in self.session.pending, self.session.hold,
-                                    lambda: P.volume_offset(self.session.state, self.out[1]))
+                                    lambda: P.volume_offset(self.session.state, self.out[1], self.session.model))
         self.volume.setFixedWidth(VALUE_WIDTH)
         self.volume.chosen.connect(lambda value: self.edited.emit((self.out[1], P.VOLUME), value, False))
         self.volume_label = _label("Volume (dB)")
@@ -601,7 +601,7 @@ class OutputPanel(QWidget):
         self.volume_label.setText("Volume (%s)" % self.volume.unit)
         lowering = tuple(i for i in (P.MUTE, P.DIM) if on(i))
         if ready:
-            self.volume.set_floor(P.volume_floor(s, out))
+            self.volume.set_floor(P.volume_floor(s, out, self.session.model))
         lo, hi = self.volume.floor, P.OUTPUT_RANGES[P.VOLUME][1]
         tip = [LOWERED.get(lowering), OUT_OF_DIM if P.DIM in lowering and not on(P.LOCK_VOLUME) else None,
                "Lock Volume is on: set it in the device's menu" if on(P.LOCK_VOLUME) else

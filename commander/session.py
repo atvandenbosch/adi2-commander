@@ -273,7 +273,7 @@ class Session:
             raise ValueError("%d/%d: %d outside %d..%d" % (key + (value, lo, hi)))
         if key[0] in P.OUTPUT_ADDRESSES and key[1] == P.VOLUME:
             now = self.state[key]
-            most = P.volume_held_step(now + P.volume_offset(self.state, key[0]))
+            most = P.volume_held_step(now + P.volume_offset(self.state, key[0], self.model))
             if value - now > most:
                 raise ValueError("Volume: %d is more than %.1f dB above %d" % (value, most / 10, now))
         self.pending[key] = value
