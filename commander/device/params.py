@@ -74,6 +74,7 @@ OUTPUT_ADDRESSES = tuple(out for _, out, _, _ in OUTPUTS)
 SAMPLE_RATES = [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000]
 SAMPLE_RATE = (12, 16)                           # Sample Rate: the rate the device runs at, display only
 # ADI-2 Pro and ADI-2/4 Pro: Basic Mode (12/6), and the mode in use in the status message (status.mode)
+BASIC_MODE = (12, 6)
 BASIC_MODES = ["Auto", "AD/DA", "USB", "Preamp", "Dig Thru", "DAC"]
 MODE_AD_DA, MODE_DAC = 1, 5
 

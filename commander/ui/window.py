@@ -570,14 +570,13 @@ class MainWindow(QMainWindow):
             self.follow_preview(self.pointer())
 
     def set_model(self, model):
-        """Lay the window out for a model: the names of the outputs; the panels of the input and the output's other
-        settings, that Commander does not control on it, are grey and cannot be opened; the tabs: show_tabs."""
+        """Lay the window out for a model: the names of the outputs; the panel of the output's other settings, where
+        Commander does not control them on it, is grey and cannot be opened; the tabs: show_tabs."""
         self.model = model
         self.graph.no_bt_from = self.loudness_graph.no_bt_from = self.preview.no_bt_from = model.no_bt_from
         for i, name in enumerate(model.outputs):
             self.tabs.setTabText(i, name)
-        for tab in (self.input_tab, self.output_tab):
-            tab.set_available(not model.eq_only, NOT_YET % model.name)
+        self.output_tab.set_available(not model.eq_only, NOT_YET % model.name)
         self.on_device_status(self.session.device_status)
 
     def on_connection(self, status, detail):
@@ -1353,8 +1352,8 @@ class MainWindow(QMainWindow):
                                                              " IEM\n(the device does so)."))
         self.refresh_presets()
         self.refresh_edit()
-        if not self.model.eq_only:                       # else closed, and their names are those of the DAC FS
-            self.input_panel.refresh()
+        self.input_panel.refresh()
+        if not self.model.eq_only:                       # else closed
             self.output_panel.refresh()
         for m in self.band_models + [self.bt_model, self.loudness_model]:
             m.refresh()

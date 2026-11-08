@@ -3,7 +3,8 @@ proof, so a connection asks under each ID in turn, the hinted one first.
 
 Commander controls all of an ADI-2 DAC FS. Of an ADI-2 Pro and ADI-2/4 Pro it controls the EQ (bands, Bass/Treble,
 presets, Loudness) of Line Out and Phones 3/4, and of Phones 1/2 while it has settings of its own: Phones 1/2 shares
-the signal of Line Out, and has its own settings with Dual Phones and Mute v. TRS 1/2 on (ADI-2 Pro manual, 14.1.4)."""
+the signal of Line Out, and has its own settings with Dual Phones and Mute v. TRS 1/2 on (ADI-2 Pro manual, 14.1.4).
+It also controls their Source, as far as the Basic Mode in use allows."""
 
 from collections import namedtuple
 

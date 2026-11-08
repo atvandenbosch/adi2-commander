@@ -1,7 +1,7 @@
 # ADI-2 Commander
 
-A Windows app to control the RME ADI-2 DAC FS[^rme] and the EQ of the ADI-2 Pro and ADI-2/4 Pro, and to load and
-convert externally generated filter sets.
+A Windows app to control the RME ADI-2 DAC FS[^rme] and the EQ and Source of the ADI-2 Pro and ADI-2/4 Pro, and to
+load and convert externally generated filter sets.
 A personal project, shared as is.
 
 ![ADI-2 Commander: the main window, the panels, Load, presets and Loudness](docs/feature-tour.gif)
@@ -10,7 +10,7 @@ A personal project, shared as is.
 
 - **Device control:** EQ, Bass/Treble, Loudness and the output settings of Line Out, Phones and IEM. On the ADI-2 Pro
   and ADI-2/4 Pro: EQ, Bass/Treble and Loudness of Line Out and Phones 3/4, and of Phones 1/2 with Dual Phones and
-  Mute v. TRS 1/2 on.
+  Mute v. TRS 1/2 on; Source.
 - **In-graph editing:** the EQ as a response curve, edited in place.
 - **Table input:** every value entered or stepped directly, by keyboard or mouse.
 - **Device-accurate curves:** curves and conversions follow the device implementation.

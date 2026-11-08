@@ -7,6 +7,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtTest import QTest
 
 from commander.device import params as P
+from commander.device.models import PRO
 from commander.device.status import Spdif
 from commander.ui import theme
 from commander.ui.inputs import _spdif_text
@@ -90,6 +91,51 @@ class InputSettings(WindowTest):
         self.sim.signal(usb=352800, dsd=True)
         self.spin(1100)
         self.assertEqual((self.row("usb")[0], self.row("rate")[0]), ("DSD128 (DoP)", "DSD128"))
+
+
+class ProSource(WindowTest):
+    """An ADI-2 Pro: the Basic Mode in use, and a Source row per setting."""
+
+    model = PRO
+
+    def setUp(self):
+        super().setUp()
+        self.panel = self.win.input_panel
+        QTest.mouseClick(self.win.input_tab, Qt.LeftButton)
+        for _ in range(30):
+            if self.session.device_status is not None:
+                break
+            self.spin(100)
+        self.spin(50)
+
+    def shown(self):
+        """Per visible Source row its name, value as shown, and whether its arrows work."""
+        return [(name.text(), s.text(s.value), s.isEnabled()) for row, name, s in self.panel.rows if row.isVisible()]
+
+    def mode(self, mode):
+        self.sim.front_panel([(12, 6, mode)])
+        self.spin(1500)
+
+    def test_the_rows_in_each_basic_mode(self):
+        self.assertEqual(self.panel.values["mode"].text(), "Auto: USB")
+        self.assertTrue(self.panel.mode_row.toolTip().startswith("The Basic Mode in use\nSet on the device"))
+        self.assertEqual(self.shown(), [("Ln. Out · Ph. 1/2", "USB 1/2", False), ("Phones 3/4", "Auto", True)])
+        self.assertEqual(self.panel.rows[0][2].toolTip(), "The input of Line Out and Phones 1/2\nSet by Basic Mode USB")
+        self.assertFalse(self.panel.dac_fs[0].isVisible())                     # what the DAC FS inputs receive
+        self.mode(1)
+        self.assertEqual(self.panel.values["mode"].text(), "AD/DA")
+        self.assertEqual(self.shown()[0], ("Ln. Out · Ph. 1/2", "Auto", True))
+        self.mode(5)
+        self.assertEqual(self.shown(), [("Source", "Auto", True)])
+        self.assertEqual(self.panel.rows[0][2].toolTip(), "The input of all outputs, and the clock of the device")
+        self.assertEqual(len(self.panel.rows[0][2].names), 7)
+
+    def test_each_row_writes_its_own(self):
+        self.mode(1)
+        self.panel.rows[0][2].step(+1)                                          # Line Out: AES
+        self.panel.rows[1][2].step(+1)                                          # Phones 3/4: AES
+        self.settle()
+        self.assertEqual([self.sim.state[(out, P.SOURCE)] for out in (3, 6, 9)], [1, 0, 1])
 
 
 if __name__ == "__main__":

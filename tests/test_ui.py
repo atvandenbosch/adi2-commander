@@ -738,12 +738,14 @@ class ProWindow(WindowTest):
         self.win.on_device_status(None)
         self.assertEqual(dots(), [False, False, False])
 
-    def test_input_and_output_panels_grey(self):
-        for tab, area in ((self.win.input_tab, self.win.input_area), (self.win.output_tab, self.win.output_area)):
-            self.assertFalse(tab.isEnabled())
-            self.assertEqual(tab.toolTip(), "Not yet available for the ADI-2 Pro")
-            QTest.mouseClick(tab, Qt.LeftButton)
-            self.assertTrue(area.isHidden())
+    def test_the_output_panel_grey_the_input_panel_open(self):
+        tab, area = self.win.output_tab, self.win.output_area
+        self.assertFalse(tab.isEnabled())
+        self.assertEqual(tab.toolTip(), "Not yet available for the ADI-2 Pro")
+        QTest.mouseClick(tab, Qt.LeftButton)
+        self.assertTrue(area.isHidden())
+        QTest.mouseClick(self.win.input_tab, Qt.LeftButton)
+        self.assertFalse(self.win.input_area.isHidden())
         QTest.mouseClick(self.win.presets_tab, Qt.LeftButton)
         self.assertFalse(self.win.presets_area.isHidden())
 
