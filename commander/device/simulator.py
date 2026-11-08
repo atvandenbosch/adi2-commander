@@ -67,6 +67,9 @@ PRO_OUTPUT = {
     16: (0, 1, 0), 17: (0, 9, 0), 18: (0, 2, 2), 20: (0, 1, 0), 21: (2, 20, 14), 22: (2, 20, 14),
     23: (-180, -40, -60),
 }
+# ADI-2 Pro: Phones 1/2 uses these of Line Out and has none on its own address: Source, Mono, Width, DA Filter,
+# De-Emphasis, Lock Volume, Mute, Dim, Loopback, Dig. DC Protection
+PRO_LINE_ONLY = (1, 4, 5, 9, 10, 13, 15, 16, 17, 18)
 PRO_REF_LEVEL = {"line": (0, 3, 2), "phones": (0, 1, 0)}    # +4 .. +24 dBu; Lo-Power, Hi-Power
 PRO_REF_DBU = {3: (4, 13, 19, 24), 9: (7, 22)}   # Auto Ref Level, on Line Out and Phones 3/4: as REF_DBU
 PRO_24_OUTPUT = {**PRO_OUTPUT, 9: (0, 6, 2)}     # DA Filter: SD Sharp .. SD LD, Brickwall, NOS
@@ -121,7 +124,9 @@ def tables(model, revision):
     if ex:
         output = {**output, 1: EX_SOURCE}
     outputs = {a: {**output, 2: ref["line" if a == 3 else "phones"]} for a in OUTPUT_ADDRESSES}
-    if not pro:
+    if pro:
+        outputs[6] = {i: r for i, r in outputs[6].items() if i not in PRO_LINE_ONLY}
+    else:
         outputs[9].update(REAR_TRS_SOURCE)
     inputs = INPUT if pro else INPUT_24_EX if ex else INPUT_24_SE
     return Tables(outputs, inputs, PRO_DEVICE if pro else PRO_24_DEVICE)

@@ -667,7 +667,7 @@ class OtherModels(unittest.TestCase):
                                  (14, revision or 0, 48000, 48000, 1))                 # Line Out active
 
     def test_the_ranges_of_each_model(self):
-        writes = [(9, 2, 9), (3, 2, 9), (3, 9, 9), (6, 17, 12), (0, 1, -9), (0, 10, 9)]
+        writes = [(9, 2, 9), (3, 2, 9), (3, 9, 9), (3, 17, 12), (0, 1, -9), (0, 10, 9)]
         expect = {"Pro": [1, 3, 5, 9, 0, 3], "2/4 SE": [2, 4, 6, 9, 0, 1], "2/4 EX": [2, 4, 6, 9, -6, 2]}
         for name, values in expect.items():
             with self.subTest(name):
@@ -691,8 +691,8 @@ class OtherModels(unittest.TestCase):
             with self.subTest(name):
                 sim = self.use(name)
                 self.send((3, 1, 9))
-                self.send((12, 6, 5), (6, 1, 9))
-                self.assertEqual((sim.state[(3, 1)], sim.state[(6, 1)]), (before, after))
+                self.send((12, 6, 5), (9, 1, 9))
+                self.assertEqual((sim.state[(3, 1)], sim.state[(9, 1)]), (before, after))
 
     def test_the_status_message_reports_the_basic_mode_in_use(self):
         for name in self.MODELS:
@@ -704,6 +704,18 @@ class OtherModels(unittest.TestCase):
                     self.clock.sleep(1.1)
                     modes.append([m for m in sim.poll() if m[5] == 0x07][-1][6 + 9] & 0x07)
                 self.assertEqual(modes, [1, 2, 3, 4, 5, 2])         # Auto: USB, over which MIDI runs
+
+    def test_phones_1_2_of_the_pro_uses_these_of_line_out(self):
+        line_only = [1, 4, 5, 9, 10, 13, 15, 16, 17, 18]
+        sim = self.use("Pro")
+        self.dump()
+        self.assertEqual([i for i in line_only if (6, i) in sim.state], [])
+        self.assertTrue(all((3, i) in sim.state and (9, i) in sim.state for i in line_only))
+        self.send((6, 15, 1))
+        self.assertEqual(sim.unsimulated, ["output address 6 index 15"])
+        sim.unsimulated.clear()
+        sim = self.use("2/4 SE")
+        self.assertTrue(all((6, i) in sim.state for i in line_only))
 
     def test_what_only_the_dac_fs_is_known_to_do_it_does_not(self):
         sim = self.use("2/4 SE")

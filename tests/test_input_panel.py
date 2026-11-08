@@ -135,7 +135,7 @@ class ProSource(WindowTest):
         self.panel.rows[0][2].step(+1)                                          # Line Out: AES
         self.panel.rows[1][2].step(+1)                                          # Phones 3/4: AES
         self.settle()
-        self.assertEqual([self.sim.state[(out, P.SOURCE)] for out in (3, 6, 9)], [1, 0, 1])
+        self.assertEqual([self.sim.state.get((out, P.SOURCE)) for out in (3, 6, 9)], [1, None, 1])  # 6: Line Out's
 
 
 if __name__ == "__main__":
