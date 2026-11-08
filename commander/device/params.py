@@ -50,10 +50,20 @@ DA_FILTERS = {0: ["SD Sharp", "SD Slow", "Sharp", "Slow", "NOS"]}
 DA_FILTERS.update({1: DA_FILTERS[0] + ["SD LD"], 2: DA_FILTERS[0] + ["Brickwall"]})
 
 
-def da_filters(revision):
+def da_filters(revision, model=None):
     """The DA Filter names of a device of this revision; None when they are not known: before the first status
-    message, or for another revision."""
-    return DA_FILTERS.get(revision)
+    message, or for another revision. model: a models.Model, else the ADI-2 DAC FS."""
+    return (DA_FILTERS if model is None else model.da_filters).get(revision)
+
+
+def ref_levels(out, model=None):
+    """The Ref Level names of output address out; none where it has no Ref Level."""
+    return (REF_LEVELS if model is None else model.ref_levels).get(out, [])
+
+
+def choices(index, model=None):
+    """The names of a setting on an output address that has a fixed list (CHOICES), as model names them."""
+    return CHOICES[index] if model is None else model.choices.get(index, CHOICES[index])
 
 
 # Width and Balance -100 .. 100, in hundredths; shown -1.00 .. 1.00 with its three points by name, and
@@ -113,17 +123,20 @@ def spec(key):
     return ("out", i) if a in OUTPUT_ADDRESSES else i
 
 
-def limits(key, revision=None):
+def limits(key, revision=None, model=None):
     """The lowest and highest value of a parameter key; Ref Level as far as its output goes, DA Filter as far as the
-    device's revision goes (ValueError when its filters are not known)."""
+    device's revision goes (ValueError when its filters are not known), the other lists as model names them.
+    model: a models.Model, else the ADI-2 DAC FS."""
     a, i = key
     if a in OUTPUT_ADDRESSES and i == REF_LEVEL:
-        return 0, len(REF_LEVELS.get(a, [])) - 1
+        return 0, len(ref_levels(a, model)) - 1
     if a in OUTPUT_ADDRESSES and i == DA_FILTER:
-        names = da_filters(revision)
+        names = da_filters(revision, model)
         if names is None:
             raise ValueError("the DA filters of revision %s are not known" % revision)
         return 0, len(names) - 1
+    if a in OUTPUT_ADDRESSES and i in CHOICES:
+        return 0, len(choices(i, model)) - 1
     return RANGES[spec(key)]
 
 

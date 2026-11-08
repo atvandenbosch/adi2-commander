@@ -559,7 +559,18 @@ class OutputPanel(QWidget):
 
     def set_output(self, output):
         self.out = output
-        self.steppers[P.REF_LEVEL].names = P.REF_LEVELS.get(output[1], [])
+        self.refresh_names()
+
+    def refresh_names(self):
+        """The names of the lists as the device connected has them: Ref Level per output, DA Filter per revision."""
+        model = self.session.model
+        self.steppers[P.REF_LEVEL].names = P.ref_levels(self.out[1], model)
+        for i in P.CHOICES.keys() & self.steppers.keys():
+            self.steppers[i].names = P.choices(i, model)
+        da_filters = P.da_filters(self.session.revision(), model)
+        if da_filters is not None:
+            self.steppers[P.DA_FILTER].names = da_filters
+        return da_filters
 
     def active(self):
         """This output is the one the device has active, as its status message says."""
@@ -609,9 +620,7 @@ class OutputPanel(QWidget):
     def refresh(self):
         s, out, ready = self.session.state, self.out[1], self.session.ready()
         bypassed = ready and self.session.bypassed()
-        da_filters = P.da_filters(self.session.revision())
-        if da_filters is not None:
-            self.steppers[P.DA_FILTER].names = da_filters
+        da_filters = self.refresh_names()
         for i, stepper in self.steppers.items():
             key = (out, i)
             unknown = i == P.DA_FILTER and da_filters is None

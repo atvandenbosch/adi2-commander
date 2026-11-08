@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication
 
 from commander.device import codec
 from commander.device import params as P
+from commander.device.models import PRO_24
 from commander.ui.output import VolumeStepper
 from commander.ui.widgets import Action
 from tests.gui import WindowTest
@@ -645,6 +646,25 @@ class OutputSettings(WindowTest):
         self.sim.signal(usb=384000)
         self.spin(1100)
         self.assertFalse(crossfeed.faded)
+
+
+class ProNames(WindowTest):
+    """The lists of an ADI-2/4 Pro carry its own names."""
+
+    model = PRO_24
+
+    def test_ref_level_da_filter_and_loopback(self):
+        panel = self.win.output_panel
+        for _ in range(30):
+            if self.session.device_status is not None:
+                break
+            self.spin(100)
+        panel.set_output(P.OUTPUTS[2])                                          # Phones 3/4
+        names = lambda i: panel.steppers[i].names                               # noqa: E731
+        self.assertEqual((names(P.REF_LEVEL), len(names(P.DA_FILTER)), len(names(P.LOOPBACK))),
+                         (["IEM", "Lo-Power", "Hi-Power"], 7, 10))
+        panel.set_output(P.OUTPUTS[0])
+        self.assertEqual(names(P.REF_LEVEL)[-1], "+24 dBu")
 
 
 if __name__ == "__main__":

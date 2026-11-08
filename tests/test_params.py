@@ -3,6 +3,7 @@
 import unittest
 
 from commander.device import params as p
+from commander.device.models import DAC, PRO, PRO_24
 
 
 class Grid(unittest.TestCase):
@@ -61,6 +62,22 @@ class Output(unittest.TestCase):
         with self.assertRaises(ValueError):
             p.limits((9, p.DA_FILTER), 3)
         self.assertEqual(p.OUTPUT_RANGES[p.DA_FILTER], (0, 5))
+
+    def test_the_names_and_limits_of_each_model(self):
+        loopback = (3, p.LOOPBACK)
+        self.assertEqual([p.limits(loopback, model=m) for m in (None, DAC, PRO, PRO_24)],
+                         [(0, 3), (0, 3), (0, 9), (0, 9)])
+        self.assertEqual(p.choices(p.LOOPBACK, PRO)[1:4], ["pre FX to 1/2", "post FX to 1/2", "post 1/2 -6 dB"])
+        self.assertEqual(p.choices(p.MONO, PRO), p.CHOICES[p.MONO])                          # the same on each
+        ref = {m.name: [p.limits((a, p.REF_LEVEL), model=m)[1] for a in (3, 6, 9)] for m in (DAC, PRO, PRO_24)}
+        self.assertEqual(ref, {DAC.name: [3, 1, -1], PRO.name: [3, 1, 1], PRO_24.name: [4, 2, 2]})  # IEM: none
+        self.assertEqual((p.ref_levels(9, PRO)[1], p.ref_levels(9, PRO_24)[0]), ("Hi-Power", "IEM"))
+        filters = {m.name: [len(p.da_filters(r, m)) for r in range(4)] for m in (PRO, PRO_24)}
+        self.assertEqual(filters, {PRO.name: [5, 6, 6, 6], PRO_24.name: [7, 7, 7, 7]})
+        self.assertEqual((p.da_filters(1, PRO)[5], p.da_filters(1, PRO_24)[6]), ("SD LD", "NOS"))
+        self.assertEqual([p.da_filters(None, m) for m in (PRO, PRO_24)], [None, None])     # before the first status
+        self.assertEqual(p.limits((9, p.DA_FILTER), 0, PRO_24), (0, 6))
+        self.assertEqual(p.da_filters(1, DAC), p.da_filters(1))
 
     def test_volume_steps_onto_the_half_dbs_whatever_the_size(self):
         v = p.spec((3, p.VOLUME))
