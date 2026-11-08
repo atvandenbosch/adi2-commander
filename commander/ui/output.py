@@ -53,6 +53,7 @@ NOT_KNOWN = "Not known for this device"           # DA Filter: the device's filt
 PLUG_WARNING = ("Plugging in headphones will bring up a warning on the device:\n"
                 "it will hold the output low until Volume is -15 dB or lower, or the warning is confirmed there.")
 PLUG_WARNING_ABOVE = -150                       # Phones on Hi-Power: the warning comes above -15 dB, not at -15.0
+PLUGS = {6: "phones", 9: "iem"}                # per Phones address its plug in the status message (status.Status)
 PROCESSING = (P.MONO, P.WIDTH, P.MS_PROC, P.POLARITY, P.CROSSFEED)      # the DSP: bypassed while DSD plays
 EQ_OR_CROSSFEED_FROM = 705600                    # from this rate the device runs the EQ or Crossfeed, the EQ first
 VOLUME_UNIT = 6                                  # 0.1 dB per pixel of Volume's slider: ~200 px, as Balance's
@@ -578,11 +579,14 @@ class OutputPanel(QWidget):
         return st is not None and st.output < len(P.OUTPUTS) and P.OUTPUTS[st.output][1] == self.out[1]
 
     def plug_warning(self):
-        """Plugging headphones into Phones now brings up the device's Hi-Power warning: Hi-Power (by hand or by Auto
-        Ref Level), Volume above -15 dB, and no plug in yet. Once the plug is in, whoever put it in is at the device."""
-        s, st = self.session.state, self.session.device_status
-        return (self.out[1] == 6 and s.get((6, P.REF_LEVEL)) == 1 and s.get((6, P.VOLUME), PLUG_WARNING_ABOVE)
-                > PLUG_WARNING_ABOVE and st is not None and not st.phones)
+        """Plugging headphones into this output now brings up the device's Hi-Power warning: Hi-Power (by hand or by
+        Auto Ref Level), Volume above -15 dB, and no plug in yet. Once the plug is in, whoever put it in is at the
+        device."""
+        s, st, out = self.session.state, self.session.device_status, self.out[1]
+        names = P.ref_levels(out, self.session.model)
+        return ("Hi-Power" in names and s.get((out, P.REF_LEVEL)) == names.index("Hi-Power")
+                and s.get((out, P.VOLUME), PLUG_WARNING_ABOVE) > PLUG_WARNING_ABOVE
+                and st is not None and not getattr(st, PLUGS[out]))
 
     def crossfeed_crowded(self):
         """At EQ_OR_CROSSFEED_FROM and up, with the EQ on (either channel), Crossfeed does nothing."""

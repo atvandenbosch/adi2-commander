@@ -13,7 +13,7 @@ from .params import SAMPLE_RATES
 # any signal since power-on), and whether it carries DSD or non-audio data (a bitstream)
 Spdif = namedtuple("Spdif", "lock sync rate dsd non_audio")
 # output: the active output, the one the display and the volume knob control, as an index into params.OUTPUTS;
-# phones, iem: a plug in that jack; clock: "coax" or "optical" while the device follows that input, None on its
+# phones, iem: a plug in that jack, on an ADI-2 Pro and ADI-2/4 Pro in Phones 1/2 and Phones 3/4; clock: "coax" or "optical" while the device follows that input, None on its
 # own clock (internal, or USB); rate: the rate the device runs at; usb_rate: the rate set for USB on the
 # computer; usb_dsd: DSD over USB (DoP); dsd: DSD is played, with the DSP bypassed; coax, optical: Spdif;
 # revision: the device revision, which tells its D/A converter (params.da_filters); mode: on an ADI-2 Pro and

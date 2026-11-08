@@ -666,6 +666,22 @@ class ProNames(WindowTest):
         panel.set_output(P.OUTPUTS[0])
         self.assertEqual(names(P.REF_LEVEL)[-1], "+24 dBu")
 
+    def test_hi_power_on_either_phones(self):
+        panel, s = self.win.output_panel, self.session.state
+        for _ in range(30):
+            if self.session.device_status is not None:
+                break
+            self.spin(100)
+        for out, plug in ((9, "iem"), (6, "phones")):                          # Phones 3/4, Phones 1/2
+            panel.set_output(next(o for o in P.OUTPUTS if o[1] == out))
+            s[(out, P.VOLUME)] = -100
+            s[(out, P.REF_LEVEL)] = 1                                           # Lo-Power
+            self.assertFalse(panel.plug_warning())
+            s[(out, P.REF_LEVEL)] = 2                                           # Hi-Power
+            self.assertTrue(panel.plug_warning())
+            self.session.device_status = self.session.device_status._replace(**{plug: True})
+            self.assertFalse(panel.plug_warning())
+
 
 if __name__ == "__main__":
     unittest.main()
