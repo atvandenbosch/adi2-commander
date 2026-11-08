@@ -198,6 +198,12 @@ class Session:
         shares them, Phones 3/4 in Balanced Phones mode; None otherwise."""
         return {"shared": P.OUTPUT_ADDRESSES[0], "balanced": P.OUTPUT_ADDRESSES[2]}.get(self.phones_1_2(out))
 
+    def kept_ref_level(self):
+        """The key of the Ref Level that Phones 1/2 keeps of its own while it uses the settings of Line Out (phones_1_2
+        'shared'), on an ADI-2/4 Pro; None otherwise."""
+        out = next((o for o, _ in self.model.separate if self.phones_1_2(o) == "shared"), None) if self.model else None
+        return None if out is None or self.model.shared_ref_level is not None else (out, P.REF_LEVEL)
+
     def at(self, key):
         """The key the device holds setting key at: another output's where it is that output's (Model.borrowed),
         else key itself."""
@@ -251,7 +257,7 @@ class Session:
         if not self.ready() or self._op is not None or key not in self.state:
             return False
         if a in P.OUTPUT_ADDRESSES:
-            if not self.controls(a):
+            if not (self.controls(a) or key == self.kept_ref_level()):
                 return False
             if i == P.SOURCE and self.model.sources is not None and not self._source_choosable(key):
                 return False

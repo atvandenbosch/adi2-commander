@@ -26,6 +26,7 @@ from commander.ui import loudness as L
 from commander.conversion import setupfile
 from commander.ui import simulated, theme
 from commander.ui.tables import FLASH_TIME, KEY_ROLE
+from commander.ui.output import PHONES_REF
 from commander.ui.untested import UntestedBox
 from commander.ui.window import PHONES_1_2, MainWindow
 from commander.ui.widgets import FRAME, SIDE, label_color, placement
@@ -747,6 +748,24 @@ class ProWindow(WindowTest):
         self.win.tabs.setCurrentIndex(2)
         self.assertNotIn(shared, panel.options[P.MUTE].toolTip())
 
+    def test_ref_level_of_phones_1_2_beside_line_out(self):
+        """Phones 1/2 with the settings of Line Out: on their tab its Ref Level beside Line Out's, which sets it, shown
+        only; with settings of its own, on its own tab."""
+        panel = self.win.output_panel
+        QTest.mouseClick(self.win.output_tab, Qt.LeftButton)
+        self.sim.state.update({(12, 8): 1, (12, 11): 0, (3, P.AUTO_REF_LEVEL): 0, (3, P.REF_LEVEL): 1})
+        self.spin(4000)
+        phones = panel.phones_ref
+        self.assertTrue(panel.rows[PHONES_REF].isVisible())
+        self.assertEqual([panel.labels[P.REF_LEVEL].text(), panel.labels[PHONES_REF].text()],
+                         ["Ref Level Ln. Out", "Ref Level Ph. 1/2"])
+        self.assertEqual((phones.text(phones.value), phones.isEnabled(), phones.held), ("+16 dBu", False, True))
+        self.assertEqual(phones.toolTip(), "Set by the Ref Level of Line Out: 3 dB higher, +22 dBu at most")
+        self.sim.state[(12, 11)] = 1
+        self.spin(4000)
+        self.assertFalse(panel.rows[PHONES_REF].isVisible())
+        self.assertEqual(panel.labels[P.REF_LEVEL].text(), "Ref Level")
+
     def test_load_bt_of_phones_1_2_is_that_of_line_out(self):
         """With settings of its own, Phones 1/2 shows and switches Load B/T of Line Out, and says so; so does Line
         Out."""
@@ -917,6 +936,23 @@ class Pro24Window(WindowTest):
         self.sim.state[(12, 16)] = 8                                  # 705.6 kHz
         self.assertEqual(self.bypassed_by_the_input(), (True, True, True, False))
         self.assertIn("the ADI-2/4 Pro then runs that EQ only.", self.win.eq_switches[0].toolTip())
+
+    def test_ref_level_of_phones_1_2_beside_line_out(self):
+        """Phones 1/2 with the settings of Line Out keeps a Ref Level of its own: on their tab, beside Line Out's."""
+        panel = self.win.output_panel
+        QTest.mouseClick(self.win.output_tab, Qt.LeftButton)
+        self.sim.state.update({(12, 8): 1, (12, 11): 0, (6, P.AUTO_REF_LEVEL): 0, (6, P.REF_LEVEL): 1})
+        self.spin(4000)
+        phones, line = panel.phones_ref, self.sim.state[(3, P.REF_LEVEL)]
+        self.assertTrue(panel.rows[PHONES_REF].isVisible())
+        self.assertEqual((phones.names, phones.text(phones.value), phones.isEnabled()),
+                         (["IEM", "Lo-Power", "Hi-Power"], "Lo-Power", True))
+        self.assertFalse(phones.warned)
+        QTest.mouseClick(phones, Qt.LeftButton, pos=QPoint(phones.width() - 4, phones.height() // 2))
+        self.spin(1500)
+        self.assertEqual((self.sim.state[(6, P.REF_LEVEL)], self.sim.state[(3, P.REF_LEVEL)]), (2, line))
+        self.assertTrue(phones.warned)                                # Hi-Power, Volume -10 dB, no plug in
+        self.assertIn("Plugging in headphones", phones.toolTip())
 
 
 class Placement(unittest.TestCase):

@@ -56,6 +56,8 @@ PLUG_WARNING_ABOVE = -150                       # Phones on Hi-Power: the warnin
 PLUGS = {6: "phones", 9: "iem"}                # per Phones address its plug in the status message (status.Status)
 PROCESSING = (P.MONO, P.WIDTH, P.MS_PROC, P.POLARITY, P.CROSSFEED)      # the DSP: bypassed while DSD plays
 EQ_OR_CROSSFEED_FROM = 705600                    # from this rate the device runs the EQ or Crossfeed, the EQ first
+PHONES_REF = "phones_ref"                         # the row of the Ref Level of Phones 1/2 beside Line Out's
+SHARED_REF_TIP = "Set by the Ref Level of Line Out: 3 dB higher, %s at most"
 VOLUME_UNIT = 6                                  # 0.1 dB per pixel of Volume's slider: ~200 px, as Balance's
 
 
@@ -524,8 +526,13 @@ class OutputPanel(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
         lay.addWidget(head(title))
+        self.phones_ref = Stepper(P.REF_LEVELS[P.OUTPUTS[1][1]])                # its names follow the model
+        self.phones_ref.setFixedWidth(VALUE_WIDTH)
+        self.phones_ref.chosen.connect(lambda value: self.edited.emit(self.session.kept_ref_level(), value, False))
+        self.labels = {}
         groups = [("LEVEL", [(P.LOCK_VOLUME, None), (P.VOLUME, "Volume"), (P.AUTO_REF_LEVEL, None),
-                             (P.REF_LEVEL, "Ref Level"), (P.MUTE, None), (P.DIM, None), (P.BALANCE, "Balance")]),
+                             (P.REF_LEVEL, "Ref Level"), (PHONES_REF, "Ref Level Ph. 1/2"), (P.MUTE, None),
+                             (P.DIM, None), (P.BALANCE, "Balance")]),
                   ("PROCESSING", [(P.MONO, "Mono"), (P.WIDTH, "Width"), (P.MS_PROC, "M/S-Proc"),
                                   (P.POLARITY, "Polarity"), (P.CROSSFEED, "Crossfeed")]),
                   ("DAC", [(P.DA_FILTER, "DA Filter"), (P.DE_EMPHASIS, "De-Emphasis"),
@@ -550,6 +557,9 @@ class OutputPanel(QWidget):
             return _row(option, indent=NAME_INDENT - Option.RING - 1)        # the track where the names start
         if i == P.VOLUME:
             return _row(self.volume_label, self.volume)
+        self.labels[i] = _label(text)
+        if i == PHONES_REF:
+            return _row(self.labels[i], self.phones_ref)
         names = P.CHOICES.get(i)
         if i == P.WIDTH:
             s = RangeStepper(i, [(n, v) for v, n in P.WIDTH_NAMES.items()], anchor=100)   # full stereo
@@ -564,7 +574,7 @@ class OutputPanel(QWidget):
         s.setFixedWidth(VALUE_WIDTH)
         s.chosen.connect(lambda value, i=i: self.edited.emit(self.key(i), value, False))
         self.steppers[i] = s
-        return _row(_label(text), s)
+        return _row(self.labels[i], s)
 
     def set_output(self, output):
         self.out = output
@@ -593,15 +603,48 @@ class OutputPanel(QWidget):
         return (st is not None and st.output < len(active)
                 and bool(set(self.session.sharing((self.out[1], i))) & set(active[st.output])))
 
-    def plug_warning(self):
-        """Plugging headphones into this output now brings up the device's Hi-Power warning: Hi-Power (by hand or by
-        Auto Ref Level), Volume above -15 dB, and no plug in yet. Once the plug is in, whoever put it in is at the
-        device."""
-        s, st, out = self.session.state, self.session.device_status, self.out[1]
+    def plug_warning(self, out=None):
+        """Plugging headphones into output out (else this one) now brings up the device's Hi-Power warning: Hi-Power
+        (by hand or by Auto Ref Level), Volume as shown above -15 dB, and no plug in yet. Once the plug is in, whoever
+        put it in is at the device."""
+        s, st, out = self.session.state, self.session.device_status, out or self.out[1]
         names = P.ref_levels(out, self.session.model)
         return ("Hi-Power" in names and s.get((out, P.REF_LEVEL)) == names.index("Hi-Power")
-                and s.get((out, P.VOLUME), PLUG_WARNING_ABOVE) > PLUG_WARNING_ABOVE
+                and s.get((self.out[1], P.VOLUME), PLUG_WARNING_ABOVE) > PLUG_WARNING_ABOVE
                 and st is not None and not getattr(st, PLUGS[out]))
+
+    def shared_phones(self):
+        """Phones 1/2 where it uses the settings of this output (Session.phones_1_2 'shared'); else None."""
+        model = self.session.model
+        return None if model is None else next((o for o, _ in model.separate if self.session.phones_1_2(o) == "shared"
+                                                and self.session.follows(o) == self.out[1]), None)
+
+    def refresh_phones_ref(self, ready):
+        """Beside Line Out's Ref Level, where Phones 1/2 uses the settings of Line Out: that of Phones 1/2. On an
+        ADI-2/4 Pro its own; on an ADI-2 Pro set by Line Out's, shown only."""
+        s, model, line = self.session.state, self.session.model, self.key(P.REF_LEVEL)
+        phones = self.shared_phones() if ready else None
+        shown = phones is not None and not P.absent(P.REF_LEVEL, s.get(line))
+        self.rows[PHONES_REF].setVisible(shown)
+        self.labels[P.REF_LEVEL].setText("Ref Level Ln. Out" if shown else "Ref Level")
+        if not shown:
+            return
+        key = self.session.kept_ref_level()
+        if key is None:
+            names = model.shared_ref_level
+            self.phones_ref.names = names
+            self.phones_ref.show_state(s.get(line), False, SHARED_REF_TIP % names[-1], held=True)
+            return
+        self.phones_ref.names = P.ref_levels(phones, model)
+        held = s.get((phones, P.AUTO_REF_LEVEL)) == 1
+        tip = "Chosen by Auto Ref Level, from Volume and the positive EQ gain" if held else TIPS[P.REF_LEVEL]
+        warned = self.plug_warning(phones)
+        if warned:
+            tip += "\n" + PLUG_WARNING
+        if key in self.marks.mismatch:
+            tip += "\nSent %s, device has %s" % tuple(self.phones_ref.text(v) for v in self.marks.mismatch[key])
+        self.phones_ref.show_state(s.get(key), self.session.writable(key), tip, bad=key in self.marks.mismatch,
+                                   held=held, warned=warned)
 
     def crossfeed_crowded(self):
         """At EQ_OR_CROSSFEED_FROM and up, with the EQ on (either channel), Crossfeed does nothing."""
@@ -668,6 +711,7 @@ class OutputPanel(QWidget):
                 sent, actual = self.marks.mismatch[key]
                 tip += "\nSent %s, device has %s" % (stepper.text(sent), stepper.text(actual))
             stepper.show_state(v, self.session.writable(key), tip, faded, key in self.marks.mismatch, held, warned)
+        self.refresh_phones_ref(ready)
         self.refresh_volume()
         for i, option in self.options.items():
             key = self.key(i)
