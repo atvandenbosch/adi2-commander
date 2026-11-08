@@ -17,6 +17,11 @@ class Status(unittest.TestCase):
         self.assertEqual(s.coax, S.Spdif(False, False, None, False, False))      # no signal since power-on
         self.assertEqual(s.optical, S.Spdif(False, False, None, False, False))
 
+    def test_the_basic_mode_in_use(self):
+        dsd_in_dac = S.decode(body("05 00 7e 0b 00 00 00 00 00 75 02 02 00 00"))
+        self.assertEqual((dsd_in_dac.mode, dsd_in_dac.dsd), (5, True))
+        self.assertEqual(S.decode(body("08 30 7e 28 00 00 00 42 00 00 02 0a 00 00")).mode, 0)
+
     def test_every_rate(self):
         seen = [(0x04, 0x01), (0x08, 0x02), (0x14, 0x05), (0x18, 0x06), (0x24, 0x09),
                 (0x28, 0x0a), (0x34, 0x0d), (0x38, 0x0e), (0x44, 0x11), (0x48, 0x12)]    # d3, d11 on USB

@@ -32,6 +32,7 @@ No Qt here; listeners are plain callables:
 """
 
 import time
+from collections import namedtuple
 
 from .device import codec
 from .device import models
@@ -68,9 +69,10 @@ RELOAD = {P.EQ_ENABLE, P.EQ_PRESET_SELECT}  # make the device rebuild its filter
 
 LEFT = {left: out for _, out, left, _ in P.OUTPUTS}
 RIGHT = {right: out for _, out, _, right in P.OUTPUTS}
-# what Commander writes with set() on the address of an output of a model it controls only the EQ of
-# (models.Model.eq_only); Dual EQ goes by set_dual()
-EQ_ONLY = {P.LOUDNESS_ENABLE, P.LD_BASS, P.LD_TREBLE, P.LD_LOW_VOL_REF}
+# one Source setting (Session.source_rows): the key its value is read from and written to, the output addresses it
+# is for, the names of its choices
+SourceRow = namedtuple("SourceRow", "key outputs names")
+LINE_SOURCE, PHONES_34_SOURCE = (3, P.SOURCE), (9, P.SOURCE)
 
 
 def output_content(state, out):
@@ -178,12 +180,49 @@ class Session:
         return out in self.model.controlled or need is not None and all(
             self.state.get((12, i)) == 1 for i in need)
 
+    def basic_mode(self):
+        """On an ADI-2 Pro and ADI-2/4 Pro the Basic Mode in use as its status message reports it, an index into
+        params.BASIC_MODES; None before the first status message, and on an ADI-2 DAC FS."""
+        if self.model is None or self.model.sources is None or self.device_status is None:
+            return None
+        return self.device_status.mode
+
+    def source_rows(self):
+        """The Source settings of the device connected, one SourceRow each. An ADI-2 DAC FS has one input for all
+        outputs. An ADI-2 Pro and ADI-2/4 Pro have one for Line Out and Phones 1/2, which always take the same input,
+        and one for Phones 3/4; in Basic Mode DAC one for all outputs."""
+        m = self.model
+        if m is None:
+            return []
+        if m.sources is None:
+            return [SourceRow(LINE_SOURCE, P.OUTPUT_ADDRESSES, P.INPUTS)]
+        if self.basic_mode() == P.MODE_DAC:
+            return [SourceRow(LINE_SOURCE, P.OUTPUT_ADDRESSES, m.sources["dac"])]
+        ex = (self.revision() or 0) >= 1 and "phones_ex" in m.sources       # an ADI-2/4 Pro EX
+        return [SourceRow(LINE_SOURCE, (3, 6), m.sources["line"]),
+                SourceRow(PHONES_34_SOURCE, (9,), m.sources["phones_ex" if ex else "phones"])]
+
+    def source_names(self, key):
+        """The names of the Source setting at key; None where there is none."""
+        return next((row.names for row in self.source_rows() if row.key == key), None)
+
+    def _source_choosable(self, key):
+        """ADI-2 Pro and ADI-2/4 Pro: Line Out's Source can be chosen in AD/DA and DAC, Phones 3/4's in every other
+        mode; in DAC Line Out's is that of all outputs."""
+        mode = self.basic_mode()
+        if key == LINE_SOURCE:
+            return mode in (P.MODE_AD_DA, P.MODE_DAC)
+        return key == PHONES_34_SOURCE and mode is not None and mode != P.MODE_DAC
+
     def writable(self, key):
         a, i = key
         if not self.ready() or self._op is not None or key not in self.state:
             return False
         if a in P.OUTPUT_ADDRESSES:
-            if not self.controls(a) or (self.model.eq_only and i not in EQ_ONLY):
+            settings = self.model.settings
+            if not self.controls(a) or (settings is not None and i not in settings):
+                return False
+            if i == P.SOURCE and self.model.sources is not None and not self._source_choosable(key):
                 return False
             if i == P.REF_LEVEL and self.state.get((a, P.AUTO_REF_LEVEL)) == 1:
                 return False                             # the device chooses it; written, it moves Volume a step
@@ -210,7 +249,8 @@ class Session:
         any amount."""
         if not self.writable(key):
             raise ValueError("parameter %d/%d is not writable now" % key)
-        lo, hi = P.limits(key, self.revision(), self.model)
+        names = self.source_names(key) if key[0] in P.OUTPUT_ADDRESSES and key[1] == P.SOURCE else None
+        lo, hi = (0, len(names) - 1) if names is not None else P.limits(key, self.revision(), self.model)
         if not lo <= value <= hi:
             raise ValueError("%d/%d: %d outside %d..%d" % (key + (value, lo, hi)))
         if key[0] in P.OUTPUT_ADDRESSES and key[1] == P.VOLUME:
@@ -224,10 +264,12 @@ class Session:
             self.state[key] = value
             self._emit(self.on_changed, [key], "write")
 
-    def set_source(self, value):
-        """Choose the input, an index into params.INPUTS. It is one setting of the whole device, on every output
-        address: written to all three at once, as the device reports a change on its front panel."""
-        keys = [(out, P.SOURCE) for out in P.OUTPUT_ADDRESSES]
+    def set_source(self, value, key=LINE_SOURCE):
+        """Choose the input of the Source setting at key (source_rows), an index into its names. On an ADI-2 DAC FS
+        it is one setting of the whole device, on every output address: written to all three at once, as the device
+        reports a change on its front panel."""
+        one = self.model is not None and self.model.sources is not None
+        keys = [key] if one else [(out, P.SOURCE) for out in P.OUTPUT_ADDRESSES]
         if not all(self.writable(k) for k in keys):
             raise ValueError("the input is not writable now")
         for k in keys:

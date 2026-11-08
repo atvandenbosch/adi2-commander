@@ -815,7 +815,7 @@ class StoreWrite(Harness):
 
 
 class EqOnly(Harness):
-    """An ADI-2 Pro: Commander writes the EQ of Line Out and Phones 3/4, and nothing else."""
+    """An ADI-2 Pro: Commander writes the EQ of Line Out and Phones 3/4, and of their other settings only Source."""
 
     def setUp(self):
         super().setUp()
@@ -857,6 +857,65 @@ class EqOnly(Harness):
         self.assertEqual(self.operations, [("store", 2, {})])
         self.assertEqual({k for k in self.written(since) if k[1] == P.EQ_PRESET_SELECT}, {(4, 28), (10, 28)})
         self.assertNotIn(7, {a for a, _ in self.written()})
+
+
+class ProSource(Harness):
+    """Source on an ADI-2 Pro and ADI-2/4 Pro: one setting for Line Out and Phones 1/2, one for Phones 3/4, and in
+    Basic Mode DAC one for all; which can be chosen follows the Basic Mode in use."""
+
+    def use(self, model, revision=None):
+        self.sim = SimulatedAdi2.factory(model, revision, presets=PRESETS, clock=self.clock)
+        self.connect()
+
+    def basic_mode(self, mode):
+        self.sim.front_panel([(12, 6, mode)])
+        self.run_for(1.5)                                               # the next status message
+
+    def rows(self):
+        return [(row.key, row.outputs, len(row.names)) for row in self.session.source_rows()]
+
+    def choosable(self):
+        return [self.session.writable((out, P.SOURCE)) for out in (3, 6, 9)]
+
+    def test_the_rows_and_what_can_be_chosen_in_each_mode(self):
+        self.use(PRO)
+        self.assertEqual(self.session.basic_mode(), 2)                  # Auto, with USB connected: USB
+        self.assertEqual(self.rows(), [((3, 1), (3, 6), 4), ((9, 1), (9,), 6)])
+        self.assertEqual(self.choosable(), [False, False, True])
+        self.basic_mode(1)                                              # AD/DA
+        self.assertEqual(self.choosable(), [True, False, True])
+        self.basic_mode(5)                                              # DAC
+        self.assertEqual(self.rows(), [((3, 1), (3, 6, 9), 7)])
+        self.assertEqual(self.choosable(), [True, False, False])
+        self.assertEqual(self.session.source_names((3, 1))[3], "Optical")
+        for mode in (3, 4):                                             # Preamp, Dig Thru
+            self.basic_mode(mode)
+            self.assertEqual(self.choosable(), [False, False, True])
+
+    def test_each_row_writes_its_own_key(self):
+        self.use(PRO)
+        self.basic_mode(1)
+        since = len(self.sim.received)
+        self.session.set_source(3)                                      # Line Out: Analog
+        self.session.set_source(5, (9, P.SOURCE))                       # Phones 3/4: USB 3/4
+        self.run_for(2.0)
+        written = [codec.decode_triplet(*t)[:3] for m in self.sim.received[since:] if m[5] == 0x02
+                   for t in codec.parameter_triplets([m])]
+        self.assertEqual(written, [(3, 1, 3), (9, 1, 5)])
+        with self.assertRaises(ValueError):
+            self.session.set_source(4)                                  # Line Out has four
+        with self.assertRaises(ValueError):
+            self.session.set_source(1, (6, P.SOURCE))                   # Phones 1/2 takes Line Out's
+
+    def test_adat_on_phones_3_4_of_the_ex(self):
+        self.use(PRO_24, 1)                                             # revision 1: the EX
+        self.assertEqual(self.session.source_names((9, P.SOURCE))[-1], "ADAT 3/4")
+        self.assertEqual(len(self.session.source_names((3, P.SOURCE))), 4)
+
+    def test_one_input_for_the_whole_dac_fs(self):
+        self.connect()
+        self.assertEqual(self.rows(), [((3, 1), (3, 6, 9), len(P.INPUTS))])
+        self.assertIsNone(self.session.basic_mode())
 
 
 if __name__ == "__main__":
