@@ -451,6 +451,7 @@ class MainWindow(QMainWindow):
         self.output_tab.toggled.connect(self.output_area.setVisible)
         # the input, of the whole device: first, where the signal comes in
         self.input_panel = InputPanel(session, self.marks)
+        self.input_panel.edited.connect(self.write)
         self.input_area = QScrollArea()
         self.input_area.setWidget(self.input_panel)
         self.input_area.setWidgetResizable(True)

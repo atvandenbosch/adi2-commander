@@ -6,7 +6,8 @@ presets, Loudness) and the other settings of Line Out and Phones 3/4, and of Pho
 own. Phones 1/2 shares
 the signal of Line Out and is active with Dual Phones on; with Mute v. TRS 1/2 on as well it has settings of its own,
 otherwise it uses those of Line Out (ADI-2 Pro manual, 14.1.4, 21.4). In Balanced Phones mode it is the right channel
-of Phones 3/4 (chapter 18). Commander also controls their Source, as far as the Basic Mode in use allows."""
+of Phones 3/4 (chapter 18). Commander also controls their Source, as far as the Basic Mode in use allows, and the
+settings of their analog input."""
 
 from collections import namedtuple
 

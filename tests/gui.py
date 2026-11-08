@@ -57,6 +57,7 @@ class WindowTest(unittest.TestCase):
 
     size = None
     model = None                                 # a models.Model to start from its factory values instead of the dump
+    revision = None                              # and its device revision
     TICK = 20                                    # ms, as the window's timer
 
     def setUp(self):
@@ -64,7 +65,7 @@ class WindowTest(unittest.TestCase):
         if self.model is None:
             self.sim = SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=self.clock)
         else:
-            self.sim = SimulatedAdi2.factory(self.model, presets=PRESETS, clock=self.clock)
+            self.sim = SimulatedAdi2.factory(self.model, self.revision, presets=PRESETS, clock=self.clock)
         self.session = Session(lambda: SimPort(self.sim), clock=self.clock)
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
