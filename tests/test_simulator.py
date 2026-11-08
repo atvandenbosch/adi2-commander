@@ -684,6 +684,16 @@ class OtherModels(unittest.TestCase):
                 self.send(*writes)
                 self.assertEqual([sim.state[(a, i)] for a, i, _ in writes], values)
 
+    def test_riaa_mode_sets_the_input_ref_level_to_plus_1_dbu(self):
+        for name in ("2/4 SE", "2/4 EX"):
+            with self.subTest(name):
+                sim = self.use(name)
+                self.send((0, 1, 3))
+                sim.poll()
+                self.send((0, 11, 2))
+                said = client.parse([m for m in sim.poll() if m[5] == 0x01])
+                self.assertEqual((sim.state[(0, 1)], said.get((0, 1))), (0, 0))
+
     def test_rear_trs_source_and_dsd_direct(self):
         sim = self.use("2/4 SE")
         self.send((9, 19, 1))

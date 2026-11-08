@@ -37,10 +37,15 @@ from . import params as P
 #   Out's, which sets it; None where Phones 1/2 keeps a Ref Level of its own
 # da_filters: per device revision the names of DA Filter
 # choices: the names of the other lists on an output address, where they differ from params.CHOICES
+# input: the settings of the analog input that differ per model (params.INPUT_CHOICES has the others), per index its
+#   params.Choices; None for a model without an analog input. input_ex: on an ADI-2/4 Pro EX (revision 1 and up), what
+#   it has instead or besides
+# ad_filter_fixed_from: from this rate on the analog input uses one AD Filter, Slow, whatever is chosen
 # sources: the names of Source: of Line Out ("line"), of Phones 3/4 ("phones"; "phones_ex" on an ADI-2/4 Pro EX),
 #   and in Basic Mode DAC ("dac"). None for one input of the whole device, params.INPUTS
 class Model(namedtuple("Model", "id name port supported tested outputs tags controlled separate borrowed no_bt_from "
-                                "one_eq_from active ref_levels ref_dbu shared_ref_level da_filters choices sources")):
+                                "one_eq_from active ref_levels ref_dbu shared_ref_level da_filters choices input "
+                                "input_ex ad_filter_fixed_from sources")):
     __slots__ = ()
 
     def __hash__(self):                          # a model is its device ID
@@ -50,7 +55,7 @@ class Model(namedtuple("Model", "id name port supported tested outputs tags cont
 DAC =Model(0x71, MODEL, "ADI-2 DAC", True, True, ("Line Out", "Phones 1/2", "Phones 3/4 · IEM"), ("L", "P", "I"),
             (3, 6, 9), (), {}, 705600, None, ((3,), (6,), (9,), ()),
             ref_levels=P.REF_LEVELS, ref_dbu=P.REF_DBU, shared_ref_level=None, da_filters=P.DA_FILTERS,
-            choices={}, sources=None)
+            choices={}, input=None, input_ex={}, ad_filter_fixed_from=None, sources=None)
 
 _FILTERS = ["SD Sharp", "SD Slow", "Sharp", "Slow"]
 _PHONES = ["Lo-Power", "Hi-Power"]
@@ -58,6 +63,7 @@ _INPUTS, _USB = ["Auto", "AES", "SPDIF", "Analog"], ["USB 1/2", "USB 3/4"]
 # Loopback to USB: the output's signal to the USB record channels 1/2, 3/4 or 5/6
 _LOOPBACK = ["Off"] + [name % ch for ch in ("1/2", "3/4", "5/6")
                        for name in ("pre FX to %s", "post FX to %s", "post %s -6 dB")]
+_RIAA = ["+14 dB", "+20 dB", "+26 dB", "+32 dB", "+38 dB"]      # RIAA Mode: the gains
 # Phones 1/2 of the ADI-2 Pro: Line Out's Source, Mono, Width, DA Filter, De-Emphasis, Lock Volume, Mute, Dim,
 # Loopback, Dig. DC Protection and Load B/T
 _BORROWED = {6: (3, (P.SOURCE, P.MONO, P.WIDTH, P.DA_FILTER, P.DE_EMPHASIS, P.LOCK_VOLUME, P.MUTE, P.DIM, P.LOOPBACK,
@@ -70,6 +76,9 @@ PRO = Model(0x72, "ADI-2 Pro", "ADI-2 Pro", True, False, ("Line Out", "Phones 1/
             shared_ref_level=["+7 dBu", "+16 dBu", "+22 dBu", "+22 dBu"],      # 3 dB higher, +22 dBu at most
             da_filters={0: _FILTERS + ["NOS"], **{r: _FILTERS + ["NOS", "SD LD"] for r in (1, 2, 3)}},
             choices={P.LOOPBACK: _LOOPBACK},
+            input={P.IN_REF_LEVEL: P.Choices(["+4 dBu", "+13 dBu", "+19 dBu", "+24 dBu"]),
+                   P.DC_FILTER: P.Choices(["Auto", "ADC", "RME", "None"])},
+            input_ex={}, ad_filter_fixed_from=352800,
             sources={"line": _INPUTS[:4], "phones": _INPUTS + _USB,
                      "dac": ["Auto", "AES", "SPDIF coax", "Optical", "Analog"] + _USB})
 PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", borrowed={}, one_eq_from=705600,
@@ -77,7 +86,16 @@ PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", borrowed={}, o
                       ref_levels={3: ["+1 dBu", "+7 dBu", "+13 dBu", "+19 dBu", "+24 dBu"],
                                   6: ["IEM"] + _PHONES, 9: ["IEM"] + _PHONES},
                       ref_dbu={3: (1, 7, 13, 19, 24), 6: (1, 7, 19), 9: (1, 7, 19)}, shared_ref_level=None,
-                      da_filters={r: _FILTERS + ["SD LD", "Brickwall", "NOS"] for r in range(4)})
+                      da_filters={r: _FILTERS + ["SD LD", "Brickwall", "NOS"] for r in range(4)},
+                      input={P.IN_REF_LEVEL: P.Choices(["+1 dBu", "+7 dBu", "+13 dBu", "+19 dBu", "+24 dBu"]),
+                             P.DC_FILTER: P.Choices(["RME", "None"]), P.RIAA_MODE: P.Choices(["Off"] + _RIAA),
+                             P.RIAA_MONO_BASS: P.Choices(["Off", "Mono"])},
+                      input_ex={P.IN_REF_LEVEL: P.Choices(["%d dBu (dig.)" % dbu for dbu in range(-35, 0, 6)]
+                                                          + ["+1 dBu", "+7 dBu", "+13 dBu", "+19 dBu", "+24 dBu"], -6),
+                                P.DC_FILTER: P.Choices(["ADC", "RME", "None"]),
+                                P.RIAA_MODE: P.Choices(["Off", "0 dB"] + _RIAA),
+                                P.BAL_IMPEDANCE: P.Choices(["94 kΩ", "47 kΩ"])},
+                      ad_filter_fixed_from=705600)
 MODELS = (DAC, PRO, PRO_24)
 BY_ID = {m.id: m for m in MODELS}
 

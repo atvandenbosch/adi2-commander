@@ -218,6 +218,19 @@ class Session:
         side = 1 if a[0] in P.OUTPUT_ADDRESSES else 2
         return [o[1] for o in P.OUTPUTS if self.at((o[side], a[1])) == a]
 
+    def input_choices(self, index):
+        """The params.Choices of a setting of the analog input (params.INPUT_ADDRESS) of the device connected; None
+        where it has no such setting."""
+        m = self.model
+        if m is None or m.input is None:
+            return None
+        ex = m.input_ex if (self.revision() or 0) >= 1 else {}
+        return {**P.INPUT_CHOICES, **m.input, **ex}.get(index)
+
+    def riaa(self):
+        """RIAA Mode is on: the analog input's Ref Level is then +1 dBu, and it and Auto Ref Level cannot be set."""
+        return self.state.get((P.INPUT_ADDRESS, P.RIAA_MODE), 0) != 0
+
     def basic_mode(self):
         """On an ADI-2 Pro and ADI-2/4 Pro the Basic Mode in use as its status message reports it, an index into
         params.BASIC_MODES; None before the first status message, and on an ADI-2 DAC FS."""
@@ -256,6 +269,10 @@ class Session:
         a, i = key
         if not self.ready() or self._op is not None or key not in self.state:
             return False
+        if a == P.INPUT_ADDRESS:
+            if i in (P.IN_REF_LEVEL, P.IN_AUTO_REF_LEVEL) and self.riaa():
+                return False
+            return self.input_choices(i) is not None
         if a in P.OUTPUT_ADDRESSES:
             if not (self.controls(a) or key == self.kept_ref_level()):
                 return False
@@ -287,7 +304,13 @@ class Session:
         if not self.writable(key):
             raise ValueError("parameter %d/%d is not writable now" % key)
         names = self.source_names(key) if key[0] in P.OUTPUT_ADDRESSES and key[1] == P.SOURCE else None
-        lo, hi = (0, len(names) - 1) if names is not None else P.limits(key, self.revision(), self.model)
+        if key[0] == P.INPUT_ADDRESS:
+            c = self.input_choices(key[1])
+            lo, hi = c.first, c.first + len(c.names) - 1
+        elif names is not None:
+            lo, hi = 0, len(names) - 1
+        else:
+            lo, hi = P.limits(key, self.revision(), self.model)
         if not lo <= value <= hi:
             raise ValueError("%d/%d: %d outside %d..%d" % (key + (value, lo, hi)))
         if key[0] in P.OUTPUT_ADDRESSES and key[1] == P.VOLUME:

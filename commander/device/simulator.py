@@ -89,6 +89,7 @@ INPUT = {                                        # address 0, the ADI-2 Pro
     8: (0, 1, 0), 9: (0, 1, 0), 10: (0, 3, 0),
 }
 INPUT_24_SE = {**INPUT, 1: (0, 4, 2), 10: (0, 1, 0), 11: (0, 5, 0), 12: (0, 1, 0)}
+RIAA_MODE, RIAA_REF_LEVEL = 11, 0                # ADI-2/4 Pro: RIAA Mode on sets the input's Ref Level to +1 dBu
 INPUT_24_EX = {**INPUT_24_SE, 1: (-6, 4, 2), 10: (0, 2, 0), 11: (0, 6, 0), 13: (0, 1, 0)}
 
 # address 12; the Remap Keys 1 .. 7 are indices 26, 27, 28, 29, 22, 23, 24
@@ -425,6 +426,10 @@ class SimulatedAdi2:
             self._set_slot(a, i, v, is_freq)
         elif a == 0 and i in self.tables.input:
             self.state[(0, i)] = _clamp(v, self.tables.input[i])
+            if i == RIAA_MODE and self.state[(0, i)] and self.state[(0, 1)] != RIAA_REF_LEVEL:
+                self.state[(0, 1)] = RIAA_REF_LEVEL          # RIAA sets the input's Ref Level, and says so
+                if self.session:
+                    self._emit(self._said([codec.encode(0, 1, RIAA_REF_LEVEL)]))
         elif a in INPUT_EQ and self.tables.input:
             self._note("input EQ address %d index %d" % (a, i))
         else:

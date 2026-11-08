@@ -7,6 +7,7 @@ below.
 
 import math
 import re
+from collections import namedtuple
 
 # (name, output address, left EQ address, right EQ address)
 OUTPUTS = [("Line Out", 3, 4, 5), ("Phones 1/2", 6, 7, 8), ("Phones 3/4 · IEM", 9, 10, 11)]
@@ -79,6 +80,19 @@ SAMPLE_RATE = (12, 16)                           # Sample Rate: the rate the dev
 BASIC_MODE = (12, 6)
 BASIC_MODES = ["Auto", "AD/DA", "USB", "Preamp", "Dig Thru", "DAC"]
 MODE_AD_DA, MODE_DAC = 1, 5
+
+# ADI-2 Pro and ADI-2/4 Pro: the settings of the analog input, on its own address. Each is a list of names
+# (Choices); these are the same on both models, models.Model.input has the others
+INPUT_ADDRESS = 0
+IN_REF_LEVEL, IN_AUTO_REF_LEVEL, TRIM_LEFT, TRIM_RIGHT, IN_POLARITY, IN_MS_PROC, AD_FILTER = 1, 2, 3, 4, 5, 6, 7
+AD_CONVERSION, DC_FILTER, RIAA_MODE, RIAA_MONO_BASS, BAL_IMPEDANCE = 9, 10, 11, 12, 13
+Choices = namedtuple("Choices", "names first", defaults=(0,))   # first: the value of the first name
+TRIM = ["%.1f" % (n / 2) for n in range(13)]   # 0.0 .. 6.0 dB by 0.5
+INPUT_CHOICES = {i: Choices(names) for i, names in {
+    IN_AUTO_REF_LEVEL: ["Off", "On"], TRIM_LEFT: TRIM, TRIM_RIGHT: TRIM, IN_POLARITY: CHOICES[POLARITY],
+    IN_MS_PROC: ["Off", "On"], AD_FILTER: ["SD Sharp", "SD Slow", "Sharp", "Slow"],
+    AD_CONVERSION: ["PCM", "DSD"]}.items()}
+DSD_RECORD_FROM = 176400                         # AD Conversion DSD records DSD from this rate on, PCM below
 
 # Loudness, on the output address (manual 12.4): Bass and Treble Gain +1..+10 dB, Low Vol Ref -90..-20 dB,
 # all in 0.5 dB steps. Their indices 20..23 are Bass/Treble on an EQ address, so they are told apart by spec():

@@ -835,8 +835,8 @@ class ProOutputs(Harness):
                                 (3, 15), (9, 9), (9, 17)] if self.session.writable(k)]
         self.assertEqual(writable, [(4, 4), (10, 4), (4, 21), (4, 28), (3, 20), (3, 23), (9, 21), (3, 3), (3, 12),
                                     (3, 15), (9, 9), (9, 17)])                  # right: Dual EQ off
-        # Phones 1/2 off; Source: not in Basic Mode USB; Ref Level: with Auto Ref Level on
-        for key in [(7, 4), (8, 4), (6, 20), (6, 12), (3, 1), (3, 2), (9, 2), (0, 1), (1, 4), (12, 6)]:
+        # Phones 1/2 off; Source: not in Basic Mode USB; Ref Level: with Auto Ref Level on; the EQ of the input
+        for key in [(7, 4), (8, 4), (6, 20), (6, 12), (3, 1), (3, 2), (9, 2), (0, 8), (1, 4), (12, 6)]:
             self.assertFalse(self.session.writable(key), key)
         self.assertEqual((self.session.controls(3), self.session.controls(6), self.session.controls(9)),
                          (True, False, True))
@@ -953,6 +953,58 @@ class ProSource(Harness):
         self.connect()
         self.assertEqual(self.rows(), [((3, 1), (3, 6, 9), len(P.INPUTS))])
         self.assertIsNone(self.session.basic_mode())
+
+
+class AnalogInput(Harness):
+    """The settings of the analog input of an ADI-2 Pro and ADI-2/4 Pro (address 0), by the lists of the model."""
+
+    def use(self, model, revision=None):
+        """A new session on this model."""
+        self.session.close()
+        self.sim = SimulatedAdi2.factory(model, revision, presets=PRESETS, clock=self.clock)
+        self.session = Session(self.open_port, clock=self.clock)
+        self.connect()
+
+    def test_the_lists_of_each_model(self):
+        names = lambda i: (c.names[0], len(c.names), c.first) if (c := self.session.input_choices(i)) else None  # noqa
+        self.use(PRO)
+        self.assertEqual([names(i) for i in (P.IN_REF_LEVEL, P.DC_FILTER, P.RIAA_MODE, P.TRIM_LEFT)],
+                         [("+4 dBu", 4, 0), ("Auto", 4, 0), None, ("0.0", 13, 0)])
+        self.use(PRO_24, 0)
+        self.assertEqual([names(i) for i in (P.IN_REF_LEVEL, P.DC_FILTER, P.RIAA_MODE, P.BAL_IMPEDANCE)],
+                         [("+1 dBu", 5, 0), ("RME", 2, 0), ("Off", 6, 0), None])
+        self.use(PRO_24, 1)
+        self.assertEqual([names(i) for i in (P.IN_REF_LEVEL, P.DC_FILTER, P.RIAA_MODE, P.BAL_IMPEDANCE)],
+                         [("-35 dBu (dig.)", 11, -6), ("ADC", 3, 0), ("Off", 7, 0), ("94 kΩ", 2, 0)])
+        self.assertIsNone(self.session.input_choices(P.INPUT_DUAL_EQ[1]))      # with the EQ, not here
+
+    def test_written_within_the_list(self):
+        self.use(PRO_24, 1)
+        self.session.set((0, P.IN_REF_LEVEL), -6)                               # -35 dBu
+        self.session.set((0, P.TRIM_LEFT), 12)                                  # +6 dB
+        with self.assertRaises(ValueError):
+            self.session.set((0, P.IN_REF_LEVEL), -7)
+        self.run_for(2.0)
+        self.assertEqual((self.sim.state[(0, 1)], self.sim.state[(0, 3)]), (-6, 12))
+
+    def test_ref_level_with_auto_ref_level_and_riaa(self):
+        """Ref Level can be set with Auto Ref Level on; with RIAA Mode on neither, and Ref Level is +1 dBu."""
+        self.use(PRO_24, 0)
+        self.session.set((0, P.IN_AUTO_REF_LEVEL), 1)
+        self.run_for(2.0)
+        self.assertTrue(self.session.writable((0, P.IN_REF_LEVEL)))
+        self.session.set((0, P.RIAA_MODE), 3)
+        self.run_for(2.0)
+        self.assertEqual(self.session.state[(0, P.IN_REF_LEVEL)], 0)
+        self.assertEqual([self.session.writable((0, i)) for i in (P.IN_REF_LEVEL, P.IN_AUTO_REF_LEVEL, P.TRIM_LEFT)],
+                         [False, False, True])
+
+    def test_none_on_the_adi_2_dac_fs(self):
+        self.sim = SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=self.clock)
+        self.connect()
+        self.assertIsNone(self.session.input_choices(P.IN_REF_LEVEL))
+        self.assertFalse(self.session.writable((0, P.IN_REF_LEVEL)))
+
 
 
 if __name__ == "__main__":
