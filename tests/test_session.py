@@ -852,6 +852,18 @@ class EqOnly(Harness):
                                 ("balanced", 9, False, False)])
         self.assertEqual([self.session.phones_1_2(out) for out in (3, 9)], [None, None])
 
+    def test_phones_1_2_has_some_settings_of_line_out(self):
+        """At Line Out's address, and of both: Mute and the other settings of the D/A converter, and Load B/T. Of an
+        ADI-2/4 Pro and ADI-2 DAC FS, each output its own."""
+        s = self.session
+        self.assertEqual([s.at(k) for k in [(6, P.MUTE), (6, P.DA_FILTER), (7, P.LOAD_BT), (6, P.VOLUME), (8, 27),
+                                            (9, P.MUTE)]],
+                         [(3, P.MUTE), (3, P.DA_FILTER), (4, P.LOAD_BT), (6, P.VOLUME), (8, 27), (9, P.MUTE)])
+        self.assertEqual([s.sharing(k) for k in [(6, P.MUTE), (3, P.MUTE), (4, P.LOAD_BT), (6, P.VOLUME)]],
+                         [[3, 6], [3, 6], [3, 6], [6]])
+        s.model = PRO_24
+        self.assertEqual((s.at((6, P.MUTE)), s.sharing((3, P.MUTE))), ((6, P.MUTE), [3]))
+
     def test_dual_eq_store_and_source_only_where_it_controls(self):
         self.session.set_dual(3, True)
         self.run_for(2.0)

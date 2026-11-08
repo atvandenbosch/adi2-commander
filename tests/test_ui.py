@@ -718,6 +718,21 @@ class ProWindow(WindowTest):
         self.assertEqual((tabs.isTabEnabled(1), tabs.currentIndex() == 1), (False, False))
         self.assertFalse(self.session.writable((7, 4)))
 
+    def test_load_bt_of_phones_1_2_is_that_of_line_out(self):
+        """With settings of its own, Phones 1/2 shows and switches Load B/T of Line Out, and says so; so does Line
+        Out."""
+        load_bt = self.win.load_bt
+        self.assertNotIn("One setting", load_bt.toolTip())                    # Phones 1/2 off
+        self.sim.state.update({(12, 8): 1, (4, P.LOAD_BT): 1, (7, P.LOAD_BT): 0})
+        self.spin(4000)
+        self.assertIn("One setting for Line Out and Phones 1/2", load_bt.toolTip())
+        self.win.tabs.setCurrentIndex(1)
+        self.assertTrue(load_bt.on)
+        self.assertIn("One setting for Line Out and Phones 1/2", load_bt.toolTip())
+        QTest.mouseClick(load_bt, Qt.LeftButton)
+        self.spin(1500)
+        self.assertEqual((self.sim.state[(4, P.LOAD_BT)], self.sim.state[(7, P.LOAD_BT)]), (0, 0))
+
     def shown_tabs(self):
         tabs = self.win.tabs
         return [tabs.tabText(i) for i in range(3) if tabs.isTabVisible(i)]

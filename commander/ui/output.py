@@ -478,6 +478,14 @@ class VolumeStepper(RangeStepper):
             self.step(direction)
 
 
+def shared_tip(session, key):
+    """Where the setting at key is that of more than one output, each with settings of its own now: which."""
+    outs = session.sharing(key)
+    if len(outs) < 2 or not all(session.controls(o) for o in outs):
+        return None
+    return "One setting for %s" % " and ".join(session.model.outputs[P.OUTPUT_ADDRESSES.index(o)] for o in outs)
+
+
 def _label(text):
     label = QLabel(text)
     label.setFixedWidth(LABEL_WIDTH)
@@ -554,7 +562,7 @@ class OutputPanel(QWidget):
         else:
             s = Stepper(names, off=names.index("Off") if "Off" in names else None)
         s.setFixedWidth(VALUE_WIDTH)
-        s.chosen.connect(lambda value, i=i: self.edited.emit((self.out[1], i), value, False))
+        s.chosen.connect(lambda value, i=i: self.edited.emit(self.key(i), value, False))
         self.steppers[i] = s
         return _row(_label(text), s)
 
@@ -573,10 +581,17 @@ class OutputPanel(QWidget):
             self.steppers[P.DA_FILTER].names = da_filters
         return da_filters
 
-    def active(self):
-        """This output is the one the device has active, as its status message says."""
-        st = self.session.device_status
-        return st is not None and st.output < len(P.OUTPUTS) and P.OUTPUTS[st.output][1] == self.out[1]
+    def key(self, i):
+        """The key of setting i of this output, where the device holds it (Session.at)."""
+        return self.session.at((self.out[1], i))
+
+    def active(self, i):
+        """Setting i is that of an output the device has active, as its status message says: of this one, or of one
+        that shares it (Session.sharing)."""
+        st, model = self.session.device_status, self.session.model
+        active = () if model is None else model.active
+        return (st is not None and st.output < len(active)
+                and bool(set(self.session.sharing((self.out[1], i))) & set(active[st.output])))
 
     def plug_warning(self):
         """Plugging headphones into this output now brings up the device's Hi-Power warning: Hi-Power (by hand or by
@@ -600,7 +615,7 @@ class OutputPanel(QWidget):
         its own menu only. With Mute or Dim on its value is amber: the output is silent, or Dim is on."""
         s, out, ready = self.session.state, self.out[1], self.session.ready()
         key = (out, P.VOLUME)
-        on = lambda i: ready and s.get((out, i)) == 1                         # noqa: E731
+        on = lambda i: ready and s.get(self.key(i)) == 1                      # noqa: E731
         self.volume.unit = "dBr" if on(P.AUTO_REF_LEVEL) else "dB"
         self.volume_label.setText("Volume (%s)" % self.volume.unit)
         lowering = tuple(i for i in (P.MUTE, P.DIM) if on(i))
@@ -617,7 +632,7 @@ class OutputPanel(QWidget):
                                bad=key in self.marks.mismatch, held=on(P.LOCK_VOLUME), warned=bool(lowering))
 
     def toggle(self, i):
-        key = (self.out[1], i)
+        key = self.key(i)
         if self.session.writable(key):
             self.edited.emit(key, 1 - self.session.state[key], False)
 
@@ -626,7 +641,7 @@ class OutputPanel(QWidget):
         bypassed = ready and self.session.bypassed()
         da_filters = self.refresh_names()
         for i, stepper in self.steppers.items():
-            key = (out, i)
+            key = self.key(i)
             unknown = i == P.DA_FILTER and da_filters is None
             v = s.get(key) if ready and not unknown else None
             self.rows[i].setVisible(not P.absent(i, v))
@@ -648,17 +663,19 @@ class OutputPanel(QWidget):
             warned = ready and i == P.REF_LEVEL and self.plug_warning()
             if warned:
                 tip += "\n" + PLUG_WARNING
+            tip = "\n".join(filter(None, (tip, shared_tip(self.session, key))))
             if key in self.marks.mismatch:
                 sent, actual = self.marks.mismatch[key]
                 tip += "\nSent %s, device has %s" % (stepper.text(sent), stepper.text(actual))
             stepper.show_state(v, self.session.writable(key), tip, faded, key in self.marks.mismatch, held, warned)
         self.refresh_volume()
         for i, option in self.options.items():
-            v = s.get((out, i)) if ready else None
+            key = self.key(i)
+            v = s.get(key) if ready else None
             self.rows[i].setVisible(not P.absent(i, v))
             on = v == 1
             tip = "%s: %s\n%s" % (OPTIONS[i], "on" if on else "off", OPTION_TIPS[i])
-            enabled = self.session.writable((out, i))
-            if i == P.DIM and not self.active():                # as on the device: the current output only
+            enabled = self.session.writable(key)
+            if i == P.DIM and not self.active(i):               # as on the device: the current output only
                 enabled, tip = False, tip + "\n" + DIM_ACTIVE_ONLY
-            option.show_state(on, enabled, tip)
+            option.show_state(on, enabled, "\n".join(filter(None, (tip, shared_tip(self.session, key)))))

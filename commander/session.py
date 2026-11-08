@@ -198,6 +198,20 @@ class Session:
         shares them, Phones 3/4 in Balanced Phones mode; None otherwise."""
         return {"shared": P.OUTPUT_ADDRESSES[0], "balanced": P.OUTPUT_ADDRESSES[2]}.get(self.phones_1_2(out))
 
+    def at(self, key):
+        """The key the device holds setting key at: another output's where it is that output's (Model.borrowed),
+        else key itself."""
+        a, i = key
+        owner, indices = (None, ()) if self.model is None else self.model.borrowed.get(a, (None, ()))
+        return (owner, i) if i in indices else key
+
+    def sharing(self, key):
+        """The outputs whose setting is the one at key (at), by their output address: its own, and those that use
+        it too. key is on an output address or a left EQ address."""
+        a = self.at(key)
+        side = 1 if a[0] in P.OUTPUT_ADDRESSES else 2
+        return [o[1] for o in P.OUTPUTS if self.at((o[side], a[1])) == a]
+
     def basic_mode(self):
         """On an ADI-2 Pro and ADI-2/4 Pro the Basic Mode in use as its status message reports it, an index into
         params.BASIC_MODES; None before the first status message, and on an ADI-2 DAC FS."""
@@ -244,7 +258,7 @@ class Session:
                 return False
             if i == P.REF_LEVEL and self.state.get((a, P.AUTO_REF_LEVEL)) == 1:
                 return False                             # the device chooses it; written, it moves Volume a step
-            if i == P.VOLUME and self.state.get((a, P.LOCK_VOLUME)) == 1:
+            if i == P.VOLUME and self.state.get(self.at((a, P.LOCK_VOLUME))) == 1:
                 return False                             # the device refuses it while Lock Volume is on
             if i == P.DA_FILTER and P.da_filters(self.revision(), self.model) is None:
                 return False                             # what its values mean is not known
@@ -568,7 +582,7 @@ class Session:
             slot = self.slots.get(source - 1) if source is not None else None   # Preset n is n + 1
             if slot is not None:
                 diff = differences(output_content(self.state, out), loaded(slot),
-                                   self.state.get((left, P.LOAD_BT)) == 1)
+                                   self.state.get(self.at((left, P.LOAD_BT))) == 1)
                 if diff:
                     judged[out] = (source, diff)
         changed = [o for o in P.OUTPUT_ADDRESSES if judged.get(o) != self._stale.get(o)]

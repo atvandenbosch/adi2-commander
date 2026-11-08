@@ -49,7 +49,7 @@ from .inputs import InputPanel
 from .legend import ITEM_PAD, Legend
 from .loaddialog import LoadDialog, read_file
 from .loudness import LoudnessGraph
-from .output import OutputPanel
+from .output import OutputPanel, shared_tip
 from .presets import ChosenRow, NameEditor, PresetPanel, SideTab
 from .preview import PresetPreview
 from .scrim import RISE, Scrim
@@ -992,8 +992,9 @@ class MainWindow(QMainWindow):
             self.before_switch.setFocus()
 
     def toggle_load_bt(self):
-        """Load B/T with Preset: whether selecting a preset brings its Bass/Treble too; on the left address."""
-        key = (self.output[2], P.LOAD_BT)
+        """Load B/T with Preset: whether selecting a preset brings its Bass/Treble too; on the left address
+        (Session.at)."""
+        key = self.session.at((self.output[2], P.LOAD_BT))
         if self.draft is None and self.session.writable(key):
             self.write(key, 1 - self.session.state[key], False)
 
@@ -1053,7 +1054,8 @@ class MainWindow(QMainWindow):
         s, (_, _, left, _), name = self.session.state, self.output, self.output_name()
         others = [o for o, (_, out, l, _) in zip(self.model.outputs, P.OUTPUTS)
                   if l != left and self.session.controls(out) and s.get((l, P.EQ_PRESET_SELECT)) == row.value]
-        self.preview.show_preset(row.value, self.session.slots.get(row.slot), name, s.get((left, P.LOAD_BT)) == 1,
+        self.preview.show_preset(row.value, self.session.slots.get(row.slot), name,
+                                 s.get(self.session.at((left, P.LOAD_BT))) == 1,
                                  s.get((left, P.EQ_PRESET_SELECT)) == row.value, self.graph.fs, others)
 
     def place_preview(self):
@@ -1365,7 +1367,7 @@ class MainWindow(QMainWindow):
         self.save_action.setEnabled(ready)
         self.load_action.setEnabled(ready and self.editable())
         live = self.session.ready()
-        load_bt = live and self.session.state.get((left, P.LOAD_BT)) == 1
+        load_bt = live and self.session.state.get(self.session.at((left, P.LOAD_BT))) == 1
         if editing:
             self.bt_switch.show_title(BT_IN_PRESET)
         else:
@@ -1373,11 +1375,13 @@ class MainWindow(QMainWindow):
                 "Loaded with a preset: Load Bass/Treble with preset is on." if load_bt else
                 "Not loaded with a preset: Load Bass/Treble with preset is off."), dsd)
         self.loudness_switch.show_state(loudness_on, ready, switch_tip("Loudness, both channels", loudness_on), dsd)
-        self.load_bt.show_state(load_bt, live and not editing, "Load Bass/Treble with preset: %s\n"
-                                "On: selecting a preset brings its Bass/Treble too, and changing Bass/Treble on a\n"
-                                "preset makes it Temp.%s" % ("on" if load_bt else "off", "" if self.model.eq_only else
-                                                             " Switching it on switches Bass/Treble off on Phones and"
-                                                             " IEM\n(the device does so)."))
+        tip = ("Load Bass/Treble with preset: %s\n"
+               "On: selecting a preset brings its Bass/Treble too, and changing Bass/Treble on a\n"
+               "preset makes it Temp.%s" % ("on" if load_bt else "off", "" if self.model.eq_only else
+                                            " Switching it on switches Bass/Treble off on Phones and"
+                                            " IEM\n(the device does so)."))
+        shared = shared_tip(self.session, (left, P.LOAD_BT)) if live else None
+        self.load_bt.show_state(load_bt, live and not editing, "\n".join(filter(None, (tip, shared))))
         self.refresh_presets()
         self.refresh_edit()
         self.input_panel.refresh()
