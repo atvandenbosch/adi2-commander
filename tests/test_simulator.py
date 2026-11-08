@@ -666,6 +666,15 @@ class OtherModels(unittest.TestCase):
                 self.assertEqual((len(body), st.revision, st.rate, st.usb_rate, st.output),
                                  (14, revision or 0, 48000, 48000, 1))                 # Line Out active
 
+    def test_the_input_has_no_bass_treble(self):
+        """The EQ of the input: its bands, Load B/T and EQ Preset Select; no Bass/Treble, no Loudness."""
+        for name in self.MODELS:
+            with self.subTest(name):
+                self.use(name)
+                params = client.parse([m for m in self.dump() if m[5] == 0x01])
+                self.assertEqual(sorted(i for a, i in params if a == 1), list(range(2, 20)) + [27, 28])
+                self.assertEqual(sorted(i for a, i in params if a == 0 and i >= 20), [])
+
     def test_the_ranges_of_each_model(self):
         writes = [(9, 2, 9), (3, 2, 9), (3, 9, 9), (3, 17, 12), (0, 1, -9), (0, 10, 9)]
         expect = {"Pro": [1, 3, 5, 9, 0, 3], "2/4 SE": [2, 4, 6, 9, 0, 1], "2/4 EX": [2, 4, 6, 9, -6, 2]}

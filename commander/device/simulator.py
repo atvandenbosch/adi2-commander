@@ -136,14 +136,15 @@ def tables(model, revision):
 def factory_layout(t):
     """The parameter messages of a dump, [[(address, index), ...] per message], for a model with factory values:
     in the order of a real dump of the ADI-2 DAC FS, 40 parameters a message. Per channel its settings, the bands
-    left and right, Bass/Treble, Loudness; then the device; then Load B/T and EQ Preset Select of every channel."""
+    left and right, Bass/Treble, Loudness; then the device; then Load B/T and EQ Preset Select of every channel. The
+    input has no Bass/Treble and no Loudness."""
     keys = []
     channels = [(0, INPUT_EQ)] + [(o, EQ_PAIRS[o]) for o in OUTPUT_ADDRESSES]
     for o, (left, right) in channels:
         own = t.input if o == 0 else t.outputs[o]
         keys += [(o, i) for i in sorted(own) if i < 20]
         keys += [(x, i) for x in (left, right) for i in range(2, 20)]
-        keys += [(left, i) for i in range(20, 27)]
+        keys += [(left, i) for i in range(20, 27) if o != 0]
         keys += [(o, i) for i in sorted(own) if i >= 20]
     keys += [(12, i) for i in sorted(set(t.device) | set(DEVICE_REPORTED))]
     keys += [(left, i) for _, (left, _) in channels for i in (27, 28)]
@@ -158,8 +159,10 @@ def factory_state(t):
         for x in (left, right):
             state.update({(x, i): v for i, v in FACTORY_BANDS.items()})
             state[(x, 2)] = 0                    # EQ Enable
-        state.update({(left, i): v for i, v in FACTORY_BT.items()})
-        state.update({(left, 20): 1, (left, 27): 0, (left, 28): MANUAL})
+        if o != 0:                               # the input has no Bass/Treble
+            state.update({(left, i): v for i, v in FACTORY_BT.items()})
+            state[(left, 20)] = 1
+        state.update({(left, 27): 0, (left, 28): MANUAL})
     state.update({(12, i): r[2] for i, r in t.device.items()})
     state.update({(12, i): v for i, v in DEVICE_REPORTED.items()})
     return state

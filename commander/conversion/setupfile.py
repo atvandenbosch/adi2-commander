@@ -4,9 +4,10 @@ The file holds what a dump and the twenty preset slots hold: the input of an ADI
 the three outputs with their EQ, the device settings, and the presets with their names. ADI-2 Remote restores it
 with File > Open Setup File.... Each output also carries three settings of ADI-2 Remote, with its defaults. Phones
 1/2 of an ADI-2 Pro uses some settings of Line Out and has none of its own there (Source, Mono, Width, DA Filter and
-others); for those the file holds Line Out's. Values are in units (dB, Hz, Q, or an index), with two decimals and a
-comma. The device settings stand at fixed places, the same for every model; a place the model has no setting for
-has no name and 0.
+others); for those the file holds Line Out's. The input has no Bass/Treble; for it the file holds Bass/Treble
+switched on at its factory values, as ADI-2 Remote writes it. Values are in units (dB, Hz, Q, or an index), with two
+decimals and a comma. The device settings stand at fixed places, the same for every model; a place the model has no
+setting for has no name and 0.
 """
 
 from ..device import models
@@ -26,6 +27,7 @@ INPUT = [("AutoRef", 2, 1), ("RefLevel", 1, 1), ("TrimGainLeft", 3, 2), ("TrimGa
          ("MSProcessing", 6, 1), ("ADFilter", 7, 1), ("ADConversion", 9, 1), ("DCFilter", 10, 1), ("RIAAMode", 11, 1),
          ("RIAAMonoBass", 12, 1), ("BalImpedance", 13, 1)]
 INPUT_DUAL_EQ = 8
+INPUT_BT = {P.BT_ENABLE: 1, **P.FACTORY_BT}
 # the device settings (address 12) by place, their names, and per model the places it has no setting for
 DEVICE = [6, 7, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 40, 41, 42, 43, 25, 26, 27, 28, 29, 22, 23, 24,
           32, 33, 34, 35, 36, 37, 62]
@@ -44,11 +46,13 @@ PRESET_FIXED = [("BassTrebleEn", 0)]
 PRESET_TAIL = [("EQ Preset Select", 0), ("Load BT w. EQ", 1)]
 
 
-def _eq(name, state, left, right, dual):
-    """An EQ as the device runs it: the left side with Bass/Treble, the right side."""
+def _eq(name, state, left, right, dual, bt=None):
+    """An EQ as the device runs it: the left side with Bass/Treble (bt {index: value}, else the state's), the right
+    side."""
+    bt = {i: state[(left, i)] for i in BT_NAMES} if bt is None else bt
     lines = ["\t\t<%s>" % name, val("EQEnable", state[(left, P.EQ_ENABLE)])]
     lines += [val(BAND_NAMES[i], units(i, state[(left, i)])) for i in BAND_INDICES]
-    lines += [val(BT_NAMES[i], units(i, state[(left, i)])) for i in sorted(BT_NAMES)]
+    lines += [val(BT_NAMES[i], units(i, bt[i])) for i in sorted(BT_NAMES)]
     lines += [val("DualEQ", dual), val("EQ Preset Select", state[(left, P.EQ_PRESET_SELECT)]),
               val("Load BT w. EQ", state[(left, P.LOAD_BT)]), "\t\t</%s>" % name]
     right_name = name + (" R" if name.startswith("EQOut") else "R")
@@ -100,7 +104,7 @@ def write(state, slots, model=models.DAC, revision=None):
     try:
         if model.id != models.DAC.id:
             lines += _settings("Input", state, 0, INPUT)
-            lines += _eq("EQInput", state, 1, 2, state[(0, INPUT_DUAL_EQ)])
+            lines += _eq("EQInput", state, 1, 2, state[(0, INPUT_DUAL_EQ)], INPUT_BT)
         for k, (_, out, left, right) in enumerate(P.OUTPUTS, 1):
             lines += _settings("Output%d" % k, state, out, OUTPUT, REMOTE_OWN, P.OUTPUT_ADDRESSES[0])
             lines += _eq("EQOut%d" % k, state, left, right, state[(out, P.DUAL_EQ)])
