@@ -694,6 +694,17 @@ class OtherModels(unittest.TestCase):
                 self.send((12, 6, 5), (6, 1, 9))
                 self.assertEqual((sim.state[(3, 1)], sim.state[(6, 1)]), (before, after))
 
+    def test_the_status_message_reports_the_basic_mode_in_use(self):
+        for name in self.MODELS:
+            with self.subTest(name):
+                sim = self.use(name)
+                modes = []
+                for basic_mode in (1, 2, 3, 4, 5, 0):               # AD/DA, USB, Preamp, Dig Thru, DAC, Auto
+                    self.send((12, 6, basic_mode))
+                    self.clock.sleep(1.1)
+                    modes.append([m for m in sim.poll() if m[5] == 0x07][-1][6 + 9] & 0x07)
+                self.assertEqual(modes, [1, 2, 3, 4, 5, 2])         # Auto: USB, over which MIDI runs
+
     def test_what_only_the_dac_fs_is_known_to_do_it_does_not(self):
         sim = self.use("2/4 SE")
         self.dump()
