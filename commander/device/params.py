@@ -157,6 +157,8 @@ def limits(key, revision=None, model=None):
         return 0, len(names) - 1
     if a in OUTPUT_ADDRESSES and i in CHOICES:
         return 0, len(choices(i, model)) - 1
+    if a not in OUTPUT_ADDRESSES and i == EQ_PRESET_SELECT and model is not None and model.rumble:
+        return 0, RUMBLE
     return RANGES[spec(key)]
 
 
@@ -166,13 +168,17 @@ def absent(index, value):
     return (index in (REF_LEVEL, AUTO_REF_LEVEL) and value == NOT_APPLICABLE
             or index == REAR_TRS_SOURCE and value is None)
 
-SOURCES = ["Manual", "Temp"] + ["Preset %d" % n for n in range(1, 21)] + ["Clear"]
+SOURCES = ["Manual", "Temp"] + ["Preset %d" % n for n in range(1, 21)] + ["Clear", "Rumble"]
+RUMBLE = 23                                      # EQ Preset Select of Rumble, on a model that has it (Model.rumble)
 
 # what Clear and an unused preset slot load: gains 0, the default frequencies and Q 1.0, Band 1 and 5 type
 # Shelf, and Dual EQ off; with Load B/T on also this Bass/Treble: 0 dB at 85 Hz Q 0.9, 0 dB at 6500 Hz Q 0.7
 FACTORY_BANDS = {3: 1, 4: 0, 5: 100, 6: 10, 7: 0, 8: 500, 9: 10, 10: 0, 11: 1000, 12: 10,
                  13: 0, 14: 5000, 15: 10, 16: 1, 17: 0, 18: 10000, 19: 10}
 FACTORY_BT = {21: 0, 22: 85, 23: 9, 24: 0, 25: 6500, 26: 7}
+# what Rumble loads, a filter for a turntable: Band 1 High Pass at 35 Hz Q 1.1, Band 2 -12 dB at 20 Hz Q 1.1
+# (ADI-2/4 Pro SE manual, 34.28)
+RUMBLE_BANDS = {**FACTORY_BANDS, 3: 2, 5: 35, 6: 11, 7: -24, 8: 20, 9: 11}
 
 # a preset name: the signs the front panel offers, up to 14 (ADI-2 DAC FS manual, p. 27)
 NAME_MARKS = "+-/()*;:.,!#$&<>='|@"                # besides letters, digits and space

@@ -84,13 +84,19 @@ def output_content(state, out):
     return {"dual": state[(out, P.DUAL_EQ)], "vals": vals}
 
 
-def loaded(slot):
-    """What selecting a slot loads: {'dual', 'vals'}; for an unused slot the factory state, Dual EQ off."""
-    if slot["used"]:
-        return {"dual": slot["dual"], "vals": dict(slot["vals"])}
-    vals = {(a, i): v for a in (13, 14) for i, v in P.FACTORY_BANDS.items()}
+def built_in(rumble=False):
+    """What selecting Clear, or Rumble, loads: {'dual', 'vals'}, Dual EQ off."""
+    bands = P.RUMBLE_BANDS if rumble else P.FACTORY_BANDS
+    vals = {(a, i): v for a in (13, 14) for i, v in bands.items()}
     vals.update({(13, i): v for i, v in P.FACTORY_BT.items()})
     return {"dual": 0, "vals": vals}
+
+
+def loaded(slot):
+    """What selecting a slot loads: {'dual', 'vals'}; for an unused slot the factory state, as Clear."""
+    if slot["used"]:
+        return {"dual": slot["dual"], "vals": dict(slot["vals"])}
+    return built_in()
 
 
 def differences(live, preset, load_bt):

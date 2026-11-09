@@ -4,6 +4,7 @@ import unittest
 from unittest import mock
 
 from commander.device import codec, status
+from commander.device import params as P
 from commander.device.connection import DeviceNotFound, PortBusy
 from commander.device.models import DAC, PRO, PRO_24
 from commander.device.simulator import SimPort, SimulatedAdi2
@@ -693,6 +694,18 @@ class OtherModels(unittest.TestCase):
                 self.send((0, 11, 2))
                 said = client.parse([m for m in sim.poll() if m[5] == 0x01])
                 self.assertEqual((sim.state[(0, 1)], said.get((0, 1))), (0, 0))
+
+    def test_rumble_loads_on_the_2_4_only(self):
+        sim = self.use("2/4 SE")
+        self.send((10, 28, 23))
+        said = client.parse([m for m in sim.poll() if m[5] == 0x01])
+        self.assertEqual(sim.state[(10, 28)], 23)
+        self.assertEqual([sim.state[(10, i)] for i in range(3, 10)], [2, 0, 35, 11, -24, 20, 11])
+        self.assertEqual(said.get((10, 5)), 35)
+        self.assertEqual([sim.state[(10, i)] for i in range(10, 20)], [P.FACTORY_BANDS[i] for i in range(10, 20)])
+        sim = self.use("Pro")
+        self.send((10, 28, 23))
+        self.assertEqual(sim.state[(10, 28)], 22)                   # Clear, the highest it has
 
     def test_rear_trs_source_and_dsd_direct(self):
         sim = self.use("2/4 SE")

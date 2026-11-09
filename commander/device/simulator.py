@@ -19,7 +19,7 @@ from collections import namedtuple
 
 from . import codec, models
 from .connection import DeviceNotFound, PortBusy
-from .params import EQ_RANGES, FACTORY_BANDS, FACTORY_BT, SAMPLE_RATES
+from .params import EQ_RANGES, FACTORY_BANDS, FACTORY_BT, RUMBLE, RUMBLE_BANDS, SAMPLE_RATES, limits
 
 # The device's answers for an invented setup: what --simulate starts from, and the tests too
 DEMO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo")
@@ -169,7 +169,7 @@ def factory_state(t):
     return state
 
 # EQ Preset Select values
-MANUAL, TEMP, CLEAR = 0, 1, 22                   # 2..21 = Preset 1..20
+MANUAL, TEMP, CLEAR = 0, 1, 22                   # 2..21 = Preset 1..20; RUMBLE 23 where the model has it
 
 BAND_INDICES = range(3, 20)                      # band types, gains, frequencies, Qs
 BT_INDICES = range(21, 27)                       # Bass and Treble gain, frequency, Q
@@ -543,7 +543,7 @@ class SimulatedAdi2:
             return
         if is_freq and 2040 < v <= 2047:
             v = 2040                                                # 2041..2047 without the x10 flag
-        v = _clamp(v, EQ_RANGES[i])
+        v = _clamp(v, limits((a, i), model=self.model))
         # EQ Enable on a right address can be written and is read back (Dual EQ on); it takes the
         # right PEQ out of the path, the left address the left one: the front panel's ON/OFF/L/R
         if i == 28:
@@ -597,13 +597,14 @@ class SimulatedAdi2:
             self._capture(left, MANUAL)
         if v == MANUAL or v == TEMP:
             bands = self.banks[left][v]                              # Manual survives switching
-        elif v == CLEAR:
+        elif v in (CLEAR, RUMBLE):
             right = EQ_PAIRS[LEFT_EQ[left]][1]
-            bands = {(x, i): w for x in (left, right) for i, w in FACTORY_BANDS.items() if (x, i) in self.state}
+            preset = RUMBLE_BANDS if v == RUMBLE else FACTORY_BANDS
+            bands = {(x, i): w for x in (left, right) for i, w in preset.items() if (x, i) in self.state}
             bands[(LEFT_EQ[left], 11)] = 0
             if self.state.get((left, 27)) == 1:
-                # with Load B/T on, clear loads the factory Bass/Treble and switches B/T Enable on;
-                # with Load B/T off it leaves both
+                # with Load B/T on, clear and rumble load the factory Bass/Treble and switch B/T Enable on;
+                # with Load B/T off they leave both
                 bands.update({(left, i): w for i, w in FACTORY_BT.items()})
                 bands[(left, 20)] = 1
         else:

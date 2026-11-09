@@ -78,6 +78,9 @@ class Output(unittest.TestCase):
         self.assertEqual([p.da_filters(None, m) for m in (PRO, PRO_24)], [None, None])     # before the first status
         self.assertEqual(p.limits((9, p.DA_FILTER), 0, PRO_24), (0, 6))
         self.assertEqual(p.da_filters(1, DAC), p.da_filters(1))
+        select = [(a, p.EQ_PRESET_SELECT) for a in (1, 4, 10)]
+        self.assertEqual({m.name: {p.limits(k, model=m) for k in select} for m in (DAC, PRO, PRO_24)},   # Rumble
+                         {DAC.name: {(0, 22)}, PRO.name: {(0, 22)}, PRO_24.name: {(0, 23)}})
 
     def test_volume_steps_onto_the_half_dbs_whatever_the_size(self):
         v = p.spec((3, p.VOLUME))

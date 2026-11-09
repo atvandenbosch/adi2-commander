@@ -39,7 +39,7 @@ def tooltip_color(widget):
 
 
 def hover(win, row):
-    """The mouse on a row of the presets panel, and kept there: a slot's row or Clear opens its preview."""
+    """The mouse on a row of the presets panel, and kept there: a slot's row, Clear or Rumble opens its preview."""
     win.pointer = lambda: row.mapToGlobal(QPoint(row.width() // 2, row.height() // 2))
     row.enterEvent(None)
 

@@ -1,7 +1,7 @@
-"""A preset seen before anything is done with it. Under the mouse a slot's row, or Clear, opens this just past the names
-in the presets panel, joined to the row as its tab, as the edit stand is (Scrim, without the veil); the window places
-it and keeps it open while the mouse is on the row, on it, or between them. One small graph of what the preset holds,
-and under it what can be done with it: Select, Edit, Store.
+"""A preset seen before anything is done with it. Under the mouse a slot's row, Clear or Rumble opens this just past the
+names in the presets panel, joined to the row as its tab, as the edit stand is (Scrim, without the veil); the window
+places it and keeps it open while the mouse is on the row, on it, or between them. One small graph of what the preset
+holds, and under it what can be done with it: Select, Edit, Store.
 
     the graph   at rest what the slot holds: the EQ, a line per channel, with Dual EQ off one in the shared colour;
                 Bass and Treble together as a line of their own. Nothing for an unused slot, nor for a slot not read
@@ -9,13 +9,13 @@ and under it what can be done with it: Select, Edit, Store.
                 state, as for Clear; the Bass/Treble line grey where Load Bass/Treble with preset is off, as it does
                 not come along. The output's switches (EQ, Bass/Treble) are not drawn.
     Select      the preset becomes this output's source, as the device's EQ Preset Select; also when it is already,
-                which loads it again as it is now. Amber when it changes more than the graph shows: an unused slot
-                and Clear switch Bass/Treble on where Load Bass/Treble with preset is on. Its tooltip says what it
-                does.
+                which loads it again as it is now. Amber when it changes more than the graph shows: an unused slot,
+                Clear and Rumble switch Bass/Treble on where Load Bass/Treble with preset is on. Its tooltip says
+                what it does.
     Edit        opens the edit stand on the slot.
     Store       this output's EQ goes into the slot.
 
-Clear has Select only: it is no slot.
+Clear and Rumble have Select only: they are no slots.
 """
 
 import numpy as np
@@ -26,10 +26,10 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from ..device import filters as F
 from ..device import models
 from ..device import params as P
-from ..session import loaded
+from ..session import built_in, loaded
 from . import theme
 from .graph import X_HI, X_LO, Y_HI, Y_LO, side_color
-from .presets import CLEAR, ROW_HEIGHT
+from .presets import BUILT_IN, RUMBLE, ROW_HEIGHT
 from .scrim import RADIUS, RISE
 from .widgets import ATTACHED_GAP, Action, head
 
@@ -45,6 +45,7 @@ EDIT_TIP = "Edit this preset and its name; nothing goes to the device until OK"
 EDIT_FREE_TIP = "This preset is unused: it starts as the factory state"
 NOT_READ = "Not read from the device yet"
 FACTORY = "Select loads the factory state on %s: all bands 0 dB, Dual EQ off"
+RUMBLE_LOAD = "Select loads Rumble on %s: a high pass at 35 Hz, -12 dB at 20 Hz, Dual EQ off"
 
 
 def lines(content, fs, freqs):
@@ -69,10 +70,11 @@ def store_tip(slot, stored, output, others):
     return "\n".join(lines)
 
 
-def select_tip(clear, used, current, output, load_bt):
-    """What Select does on this output, a line each."""
+def select_tip(value, used, current, output, load_bt):
+    """What Select does on this output, a line each. value: its EQ Preset Select value."""
+    clear = value in BUILT_IN
     if clear:
-        first = FACTORY % output
+        first = (RUMBLE_LOAD if value == RUMBLE else FACTORY) % output
     elif not used:
         first = "This preset is unused\n" + FACTORY % output
     elif current:
@@ -184,22 +186,23 @@ class PresetPreview(QWidget):
         return [self]
 
     def show_preset(self, value, stored, output, load_bt, current, fs, others=()):
-        """value: Clear or a slot's EQ Preset Select value; stored: the slot as read, None while not read (Clear:
-        not used); output: the name of this output; load_bt: Load Bass/Treble with preset on this output; current:
-        selected on this output; fs: the rate of the main graph; others: the other outputs it is selected on."""
+        """value: Clear's, Rumble's or a slot's EQ Preset Select value; stored: the slot as read, None while not read
+        (Clear, Rumble: not used); output: the name of this output; load_bt: Load Bass/Treble with preset on this
+        output; current: selected on this output; fs: the rate of the main graph; others: the other outputs it is
+        selected on."""
         self.value, self.load_bt, self.no_bt = value, load_bt, fs >= self.no_bt_from
-        clear = value == CLEAR
+        clear = value in BUILT_IN
         known = clear or stored is not None
         used = not clear and known and stored["used"]
         self.loads = ([], None)
         if known:
-            eq, bt = lines(loaded(stored if used else {"used": False}), fs, self.graph.freqs)
+            eq, bt = lines(loaded(stored) if used else built_in(value == RUMBLE), fs, self.graph.freqs)
             dual = len(eq) == 2
             self.loads = ([(side_color(side, dual), db) for side, db in eq], bt)
         self.held = self.loads if used or clear else ([], None)
         self.show_graph(self.select.underMouse())
         self.select.setEnabled(known)
-        self.select.setToolTip(select_tip(clear, used, current, output, load_bt) if known else NOT_READ)
+        self.select.setToolTip(select_tip(value, used, current, output, load_bt) if known else NOT_READ)
         self.select.warn(known and not used and load_bt)        # the factory state: Bass/Treble switched on
         self.edit.setVisible(not clear)
         self.store.setVisible(not clear)

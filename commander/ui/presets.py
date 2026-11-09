@@ -2,10 +2,10 @@
 
     the output's name   Load B/T, then Manual and Temp: this output's own, kept by the device rather than the user
     USER                the twenty slots, shared by all outputs
-    FACTORY             Clear
+    FACTORY             Clear; and Rumble, on a model that has it (Model.rumble)
 
-A slot's row and Clear are seen before anything is done with them: under the mouse the row opens its preview beside
-the panel (the window does that, commander.ui.preview), which has Select, Edit and Store; the row is its tab
+A slot's row, Clear and Rumble are seen before anything is done with them: under the mouse the row opens its preview
+beside the panel (the window does that, commander.ui.preview), which has Select, Edit and Store; the row is its tab
 meanwhile, on the ground of the preview. A click on such a row does nothing. Manual and Temp, whose content cannot be
 seen without selecting them, are selected by a click on their row. The row that is selected on this output carries a
 dot; a slot selected on another output carries that output's letter.
@@ -37,14 +37,16 @@ from ..device import params as P
 from . import theme
 from .widgets import ATTACHED_GAP, GROUP_STYLE, INNER_GAP, TITLE_STYLE, Action, Dot, head, label_color
 
-MANUAL, TEMP, CLEAR = 0, 1, 22                   # EQ Preset Select; Preset n is n + 1
+MANUAL, TEMP, CLEAR, RUMBLE = 0, 1, 22, P.RUMBLE  # EQ Preset Select; Preset n is n + 1
+BUILT_IN = (CLEAR, RUMBLE)                       # presets that are no slot: Select only
 TAGS = {3: "L", 6: "P", 9: "I"}                  # output address -> its letter
 TIPS = {MANUAL: "This output's own EQ, apart from the presets.\n"
                 "After standby it holds what was selected then: a preset, Temp, or itself.",
         TEMP: "A selected preset, changed.\nStandby moves it into Manual.",
         CLEAR: "The factory state, all bands 0 dB.\n"
                "To reset a preset: select Clear, then Store in the preview of that preset.\n"
-               "Store takes this output's Bass/Treble into the preset too."}
+               "Store takes this output's Bass/Treble into the preset too.",
+        RUMBLE: "A rumble filter for a turntable: a high pass at 35 Hz, and -12 dB at 20 Hz."}
 NAME_RULE = "Up to %d signs: letters, digits, space and %s" % (P.NAME_LENGTH, " ".join(P.NAME_MARKS))
 OK_TIP = "Write this preset to the device as it is now"
 STALE_TIP = "This output has an earlier copy of this preset.\nSelect it again to load it as it is now."
@@ -118,7 +120,7 @@ class _Row(QWidget):
         self.panel, self.value, self.slot = panel, value, slot
         self.setFixedHeight(ROW_HEIGHT)
         self.setAttribute(Qt.WA_StyledBackground)
-        self.previewable = slot is not None or value == CLEAR      # seen first, in its preview
+        self.previewable = slot is not None or value in BUILT_IN   # seen first, in its preview
         self.setCursor(Qt.ArrowCursor if self.previewable else Qt.PointingHandCursor)
         self.dot = Dot()                         # selected on this output
         self.busy = False                        # being written to the device
@@ -216,7 +218,7 @@ class _Row(QWidget):
 class PresetPanel(QWidget):
     selected = Signal(int)                       # an EQ Preset Select value
     finished = Signal(bool)                      # OK (True) or Cancel in the edit stand
-    peeked = Signal(int)                         # the mouse came on a slot's row or Clear: its EQ Preset Select value
+    peeked = Signal(int)                         # the mouse came on a previewable row: its EQ Preset Select value
 
     def __init__(self, load_bt):
         super().__init__()
@@ -236,7 +238,9 @@ class PresetPanel(QWidget):
         for n in range(1, 21):
             self._add(lay, _Row(self, n + 1, n))
         self._group(lay, "FACTORY")
-        self._add(lay, _Row(self, CLEAR, number=21))           # RME counts Clear as the 21st entry
+        self._add(lay, _Row(self, CLEAR, number=21))           # RME counts Clear as the 21st entry, Rumble the 22nd
+        self._add(lay, _Row(self, RUMBLE, number=22))
+        self.rows[RUMBLE].hide()
         lay.addStretch()
 
     def peek(self, value):
@@ -289,7 +293,7 @@ class PresetPanel(QWidget):
                 named = bool(name)
                 name = name or ("Preset %d" % row.slot if s is None and not edited else "no name")
                 m = mark(s)
-            shared = row.slot is not None or value == CLEAR
+            shared = row.slot is not None or value in BUILT_IN
             tags = [tags_of[o] for o, v in chosen.items() if o != out and v == value] if shared else []
             row.set_state(name, named and (ready or edited), m, ready and chosen.get(out) == value, tags, enabled,
                           busy, describe(issues[row.slot]) if row.slot in issues else "", edited,

@@ -44,9 +44,10 @@ from . import params as P
 # ad_filter_fixed_from: from this rate on the analog input uses one AD Filter, Slow, whatever is chosen
 # sources: the names of Source: of Line Out ("line"), of Phones 3/4 ("phones"; "phones_ex" on an ADI-2/4 Pro EX),
 #   and in Basic Mode DAC ("dac"). None for one input of the whole device, params.INPUTS
+# rumble: it has Rumble, a preset built in behind Clear (params.RUMBLE)
 class Model(namedtuple("Model", "id name port supported tested outputs tags controlled separate borrowed no_bt_from "
                                 "one_eq_from active ref_levels ref_dbu shared_ref_level da_filters choices input "
-                                "input_ex ad_filter_fixed_from sources")):
+                                "input_ex ad_filter_fixed_from sources rumble")):
     __slots__ = ()
 
     def __hash__(self):                          # a model is its device ID
@@ -56,7 +57,7 @@ class Model(namedtuple("Model", "id name port supported tested outputs tags cont
 DAC =Model(0x71, MODEL, "ADI-2 DAC", True, True, ("Line Out", "Phones 1/2", "Phones 3/4 · IEM"), ("L", "P", "I"),
             (3, 6, 9), (), {}, 705600, None, ((3,), (6,), (9,), ()),
             ref_levels=P.REF_LEVELS, ref_dbu=P.REF_DBU, shared_ref_level=None, da_filters=P.DA_FILTERS,
-            choices={}, input=None, input_ex={}, ad_filter_fixed_from=None, sources=None)
+            choices={}, input=None, input_ex={}, ad_filter_fixed_from=None, sources=None, rumble=False)
 
 _FILTERS = ["SD Sharp", "SD Slow", "Sharp", "Slow"]
 _PHONES = ["Lo-Power", "Hi-Power"]
@@ -81,7 +82,7 @@ PRO = Model(0x72, "ADI-2 Pro", "ADI-2 Pro", True, False, ("Line Out", "Phones 1/
                    P.DC_FILTER: P.Choices(["Auto", "ADC", "RME", "None"])},
             input_ex={}, ad_filter_fixed_from=352800,
             sources={"line": _INPUTS[:4], "phones": _INPUTS + _USB,
-                     "dac": ["Auto", "AES", "SPDIF coax", "Optical", "Analog"] + _USB})
+                     "dac": ["Auto", "AES", "SPDIF coax", "Optical", "Analog"] + _USB}, rumble=False)
 PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", borrowed={}, one_eq_from=705600,
                       sources={**PRO.sources, "phones_ex": _INPUTS + _USB + ["ADAT 3/4"]},
                       ref_levels={3: ["+1 dBu", "+7 dBu", "+13 dBu", "+19 dBu", "+24 dBu"],
@@ -96,7 +97,7 @@ PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", borrowed={}, o
                                 P.DC_FILTER: P.Choices(["ADC", "RME", "None"]),
                                 P.RIAA_MODE: P.Choices(["Off", "0 dB"] + _RIAA),
                                 P.BAL_IMPEDANCE: P.Choices(["94 kΩ", "47 kΩ"])},
-                      ad_filter_fixed_from=705600)
+                      ad_filter_fixed_from=705600, rumble=True)
 MODELS = (DAC, PRO, PRO_24)
 BY_ID = {m.id: m for m in MODELS}
 

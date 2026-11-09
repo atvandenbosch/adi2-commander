@@ -9,10 +9,10 @@ part is a table headed by its own switch, in the corner above the row names, on 
 a state is shown once, where it is set. Room between the parts groups them: less between the two channels than
 between the EQ, Bass/Treble and Loudness.
 
-A preset's row, or Clear, under the mouse opens its preview (PresetPreview) just past the names in the presets panel,
-joined to the row as its tab, with Select, Edit and Store; the row of its actions lies level with the row where there
-is room. It stays open while the mouse is on the row, on the preview, or between them, follows the mouse to another
-such row, and closes when an action is clicked.
+A preset's row, Clear or Rumble under the mouse opens its preview (PresetPreview) just past the names in the presets
+panel, joined to the row as its tab, with Select, Edit and Store; the row of its actions lies level with the row where
+there is room. It stays open while the mouse is on the row, on the preview, or between them, follows the mouse to
+another such row, and closes when an action is clicked.
 
 Edit in a preset's preview opens the edit stand: the stage and the column show the preset (a Draft) instead of the
 output's EQ, and all else lies under a veil (Scrim), out of reach, with the row joined to them as their tab. The title
@@ -580,8 +580,10 @@ class MainWindow(QMainWindow):
 
     def set_model(self, model):
         """Lay the window out for a model: the names of the outputs; the panel of the output's other settings, where
-        Commander does not control them on it, is grey and cannot be opened; the tabs: show_tabs."""
+        Commander does not control them on it, is grey and cannot be opened; Rumble in the presets panel where the
+        model has it; the tabs: show_tabs."""
         self.model = model
+        self.presets.rows[P.RUMBLE].setVisible(model.rumble)
         self.graph.no_bt_from = self.loudness_graph.no_bt_from = self.preview.no_bt_from = model.no_bt_from
         for i, name in enumerate(model.outputs):
             self.tabs.setTabText(i, name)
@@ -1015,11 +1017,11 @@ class MainWindow(QMainWindow):
 
     # -- a preset's preview ------------------------------------------------------------------------
     def previewable(self, row):
-        """A slot's row or Clear that can show its preview now: not while it cannot be clicked."""
+        """A row that can show its preview now (a slot's, Clear, Rumble): not while it cannot be clicked."""
         return row.previewable and row.isEnabled() and not row.edited
 
     def open_preview(self, value):
-        """A slot's row or Clear came under the mouse: its preview, beside it."""
+        """A slot's row, Clear or Rumble came under the mouse: its preview, beside it."""
         row = self.presets.rows[value]
         if row is self.preview_row or self.draft is not None or not self.previewable(row):
             return
@@ -1066,7 +1068,8 @@ class MainWindow(QMainWindow):
         root, row, preview = self.centralWidget(), self.preview_row, self.preview
         preview.resize(preview.sizeHint())
         zone = QRect(self.display.mapTo(root, QPoint(0, 0)), self.display.size())
-        names = max(r.mapTo(root, QPoint(r.text_end(r is row), 0)).x() for r in self.presets.rows.values())
+        names = max(r.mapTo(root, QPoint(r.text_end(r is row), 0)).x() for r in self.presets.rows.values()
+                    if r.isVisible())
         level = row.mapTo(root, QPoint(0, row.height())).y() + RISE - preview.height()
         top = level if level >= zone.top() + PREVIEW_INSET else row.mapTo(root, QPoint(0, 0)).y() - RISE
         at = QPoint(min(names + PREVIEW_GAP, zone.left() + PREVIEW_INSET), top)

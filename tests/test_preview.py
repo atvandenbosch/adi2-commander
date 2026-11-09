@@ -1,6 +1,6 @@
-"""A preset's preview against the simulator: opened by the mouse on a slot's row or Clear, not by a click; beside the
-panel, joined to its row; following the mouse; its graph; Select, and what it says it does; an unused slot, Clear,
-a slot not read yet; and when there is none. Select, Store and Edit as actions on the device: test_preset_panel."""
+"""A preset's preview against the simulator: opened by the mouse on a slot's row, Clear or Rumble, not by a click;
+beside the panel, joined to its row; following the mouse; its graph; Select, and what it says it does; an unused slot,
+Clear, Rumble, a slot not read yet; and when there is none. Select, Store and Edit as actions on the device: test_preset_panel."""
 
 import unittest
 
@@ -10,9 +10,10 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from commander.device import params as P
+from commander.device.models import PRO_24
 from commander.ui import theme
 from commander.ui.graph import side_color
-from commander.ui.presets import CLEAR, MANUAL, TEMP
+from commander.ui.presets import CLEAR, MANUAL, RUMBLE, TEMP
 from commander.ui.preview import EDIT_FREE_TIP, EDIT_TIP, NOT_READ, PAD
 from commander.ui.scrim import RISE
 from commander.ui.window import PREVIEW_GAP
@@ -74,7 +75,7 @@ class Preview(WindowTest):
     def test_just_past_the_names_its_actions_level_with_the_row(self):
         row, preview = self.row(4), self.open(4)                              # Preset 3
         left = self.at(preview, 0, 0).x()
-        names = max(self.at(r, r.text_end(False), 0).x() for r in self.win.presets.rows.values())
+        names = max(self.at(r, r.text_end(False), 0).x() for r in self.win.presets.rows.values() if r.isVisible())
         self.assertEqual(left, names + PREVIEW_GAP)
         self.assertLess(left, self.at(self.win.presets_area, self.win.presets_area.width(), 0).x())   # over the panel
         middle = self.at(row, 0, row.height() // 2).y()
@@ -115,7 +116,7 @@ class Preview(WindowTest):
         self.assertEqual(row.tags.text(), "P")
         preview = self.open(4)
         self.assertGreaterEqual(self.at(preview, 0, 0).x(), self.at(row.tags, row.tags.width(), 0).x())
-        names = max(self.at(r, r.text_end(False), 0).x() for r in self.win.presets.rows.values())
+        names = max(self.at(r, r.text_end(False), 0).x() for r in self.win.presets.rows.values() if r.isVisible())
         self.assertEqual(self.at(self.open(3), 0, 0).x(), names + PREVIEW_GAP)   # another row's tags: not counted
 
     def test_it_follows_the_mouse(self):
@@ -210,6 +211,9 @@ class Preview(WindowTest):
         self.open(3)
         self.assertFalse(self.amber(select))
 
+    def test_rumble_only_where_the_model_has_it(self):
+        self.assertFalse(self.row(RUMBLE).isVisible())
+
     def test_clear_has_select_only_amber_where_it_switches_bass_treble_on(self):
         preview = self.open(CLEAR)
         self.assertTrue(preview.select.isVisible())
@@ -253,6 +257,41 @@ class Preview(WindowTest):
         self.sim.power(False)
         self.spin(1500)
         self.assertIsNone(self.win.preview_row)
+
+
+class Rumble(WindowTest):
+    model = PRO_24
+
+    def setUp(self):
+        super().setUp()
+        for _ in range(120):
+            if len(self.session.slots) == 20:
+                break
+            self.spin(100)
+        self.win.presets_tab.set_open(True)
+        self.spin(50)
+
+    def test_behind_clear_with_select_only(self):
+        rows = self.win.presets.rows
+        y = lambda w: w.mapTo(self.win.presets, QPoint(0, 0)).y()            # noqa: E731
+        self.assertTrue(rows[RUMBLE].isVisible())
+        self.assertEqual((rows[RUMBLE].number.text(), rows[RUMBLE].name.text()), ("22", "Rumble"))
+        self.assertGreater(y(rows[RUMBLE]), y(rows[CLEAR]))
+        hover(self.win, rows[RUMBLE])
+        self.spin(20)
+        preview = self.win.preview
+        self.assertTrue(preview.isVisible() and preview.select.isVisible())
+        self.assertFalse(preview.edit.isVisible() or preview.store.isVisible())
+        self.assertTrue(preview.select.toolTip().startswith("Select loads Rumble on Line Out"))
+        self.assertEqual(len(preview.graph.eq), 1)                            # Dual EQ off
+        db = preview.graph.eq[0][1]
+        self.assertLess(db[0], -12)                                           # 20 Hz: the high pass and -12 dB
+        self.assertAlmostEqual(db[-1], 0, places=2)
+        QTest.mouseClick(preview.select, Qt.LeftButton)
+        self.settle()
+        self.assertEqual(self.sim.state[(4, 28)], RUMBLE)
+        self.assertEqual(self.sim.state[(4, 5)], 35)
+        self.assertTrue(rows[RUMBLE].dot.on)
 
 
 if __name__ == "__main__":
