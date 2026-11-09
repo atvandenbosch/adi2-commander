@@ -16,6 +16,7 @@ import unittest
 from commander import __version__
 from commander.conversion import eqfile as E
 from commander.device import filters as F
+from commander.device import models
 from commander.device import params as P
 from tests.support import DATA, TEN_FILTERS, dump_state
 
@@ -129,6 +130,19 @@ class RoundTrip(unittest.TestCase):
         self.assertEqual(eq.source, "apo")
         self.assertEqual(eq.skipped, [])
         self.assertGreaterEqual(len(eq.entries), 7)
+
+    def test_the_input_without_bass_treble(self):
+        dump = dump_state()
+        state = {(a - 3, i): v for (a, i), v in dump.items() if a in (LEFT, RIGHT) and i < P.BT_ENABLE}
+        state[P.INPUT_DUAL_EQ] = dump[(OUT, P.DUAL_EQ)]                # Line Out's EQ, on the input
+        text = E.write(state, P.INPUT_ADDRESS, 48000.0, model=models.PRO_24)
+        self.assertIn("\n# Device: RME ADI-2/4 Pro\n# Input: Analog In\n# Settings: EQ\n#\n", text)
+        self.assertNotIn("Bass/Treble", text)
+        eq = E.read(text)
+        self.assertEqual((eq.output, len(eq.entries)), ("Analog In", 10 if state[P.INPUT_DUAL_EQ] else 5))
+        self.assertIsNotNone(E.table(eq))
+        with self.assertRaises(ValueError):
+            E.write(state, OUT, 48000.0)                                 # an output without Bass/Treble
 
     def test_a_preset_names_itself_instead_of_the_output(self):
         text = E.write(dump_state(), OUT, 48000.0, preset=(3, "Studio"))

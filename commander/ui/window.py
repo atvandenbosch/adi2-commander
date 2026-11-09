@@ -296,7 +296,7 @@ class MainWindow(QMainWindow):
         self.source = ChosenRow()                        # as the selected row in the presets panel
         self.save_action, self.load_action = Action(), Action()
         self.save_action.setText("Save…")
-        self.save_action.setToolTip("Save the EQ of this output to a file")
+        self.save_action.setToolTip("Save this EQ to a file")
         self.save_action.clicked.connect(self.save_dialog)
         self.load_action.setText("Load…")
         self.load_action.setToolTip("Load filters (Equalizer APO, REW, other) or a curve into this output\n"
@@ -866,7 +866,7 @@ class MainWindow(QMainWindow):
 
     def channel_name(self, out):
         """The name of the output at address out as the model has it, or of the analog input."""
-        return P.channel(out)[0] if out == P.INPUT_ADDRESS else self.model.outputs[P.OUTPUT_ADDRESSES.index(out)]
+        return models.channel_name(self.model, out)
 
     def save_dialog(self):
         what = "Preset %d" % self.draft.slot if self.draft is not None else self.output_name()
@@ -1391,7 +1391,7 @@ class MainWindow(QMainWindow):
                            "This replaces the %s channel's EQ." % (name, ("right", "left")[side]) if dual else
                            "Make each channel's EQ independent (Dual EQ on).\nBoth start from this EQ.")
         has_bt = P.has_bt(out)
-        self.save_action.setEnabled(ready and has_bt)
+        self.save_action.setEnabled(ready)
         self.load_action.setEnabled(ready and self.editable() and has_bt)
         live = self.session.ready()
         load_bt = live and self.session.state.get(self.session.at((left, P.LOAD_BT))) == 1

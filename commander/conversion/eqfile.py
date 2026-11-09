@@ -75,25 +75,26 @@ GROUP_HEAD = re.compile(r"^#\s*(EQ Left and Right|EQ Left|EQ Right|Bass/Treble)(
 ROW = re.compile(r"^#\s+(Band [1-5]|Bass|Treble)\s+(?:(Peak|Low Shelf|High Shelf|High Pass|High Cut)\s+)?"
                  r"(\S+) Hz\s+(\S+) dB\s+Q (\S+)")
 FS_NOTE = re.compile(r"^#\s*Converted to RBJ Cookbook biquads at (\S+) kHz")
-OUTPUT_NOTE = re.compile(r"^#\s*Output:\s*(.+?)\s*$")
+OUTPUT_NOTE = re.compile(r"^#\s*(?:Output|Input):\s*(.+?)\s*$")
 
 
 # -- writing ---------------------------------------------------------------------------------------
 
 def write(state, out, fs=F.FS, now=None, preset=None, model=models.DAC):
-    """The EQ of one output as a file: a header (tool, date, device, where the settings come from, which settings),
-    the settings as a table for people (and for Commander to load back exactly), then the same converted to RBJ
-    Cookbook biquads in the format of Equalizer APO. A channel with EQ Enable off, and Bass/Treble with B/T Enable
-    off, are '(off)' on their group in the table and OFF for APO, which skips them. The column of types is as wide
-    as the longest type in it. preset: (slot, name) when state holds a preset being edited rather than the output.
-    model: the device, with its names of the outputs. Raises ValueError when the state of the output is incomplete."""
-    k = next(k for k, o in enumerate(P.OUTPUTS) if o[1] == out)
-    (_, _, left, right), name = P.OUTPUTS[k], model.outputs[k]
+    """The EQ of one output, or of the input, as a file: a header (tool, date, device, where the settings come from,
+    which settings), the settings as a table for people (and for Commander to load back exactly), then the same
+    converted to RBJ Cookbook biquads in the format of Equalizer APO. A channel with EQ Enable off, and Bass/Treble
+    with B/T Enable off, are '(off)' on their group in the table and OFF for APO, which skips them. The column of
+    types is as wide as the longest type in it. preset: (slot, name) when state holds a preset being edited rather
+    than the output. model: the device, with its names of the outputs. The input has no Bass/Treble: its EQ comes
+    without, a preset being edited on it with. Raises ValueError when the state of the output is incomplete."""
+    _, _, left, right = P.channel(out)
+    name = models.channel_name(model, out)
     dual = state.get(P.dual_eq_key(out))
     sets = [("L", left), ("R", right)] if dual == 1 else [("all", left)]
     bands = {ch: F.band_filters(state, addr, left) for ch, addr in sets}
     bt = F.bt_filters(state, left)
-    if dual is None or not all(bands.values()) or not bt:
+    if dual is None or not all(bands.values()) or not bt and P.has_bt(out):
         raise ValueError("EQ of %s not read yet" % name)
     when = (now or datetime.datetime.now()).strftime("%Y-%m-%d %H:%M")
     group = {"L": "EQ Left", "R": "EQ Right", "all": "EQ Left and Right"}
@@ -106,9 +107,9 @@ def write(state, out, fs=F.FS, now=None, preset=None, model=models.DAC):
         slot, label = preset
         source = "# Preset: %d" % slot + (" (%s)" % label if label else "")
     else:
-        source = "# Output: " + name.replace("·", "-")
+        source = "# %s: %s" % ("Output" if P.has_bt(out) else "Input", name.replace("·", "-"))
     lines = ["%s %s" % (HEADER, __version__), "# Date: " + when, "# Device: RME " + model.name, source,
-             "# Settings: EQ, Bass/Treble", "#"]
+             "# Settings: EQ, Bass/Treble" if bt else "# Settings: EQ", "#"]
     shown = None
     for _, head, label, typ, flt in rows:
         if head != shown:

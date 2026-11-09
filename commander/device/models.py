@@ -102,6 +102,11 @@ MODELS = (DAC, PRO, PRO_24)
 BY_ID = {m.id: m for m in MODELS}
 
 
+def channel_name(model, out):
+    """The name of the output at address out as model has it, or of the analog input."""
+    return P.channel(out)[0] if out == P.INPUT_ADDRESS else model.outputs[P.OUTPUT_ADDRESSES.index(out)]
+
+
 def probe_order(port_name):
     """All models, the one the port name suggests first."""
     hinted = [m for m in MODELS if m.port in port_name]

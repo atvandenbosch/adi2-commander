@@ -39,13 +39,16 @@ def val(name, value):
 
 
 def write(state, out, name, model=models.DAC, revision=None):
-    """The EQ of output out (or of the preset being edited, held at its addresses) as a preset file named name.
-    revision: the device's, or None when not known, which leaves it out. Raises ValueError when the state of the
+    """The EQ of output out, or of the input (or of the preset being edited, held at its addresses), as a preset file
+    named name. The input has no Bass/Treble: the file gets Bass/Treble at 0 dB, switched on, as a preset stored from
+    it. revision: the device's, or None when not known, which leaves it out. Raises ValueError when the state of the
     output is incomplete."""
     _, out, left, right = P.channel(out)
+    if not P.has_bt(out):
+        state = {**{(left, i): v for i, v in {P.BT_ENABLE: 1, **P.FACTORY_BT}.items()}, **state}
     keys = [(left, i) for i in BAND_INDICES + sorted(BT_NAMES) + [P.LOAD_BT]] + [(right, i) for i in BAND_INDICES]
     if any(k not in state for k in keys + [P.dual_eq_key(out)]):
-        raise ValueError("EQ of %s not read yet" % model.outputs[P.OUTPUT_ADDRESSES.index(out)])
+        raise ValueError("EQ of %s not read yet" % models.channel_name(model, out))
     root = ROOT[model.id]
     lines = ["\t<%s>" % root, "\t\t<General>", '\t\t\t<val e="Version" v="2"/>']
     if revision is not None:

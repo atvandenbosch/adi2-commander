@@ -1025,6 +1025,15 @@ class AnalogIn(WindowTest):
         self.win.tabs.setCurrentIndex(tab(3))
         self.assertTrue(clear.toolTip().endswith("Store takes this output's Bass/Treble into the preset too."))
 
+    def test_save_names_the_input(self):
+        self.assertTrue(self.win.save_action.isEnabled())
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "eq.txt")
+            self.win.save_file(path)
+            with open(path, encoding="utf-8") as f:
+                head = f.read(300)
+        self.assertIn("# Device: RME ADI-2/4 Pro\n# Input: Analog In\n# Settings: EQ\n", head)
+
     def test_a_preset_opened_here_shows_its_bass_treble(self):
         self.win.edit_preset(2)
         self.spin(50)

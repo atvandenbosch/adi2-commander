@@ -91,6 +91,15 @@ class PresetFile(unittest.TestCase):
         self.assertTrue(R.write(state, OUT, "x", models.PRO_24, 1).startswith("	<ADI-24PROSE>"))
         self.assertNotIn("Revision", R.write(state, OUT, "x", models.PRO))           # not known: left out
 
+    def test_the_input_with_bass_treble_at_0_db(self):
+        """As a preset stored from the input: Bass/Treble 0 dB and switched on."""
+        line = output_with_slot(1)
+        state = {(a - 3, i): v for (a, i), v in line.items() if a in (LEFT, RIGHT) and not 20 <= i <= 26}
+        state.update({(0, 8): line[(OUT, 11)], (1, 27): line[(LEFT, 27)]})
+        line.update({(LEFT, 20): 1, (LEFT, 21): 0, (LEFT, 22): 85, (LEFT, 23): 9, (LEFT, 24): 0, (LEFT, 25): 6500,
+                     (LEFT, 26): 7})
+        self.assertEqual(R.write(state, 0, "x", models.PRO_24), R.write(line, OUT, "x", models.PRO_24))
+
     def test_incomplete(self):
         state = output_with_slot(1)
         del state[(RIGHT, 18)]
