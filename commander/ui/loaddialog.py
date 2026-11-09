@@ -23,6 +23,9 @@ follows the device when Dual EQ changes there, and keeps OK off while the device
 
 Into a preset being edited (the window's edit stand) it works the same, on the preset instead of the device, and says
 so in the head of Output.
+
+Into the analog input, which has no Bass/Treble, the Bass and Treble rows of a file cannot be used, a fit cannot
+include Bass/Treble, and Output has no Bass/Treble table. A preset being edited has Bass/Treble, also on the input.
 """
 
 import itertools
@@ -66,6 +69,7 @@ BODY_MARGIN = 12                                 # px above and below the column
 ZONE_TOP = 6                                     # px above the legend in the graph's zone, as the main window's
 UNDEFINED = "—"
 UNDEFINED_TIP = "Not set: factory default"
+NO_BT = "%s has no Bass/Treble"                   # why a Bass or Treble row cannot be used, with the name
 STATE_ROLE, WARN_ROLE, MARK_ROLE = Qt.UserRole + 1, Qt.UserRole + 2, Qt.UserRole + 3
 AGAIN_ICON = 14                                  # px, the round arrow
 BOX, LINE_H = 22, 22                             # px: the check box's part of the margin; a line of the file
@@ -674,6 +678,7 @@ class LoadDialog(QDialog):
         self.setAcceptDrops(True)                           # another file dropped on it: that file instead
         default, _, self.left, self.right = P.channel(out)
         self.name = default if name is None else name
+        self.has_bt = (self.left, P.BASS[0]) in session.state    # the input has none; a preset being edited has
         self.dual = session.dual(out)
         self.connected = session.ready()
         self.mode, self.origin, self.tone = FIT, I.EXTERNAL, False
@@ -871,6 +876,7 @@ class LoadDialog(QDialog):
         lay.addWidget(self.band_views[1])
         lay.addSpacing(SECTION_GAP)
         lay.addWidget(self.bt_view)
+        self.bt_view.setVisible(self.has_bt)
         lay.addStretch(1)
         width = self.band_views[0].width()
         tables.setFixedWidth(width)
@@ -1033,7 +1039,14 @@ class LoadDialog(QDialog):
         return ["L", "R"] if self.dual else ["all"]
 
     def usable(self):
-        return I.items(self.eq, self.origin, self.fs)
+        """The lines that can be used, and why the others cannot: Bass and Treble rows not where there is no
+        Bass/Treble."""
+        usable, why = I.items(self.eq, self.origin, self.fs)
+        if not self.has_bt:
+            for line in [n for n, i in usable.items() if i.target in I.TONE]:
+                del usable[line]
+                why[line] = NO_BT % self.name
+        return usable, why
 
     def selection(self):
         """The lines checked: once the user has changed one, theirs, with Map and Fit alike; until then the proposal
@@ -1240,7 +1253,7 @@ class LoadDialog(QDialog):
         self.origin_box.setToolTip("ADI-2: the table loads\nExternal: the Filter lines load, as Cookbook filters"
                                    if commander else "ADI-2: the numbers as the device has them\n"
                                    "External: Cookbook filters, as filter files usually mean them")
-        self.tone_box.setVisible(self.mode == FIT)
+        self.tone_box.setVisible(self.mode == FIT and self.has_bt)
         allowed = self.tone_allowed()
         self.tone_box.setChecked(self.tone and allowed)
         self.tone_box.setEnabled(allowed)
@@ -1256,7 +1269,7 @@ class LoadDialog(QDialog):
             self.fs_box.setItemData(i, bold if self.fs_box.itemData(i) == self.live else None, Qt.FontRole)
 
     def blocks(self):
-        return self.eq_blocks() + ["BT"]
+        return self.eq_blocks() + (["BT"] if self.has_bt else [])
 
     def defined(self, block):
         return bool(self.outcome.get(block))

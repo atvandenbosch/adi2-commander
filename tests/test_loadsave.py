@@ -15,7 +15,7 @@ from commander.conversion import eqfile as E
 from commander.conversion import presetfile as R
 from commander.device import codec
 from commander.device import params as P
-from commander.device.models import PRO
+from commander.device.models import PRO, PRO_24
 from commander.ui import loaddialog as L
 from commander.ui import theme
 from commander.ui import window as W
@@ -428,6 +428,43 @@ class ProLoad(LoadTest):
         written = {a for m in self.sim.received[since:] if m[5] == 0x02
                    for a, *_ in [codec.decode_triplet(*t) for t in codec.parameter_triplets([m])]}
         self.assertLessEqual(written, {9, 10, 11})
+
+
+class InputLoad(LoadTest):
+    """Load into the analog input of an ADI-2/4 Pro: its bands only, without Bass/Treble."""
+
+    model = PRO_24
+
+    def setUp(self):
+        super().setUp()
+        self.session.set((LEFT, P.BASS[0]), 6)                            # Line Out's Bass, in its file
+        for i, v in ((4, 4), (5, 250), (7, -6), (8, 1200)):                # bands 1 and 2
+            self.session.set((LEFT, i), v)
+        self.settle()
+        self.line_out = self.file("line.txt", E.write(self.session.state, OUT, 48000.0, model=PRO_24))
+        self.win.tabs.setCurrentIndex(tab(0))
+
+    def test_the_bands_of_a_file_without_its_bass_treble(self):
+        def check(dialog):
+            usable, why = dialog.usable()
+            self.assertEqual((dialog.name, dialog.has_bt, dialog.mode), ("Analog In", False, L.MAP))
+            self.assertEqual(list(why.values()).count("Analog In has no Bass/Treble"), 2)
+            self.assertFalse(any(i.target in ("Bass", "Treble") for i in usable.values()))
+            self.assertFalse(dialog.bt_view.isVisible())
+            self.assertNotIn("BT", dialog.blocks())
+            dialog.set_mode(L.FIT)
+            self.assertFalse(dialog.tone_box.isVisible())
+            dialog.set_mode(L.MAP)
+        self.check = check
+        since = len(self.sim.received)
+        self.win.load_file(self.line_out)
+        self.settle()
+        self.assertEqual([self.sim.state[(1, i)] for i in range(3, 20)],
+                         [self.sim.state[(LEFT, i)] for i in range(3, 20)])
+        self.assertEqual([k for k in self.sim.state if k[0] == 1 and 20 <= k[1] <= 26], [])
+        written = {a for m in self.sim.received[since:] if m[5] == 0x02
+                   for a, *_ in [codec.decode_triplet(*t) for t in codec.parameter_triplets([m])]}
+        self.assertLessEqual(written, {1, 2})
 
 
 if __name__ == "__main__":

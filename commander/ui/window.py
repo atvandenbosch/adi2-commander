@@ -299,7 +299,7 @@ class MainWindow(QMainWindow):
         self.save_action.setToolTip("Save this EQ to a file")
         self.save_action.clicked.connect(self.save_dialog)
         self.load_action.setText("Load…")
-        self.load_action.setToolTip("Load filters (Equalizer APO, REW, other) or a curve into this output\n"
+        self.load_action.setToolTip("Load filters (Equalizer APO, REW, other) or a curve into this EQ\n"
                                     "Or drop a filter file or a curve on the window.")
         self.load_action.clicked.connect(self.load_dialog)
         self.eq_switches = [Switch(name) for name in EQ_OWN]     # colours as in the graph
@@ -946,7 +946,7 @@ class MainWindow(QMainWindow):
 
 
     def dragEnterEvent(self, e):
-        if self.eq().ready() and self.editable() and P.has_bt(self.output[1]) and dropped_file(e.mimeData()):
+        if self.eq().ready() and self.editable() and dropped_file(e.mimeData()):
             e.acceptProposedAction()
 
     def dropEvent(self, e):
@@ -1392,7 +1392,7 @@ class MainWindow(QMainWindow):
                            "Make each channel's EQ independent (Dual EQ on).\nBoth start from this EQ.")
         has_bt = P.has_bt(out)
         self.save_action.setEnabled(ready)
-        self.load_action.setEnabled(ready and self.editable() and has_bt)
+        self.load_action.setEnabled(ready and self.editable())
         live = self.session.ready()
         load_bt = live and self.session.state.get(self.session.at((left, P.LOAD_BT))) == 1
         if editing:
