@@ -15,7 +15,7 @@ from commander.conversion import presetfile as R
 from commander.device import params as P
 from commander.ui import theme
 from commander.ui.presets import NAME_RULE
-from tests.gui import WindowTest, tooltip_color
+from tests.gui import WindowTest, tab, tooltip_color
 
 
 class EditStand(WindowTest):
@@ -59,7 +59,7 @@ class EditStand(WindowTest):
         self.assertFalse(win.load_bt.isEnabled())
         self.assertFalse(win.presets.rows[4].isEnabled())
         QTest.keyClick(win, Qt.Key_Tab, Qt.ControlModifier)                   # no other output meanwhile
-        self.assertEqual(win.tabs.currentIndex(), 0)
+        self.assertEqual(win.tabs.currentIndex(), tab(3))
         for w in (win.band_views[0], win.bt_view, self.cancel(), win.preset_name, win.save_action):
             self.assertTrue(w.isEnabled() and w.isVisible())
         self.assertTrue(self.ok().isVisible())                                # disabled until something changes

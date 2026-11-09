@@ -12,7 +12,7 @@ from commander.device import params as P
 from commander.device.models import PRO_24
 from commander.ui.output import VolumeStepper
 from commander.ui.widgets import Action
-from tests.gui import WindowTest
+from tests.gui import OUTPUT_TABS, WindowTest, tab
 
 
 class OutputSettings(WindowTest):
@@ -87,7 +87,7 @@ class OutputSettings(WindowTest):
     def test_dim_only_on_the_active_output(self):
         dim = self.panel.options[P.DIM]
         self.assertTrue(dim.isEnabled())                                        # Line Out, active
-        self.win.tabs.setCurrentIndex(1)                                        # Phones, not active
+        self.win.tabs.setCurrentIndex(tab(6))                                        # Phones, not active
         self.assertFalse(dim.isEnabled())
         self.assertIn("Dim works on the active output only.", dim.toolTip())
         self.sim.plug(6)
@@ -353,7 +353,7 @@ class OutputSettings(WindowTest):
         QTest.mouseClick(self.panel.options[P.AUTO_REF_LEVEL], Qt.LeftButton)
         self.assertEqual(name(), "Volume (dB)")
         self.settle()
-        self.win.tabs.setCurrentIndex(2)                                        # IEM: no Auto Ref Level
+        self.win.tabs.setCurrentIndex(tab(9))                                        # IEM: no Auto Ref Level
         self.assertEqual(name(), "Volume (dB)")
 
     def test_ref_level_readable_while_auto_ref_level_chooses_it(self):
@@ -411,7 +411,7 @@ class OutputSettings(WindowTest):
         self.assertTrue(s.toolTip().startswith("Adjust with"))
 
     def test_hi_power_in_amber_before_headphones_are_plugged_in(self):
-        self.win.tabs.setCurrentIndex(1)                                        # Phones: Lo-Power, -10.0, no plug
+        self.win.tabs.setCurrentIndex(tab(6))                                        # Phones: Lo-Power, -10.0, no plug
         ref = self.panel.steppers[P.REF_LEVEL]
         self.assertFalse(ref.warned)
         self.session.set((6, P.REF_LEVEL), 1)                                   # Hi-Power, above -15 dB
@@ -430,21 +430,21 @@ class OutputSettings(WindowTest):
         self.assertNotIn("Plugging in", ref.toolTip())
         self.sim.plug()
         self.spin(1100)
-        self.win.tabs.setCurrentIndex(0)                                        # only Phones
+        self.win.tabs.setCurrentIndex(tab(3))                                        # only Phones
         self.assertFalse(self.panel.steppers[P.REF_LEVEL].warned)
 
     def test_no_rear_trs_source(self):
-        for tab in range(3):
-            self.win.tabs.setCurrentIndex(tab)
+        for i in OUTPUT_TABS:
+            self.win.tabs.setCurrentIndex(i)
             self.assertFalse(self.panel.rows[P.REAR_TRS_SOURCE].isVisible())
 
     def test_iem_has_no_ref_level(self):
         rows = self.panel.rows
-        self.win.tabs.setCurrentIndex(1)
+        self.win.tabs.setCurrentIndex(tab(6))
         self.assertTrue(rows[P.REF_LEVEL].isVisible() and rows[P.AUTO_REF_LEVEL].isVisible())
         ref = self.panel.steppers[P.REF_LEVEL]
         self.assertEqual((ref.names, ref.text(ref.value) in P.REF_LEVELS[6]), (P.REF_LEVELS[6], True))
-        self.win.tabs.setCurrentIndex(2)
+        self.win.tabs.setCurrentIndex(tab(9))
         self.assertFalse(rows[P.REF_LEVEL].isVisible() or rows[P.AUTO_REF_LEVEL].isVisible())
         self.assertTrue(rows[P.VOLUME].isVisible())
 
@@ -590,7 +590,7 @@ class OutputSettings(WindowTest):
 
     def test_every_output_has_its_own(self):
         line = self.sim.state[(3, P.DA_FILTER)]
-        self.win.tabs.setCurrentIndex(1)
+        self.win.tabs.setCurrentIndex(tab(6))
         self.arrow(P.DA_FILTER, +1)
         self.settle()
         self.assertEqual((self.sim.state[(3, P.DA_FILTER)], self.sim.state[(6, P.DA_FILTER)]), (line, line + 1))

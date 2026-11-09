@@ -252,6 +252,7 @@ class ResponseGraph(pg.PlotWidget):
         self.hovered = None                      # key of the point under the mouse
         self.hovered_by_label = False            # ... through its label
         self.dual = True
+        self.has_bt = True                       # the output shown has Bass/Treble; the input has none
         self.visible = {"L": True, "R": True, "BT": True, "sum": True, "compare": False, "bands": True, "handles": True}
         self.emphasis = None                     # a legend item under the mouse: its curves light up
         self.held = None                         # the key of a point while the mouse button is down on it
@@ -379,6 +380,7 @@ class ResponseGraph(pg.PlotWidget):
         dual = self.dual = s.get(P.dual_eq_key(out)) == 1
         sides = [(0, left)] + ([(1, right)] if dual else []) if ready else []
         bt = self._bt_at(F.bt_filters(s, left), self.fs) if ready else []
+        self.has_bt = not ready or bool(bt)
         self._off = {(None, f.name) for f in bt if not f.active}     # set, but out of the path
         bypassed = ready and self.session.bypassed()
         bt = [f._replace(active=False) for f in bt] if bypassed else bt

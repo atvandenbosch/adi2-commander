@@ -9,6 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QEventLoop, QPoint, QSettings, QTimer   # noqa: E402
 from PySide6.QtWidgets import QApplication, QToolTip         # noqa: E402
 
+from commander.device import params as P                     # noqa: E402
 from commander.device.simulator import SimPort, SimulatedAdi2  # noqa: E402
 from commander.session import Session                        # noqa: E402
 from commander.ui import collector, theme                    # noqa: E402
@@ -25,6 +26,15 @@ def spin(ms):
     loop = QEventLoop()
     QTimer.singleShot(ms, loop.quit)
     loop.exec()
+
+
+
+def tab(out):
+    """The index of the tab of the output, or the input, at address out."""
+    return P.CHANNELS.index(P.channel(out))
+
+
+OUTPUT_TABS = [tab(out) for out in P.OUTPUT_ADDRESSES]
 
 
 def tooltip_color(widget):

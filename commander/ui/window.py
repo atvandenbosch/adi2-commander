@@ -50,7 +50,7 @@ from .legend import ITEM_PAD, Legend
 from .loaddialog import LoadDialog, read_file
 from .loudness import LoudnessGraph
 from .output import OutputPanel, shared_tip
-from .presets import ChosenRow, NameEditor, PresetPanel, SideTab
+from .presets import INPUT_TAG, ChosenRow, NameEditor, PresetPanel, SideTab
 from .preview import PresetPreview
 from .scrim import RISE, Scrim
 from . import untested
@@ -65,6 +65,8 @@ ACTIVE_TIP = "Active on the device: its display and volume knob are on this outp
 ACTIVE = "Active on the device"                 # the ADI-2 Pro and ADI-2/4 Pro
 ALWAYS_ACTIVE = "Always active on the device"
 NOT_YET = "Not yet available for the %s"          # with the model's name
+OUTPUT_TAB_TIP = "Show or hide the output"         # as SideTab says it
+INPUT_SETTINGS = "The settings of Analog In are in the input panel"
 # Phones 1/2 of an ADI-2 Pro and ADI-2/4 Pro, as the device uses it (Session.phones_1_2); None: not known yet. Grey,
 # its own tab says why; using the settings of another output, it shares that output's tab, which says how
 PHONES_MENU = "SETUP › Options › Phones on the device"
@@ -238,9 +240,11 @@ class MainWindow(QMainWindow):
         # top: output tabs; the connection is in the status bar
         self.model = models.DAC                          # the model the window is laid out for: the last connected
         self.status_shown = None                         # the device's status message the tabs show: show_tabs
-        self.tabs = QTabBar()
-        for name in self.model.outputs:
+        self.tabs = QTabBar()                            # a tab per channel of P.CHANNELS: Analog In, then the outputs
+        for name, _, _, _ in P.CHANNELS:
             self.tabs.addTab(name)
+        self.tabs.setCurrentIndex(P.CHANNELS.index(P.OUTPUTS[0]))
+        self.tabs.setTabVisible(P.CHANNELS.index(P.INPUT_CHANNEL), False)  # on a model with an analog input
         self.tabs.currentChanged.connect(self.set_output)
         self.tabs.setIconSize(QSize(DOT + DOT_GAP, DOT))
         self.no_dot = QIcon(dot_pixmap(theme.GOOD, True, alpha=0, gap=DOT_GAP))   # a dot's room, so no tab moves
@@ -536,7 +540,7 @@ class MainWindow(QMainWindow):
         session.on_stale.append(lambda outputs: self.refresh_presets())
         session.on_operation.append(self.on_operation)
         session.on_device_status.append(self.on_device_status)
-        self.set_output(0)
+        self.set_output(self.tabs.currentIndex())
         self.set_model(self.model)
         for v in self.band_views:
             v.fit(BAND_WIDTHS)
@@ -585,8 +589,8 @@ class MainWindow(QMainWindow):
         self.model = model
         self.presets.rows[P.RUMBLE].setVisible(model.rumble)
         self.graph.no_bt_from = self.loudness_graph.no_bt_from = self.preview.no_bt_from = model.no_bt_from
-        for i, name in enumerate(model.outputs):
-            self.tabs.setTabText(i, name)
+        for name, output in zip(model.outputs, P.OUTPUTS):
+            self.tabs.setTabText(P.CHANNELS.index(output), name)
         self.on_device_status(self.session.device_status)
 
     def on_connection(self, status, detail):
@@ -613,7 +617,8 @@ class MainWindow(QMainWindow):
         self.refresh()                                   # DSD bypasses the DSP: the switches, curves and cells follow
 
     def show_tabs(self):
-        """An output Commander does not control now has a grey tab that cannot be opened. Phones 1/2 of an ADI-2 Pro
+        """Analog In has a tab on a model with an analog input. An output Commander does not control now has a grey
+        tab that cannot be opened. Phones 1/2 of an ADI-2 Pro
         and ADI-2/4 Pro follows how the device uses it (Session.phones_1_2): its own tab with settings of its own,
         grey while it is off; using the settings of Line Out or, in Balanced Phones mode, of Phones 3/4, it shares
         that output's tab, named after both, the owner of the settings first. An output the device has active gets a
@@ -622,12 +627,15 @@ class MainWindow(QMainWindow):
         status = self.status_shown
         active = self.model.active[status.output] if status is not None else ()
         always = set.intersection(*map(set, self.model.active))
-        here = P.OUTPUTS[self.tabs.currentIndex()][1]   # before a hidden tab moves the window on
+        here = P.CHANNELS[self.tabs.currentIndex()][1]  # before a hidden tab moves the window on
         users = {}                                       # owner of the settings -> the output that uses them
         for _, out, _, _ in P.OUTPUTS:
             if self.session.follows(out) is not None:
                 users[self.session.follows(out)] = out
-        for i, (_, out, _, _) in enumerate(P.OUTPUTS):
+        for i, (_, out, _, _) in enumerate(P.CHANNELS):
+            if out == P.INPUT_ADDRESS:
+                self.tabs.setTabVisible(i, self.model.input is not None)
+                continue
             user = users.get(out)
             controlled = out in self.model.controlled or self.session.controls(out)
             self.tabs.setTabVisible(i, out not in users.values())
@@ -645,9 +653,10 @@ class MainWindow(QMainWindow):
                 why = None if controlled else NOT_YET % self.model.name
             self.tabs.setTabToolTip(i, "\n".join(t for t in (why, tip if on else None) if t))
         if here in users.values():                       # its settings are on the tab of their owner
-            self.tabs.setCurrentIndex(P.OUTPUT_ADDRESSES.index(self.session.follows(here)))
-        elif not self.tabs.isTabEnabled(self.tabs.currentIndex()):
-            self.tabs.setCurrentIndex(next(i for i in range(self.tabs.count()) if self.open_tab(i)))
+            self.tabs.setCurrentIndex(P.CHANNELS.index(P.channel(self.session.follows(here))))
+        elif not self.open_tab(self.tabs.currentIndex()):   # the first output that can be opened
+            self.tabs.setCurrentIndex(next(P.CHANNELS.index(o) for o in P.OUTPUTS
+                                           if self.open_tab(P.CHANNELS.index(o))))
 
     def open_tab(self, i):
         return self.tabs.isTabVisible(i) and self.tabs.isTabEnabled(i)
@@ -795,12 +804,17 @@ class MainWindow(QMainWindow):
                                            if self.open_tab(j % n)))
 
     def set_output(self, i):
-        self.output = P.OUTPUTS[i]
+        """The channel of tab i: an output, or Analog In, which has no Bass/Treble, no Loudness and no output
+        settings."""
+        self.output = P.CHANNELS[i]
         for m in self.band_models:
             m.set_output(self.output)
         self.bt_model.set_output(self.output)
         self.loudness_model.set_output(self.output)
-        self.output_panel.set_output(self.output)
+        if P.has_bt(self.output[1]):
+            self.output_panel.set_output(self.output)
+        else:
+            self.show_stage(loudness=False)
         self.refresh()
 
     def tab_to(self, view, direction):
@@ -848,7 +862,11 @@ class MainWindow(QMainWindow):
             eq.set_dual(out, True)
 
     def output_name(self):
-        return self.model.outputs[P.OUTPUTS.index(self.output)]
+        return self.channel_name(self.output[1])
+
+    def channel_name(self, out):
+        """The name of the output at address out as the model has it, or of the analog input."""
+        return P.channel(out)[0] if out == P.INPUT_ADDRESS else self.model.outputs[P.OUTPUT_ADDRESSES.index(out)]
 
     def save_dialog(self):
         what = "Preset %d" % self.draft.slot if self.draft is not None else self.output_name()
@@ -928,7 +946,7 @@ class MainWindow(QMainWindow):
 
 
     def dragEnterEvent(self, e):
-        if self.eq().ready() and self.editable() and dropped_file(e.mimeData()):
+        if self.eq().ready() and self.editable() and P.has_bt(self.output[1]) and dropped_file(e.mimeData()):
             e.acceptProposedAction()
 
     def dropEvent(self, e):
@@ -1054,11 +1072,12 @@ class MainWindow(QMainWindow):
             self.close_preview()
             return
         s, (_, _, left, _), name = self.session.state, self.output, self.output_name()
-        others = [o for o, (_, out, l, _) in zip(self.model.outputs, P.OUTPUTS)
+        others = [self.channel_name(out) for _, out, l, _ in P.CHANNELS
                   if l != left and self.session.controls(out) and s.get((l, P.EQ_PRESET_SELECT)) == row.value]
         self.preview.show_preset(row.value, self.session.slots.get(row.slot), name,
                                  s.get(self.session.at((left, P.LOAD_BT))) == 1,
-                                 s.get((left, P.EQ_PRESET_SELECT)) == row.value, self.graph.fs, others)
+                                 s.get((left, P.EQ_PRESET_SELECT)) == row.value, self.graph.fs, others,
+                                 P.has_bt(self.output[1]))
 
     def place_preview(self):
         """Just past the longest name in the panel, and past the tags of its own row, which stay in sight; the rest of
@@ -1210,7 +1229,7 @@ class MainWindow(QMainWindow):
         if not session.ready() or session.operating() or not d.changed():
             return ""
         lines = []
-        chosen = [name for name, (_, out, left, _) in zip(self.model.outputs, P.OUTPUTS)
+        chosen = [self.channel_name(out) for _, out, left, _ in P.CHANNELS
                   if session.controls(out) and live.get((left, P.EQ_PRESET_SELECT)) == d.slot + 1]
         if chosen:
             lines.append("Selected on %s: OK loads it there" % " and ".join(chosen))
@@ -1312,6 +1331,8 @@ class MainWindow(QMainWindow):
                                           "" if ready else "OK waits for the device: it is not connected")
         tags = {o: tag for tag, (_, o, _, _) in zip(self.model.tags, P.OUTPUTS)
                 if o in self.model.controlled or self.session.controls(o)}
+        if self.model.input is not None:
+            tags = {P.INPUT_ADDRESS: INPUT_TAG, **tags}
         self.presets.refresh(s, (self.output_name(),) + self.output[1:], self.session.slots, ready,
                              self.session.operation(), self.slot_issues, editing, tags)
         self.source.copy(self.presets.rows.get(s.get((left, P.EQ_PRESET_SELECT))) if ready and not editing else None,
@@ -1329,7 +1350,9 @@ class MainWindow(QMainWindow):
         self.eq_title.setText("PRESET" if editing else "EQ")
         for w in (self.preset_number, self.preset_name):
             w.setVisible(editing)
-        self.loudness_view.setVisible(not editing)       # no part of a preset
+        bt = P.has_bt(self.output[1])                    # the input has no Bass/Treble and no Loudness
+        self.bt_view.setVisible(bt or editing)           # a preset has Bass/Treble, also opened on the input
+        self.loudness_view.setVisible(bt and not editing)   # no part of a preset
         if not editing:
             return
         self.preset_number.setText(str(d.slot))
@@ -1367,8 +1390,9 @@ class MainWindow(QMainWindow):
             act.setToolTip("Apply the %s channel's EQ to both channels (Dual EQ off).\n"
                            "This replaces the %s channel's EQ." % (name, ("right", "left")[side]) if dual else
                            "Make each channel's EQ independent (Dual EQ on).\nBoth start from this EQ.")
-        self.save_action.setEnabled(ready)
-        self.load_action.setEnabled(ready and self.editable())
+        has_bt = P.has_bt(out)
+        self.save_action.setEnabled(ready and has_bt)
+        self.load_action.setEnabled(ready and self.editable() and has_bt)
         live = self.session.ready()
         load_bt = live and self.session.state.get(self.session.at((left, P.LOAD_BT))) == 1
         if editing:
@@ -1385,6 +1409,10 @@ class MainWindow(QMainWindow):
                                             " IEM\n(the device does so)."))
         shared = shared_tip(self.session, (left, P.LOAD_BT)) if live else None
         self.load_bt.show_state(load_bt, live and not editing, "\n".join(filter(None, (tip, shared))))
+        self.output_tab.setEnabled(has_bt and not editing)   # Analog In: its settings are in the input panel
+        self.output_tab.setToolTip(OUTPUT_TAB_TIP if has_bt else INPUT_SETTINGS)
+        self.output_area.setVisible(self.output_tab.open and has_bt)
+        self.show_panel_lines()
         self.refresh_presets()
         self.refresh_edit()
         self.input_panel.refresh()
@@ -1400,6 +1428,6 @@ class MainWindow(QMainWindow):
         self.graph_head.legend.setVisible(ready)
         self.graph_note.setText("No %s at %g kHz" % ("Loudness" if self.loudness_shown() else "Bass/Treble",
                                                      self.graph.fs / 1000)
-                                if ready and self.graph.fs >= self.model.no_bt_from else "")
+                                if ready and has_bt and self.graph.fs >= self.model.no_bt_from else "")
         self.graph_head.refit()                          # the legend and the note can change width
         self.show_signal()

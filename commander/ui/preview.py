@@ -58,10 +58,11 @@ def lines(content, fs, freqs):
     return eq, F.total_db(F.bt_filters(state, 13), freqs, fs)
 
 
-def store_tip(slot, stored, output, others):
+def store_tip(slot, stored, output, others, bt=True):
     """What Store does, a line each. slot: its number; stored: the slot as read, or None; others: the other outputs
-    that have the preset selected."""
-    lines = ["Store the current EQ of %s in Preset %d, Bass/Treble included" % (output, slot),
+    that have the preset selected; bt: this output has Bass/Treble (the input has none)."""
+    lines = ["Store the current EQ of %s in Preset %d, %s" % (output, slot, "Bass/Treble included" if bt else
+                                                               "with Bass/Treble at 0 dB"),
              "It replaces what the preset holds; the name stays" if stored is None else
              "It replaces what the graph shows; the name stays" if stored["used"] else
              "Preset %d is unused: it becomes used, with the name it shows" % slot]
@@ -70,8 +71,9 @@ def store_tip(slot, stored, output, others):
     return "\n".join(lines)
 
 
-def select_tip(value, used, current, output, load_bt):
-    """What Select does on this output, a line each. value: its EQ Preset Select value."""
+def select_tip(value, used, current, output, load_bt, bt=True):
+    """What Select does on this output, a line each. value: its EQ Preset Select value; bt: this output has
+    Bass/Treble (the input has none)."""
     clear = value in BUILT_IN
     if clear:
         first = (RUMBLE_LOAD if value == RUMBLE else FACTORY) % output
@@ -81,6 +83,8 @@ def select_tip(value, used, current, output, load_bt):
         first = "Select it again: %s loads it as it is now" % output
     else:
         first = "Select it on %s: its EQ is loaded there" % output
+    if not bt:
+        return first
     if not load_bt:
         second = "Bass/Treble stays as it is: Load Bass/Treble with preset is off"
     elif clear or not used:
@@ -185,12 +189,12 @@ class PresetPreview(QWidget):
         """What the outline goes around (Scrim.cover, with no margin): the preview itself."""
         return [self]
 
-    def show_preset(self, value, stored, output, load_bt, current, fs, others=()):
+    def show_preset(self, value, stored, output, load_bt, current, fs, others=(), has_bt=True):
         """value: Clear's, Rumble's or a slot's EQ Preset Select value; stored: the slot as read, None while not read
         (Clear, Rumble: not used); output: the name of this output; load_bt: Load Bass/Treble with preset on this
         output; current: selected on this output; fs: the rate of the main graph; others: the other outputs it is
-        selected on."""
-        self.value, self.load_bt, self.no_bt = value, load_bt, fs >= self.no_bt_from
+        selected on; has_bt: this output has Bass/Treble (the input has none: Select leaves the preset's out)."""
+        self.value, self.load_bt, self.no_bt = value, load_bt and has_bt, fs >= self.no_bt_from
         clear = value in BUILT_IN
         known = clear or stored is not None
         used = not clear and known and stored["used"]
@@ -202,14 +206,14 @@ class PresetPreview(QWidget):
         self.held = self.loads if used or clear else ([], None)
         self.show_graph(self.select.underMouse())
         self.select.setEnabled(known)
-        self.select.setToolTip(select_tip(value, used, current, output, load_bt) if known else NOT_READ)
-        self.select.warn(known and not used and load_bt)        # the factory state: Bass/Treble switched on
+        self.select.setToolTip(select_tip(value, used, current, output, load_bt, has_bt) if known else NOT_READ)
+        self.select.warn(known and not used and self.load_bt)   # the factory state: Bass/Treble switched on
         self.edit.setVisible(not clear)
         self.store.setVisible(not clear)
         self.edit.setEnabled(known)
         self.edit.setToolTip(NOT_READ if not known else EDIT_TIP if used else EDIT_TIP + "\n" + EDIT_FREE_TIP)
         if not clear:
-            self.store.setToolTip(store_tip(value - 1, stored, output, others))
+            self.store.setToolTip(store_tip(value - 1, stored, output, others, has_bt))
 
     def show_graph(self, on_select):
         """At rest what the slot holds; with the mouse on Select what Select loads on this output."""

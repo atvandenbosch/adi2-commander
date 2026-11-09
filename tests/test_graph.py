@@ -16,7 +16,7 @@ from commander.device import params as P
 from commander.ui import graph as G
 from commander.ui import theme
 from commander.ui.legend import ITEM_PAD
-from tests.gui import WindowTest, app
+from tests.gui import WindowTest, app, tab
 
 
 class Graph(WindowTest):
@@ -81,7 +81,7 @@ class Graph(WindowTest):
         self.settle()
         self.assertEqual(self.sim.state[(4, 20)], 1)
         self.assertNotIn((4, 20), self.win.marks.mismatch)
-        self.win.tabs.setCurrentIndex(1)                     # every output has its own
+        self.win.tabs.setCurrentIndex(tab(6))                     # every output has its own
         phones = self.sim.state[(7, 20)]
         self.assertEqual(switch.on, bool(phones))
         QTest.mouseClick(switch, Qt.LeftButton)

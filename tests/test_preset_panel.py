@@ -12,7 +12,7 @@ from commander.ui import theme
 from commander.ui.presets import CLEAR, MANUAL, STALE_TIP, mark
 from commander.ui.widgets import Dot
 from commander.ui.preview import EDIT_FREE_TIP, EDIT_TIP
-from tests.gui import WindowTest, hover, tooltip_color
+from tests.gui import WindowTest, hover, tab, tooltip_color
 
 
 class PresetPanel(WindowTest):
@@ -57,7 +57,7 @@ class PresetPanel(WindowTest):
         order = [titles["LINE OUT"], self.win.load_bt, self.row(MANUAL), titles["USER"], self.row(2),
                  titles["FACTORY"], self.row(CLEAR)]
         self.assertEqual(sorted(order, key=y), order)
-        self.win.tabs.setCurrentIndex(2)
+        self.win.tabs.setCurrentIndex(tab(9))
         self.assertEqual(panel.output_title.text(), "PHONES 3/4 · IEM")
 
     def test_the_slots_as_the_device_has_them(self):
@@ -176,7 +176,7 @@ class PresetPanel(WindowTest):
         self.assertEqual(row.mark.text(), "")
 
     def test_an_earlier_copy_shows_in_the_eq_head(self):
-        self.win.tabs.setCurrentIndex(2)                                      # IEM, not active
+        self.win.tabs.setCurrentIndex(tab(9))                                      # IEM, not active
         self.session.set((10, 28), 3)                                         # Preset 2
         self.settle()
         self.sim.slots[2] = dict(self.sim.slots[2], vals=self.sim.slots[2]["vals"] | {(13, 7): 0})   # elsewhere

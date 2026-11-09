@@ -211,9 +211,10 @@ class Legend(QWidget):
             item.name.setStyleSheet("color: %s;" % (theme.LABEL if on else theme.OFF).name())
             group = ("channel", "channels") if k in GROUPS[0] else ("layer", "layers")
             note = {"compare": "The sums at the rate the device runs at\n",
-                    "bands": "Includes Bass and Treble\n",
+                    "bands": "Includes Bass and Treble\n" if self.graph.has_bt else "",
                     "handles": "The points: drag, wheel and click\nOff: the band labels stay, but only inform\n"}.get(k, "")
             item.setToolTip(note +
                             "Click: show or hide · Double-click: only this %s; again: all %s" % group)
         self.items["R"].setVisible(dual)
+        self.items["BT"].setVisible(self.graph.has_bt)
         self.items["compare"].setVisible(compare is not None)

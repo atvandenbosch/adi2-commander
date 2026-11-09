@@ -11,7 +11,7 @@ from commander.device.models import PRO, PRO_24
 from commander.device.status import Spdif
 from commander.ui import theme
 from commander.ui.inputs import _spdif_text
-from tests.gui import WindowTest
+from tests.gui import WindowTest, tab
 
 
 class InputSettings(WindowTest):
@@ -43,7 +43,7 @@ class InputSettings(WindowTest):
         self.settle()
         coax = P.INPUTS.index("SPDIF coax")
         self.assertEqual([self.sim.state[(out, P.SOURCE)] for out in P.OUTPUT_ADDRESSES], [coax] * 3)
-        self.win.tabs.setCurrentIndex(2)
+        self.win.tabs.setCurrentIndex(tab(9))
         self.assertEqual(s.text(s.value), "SPDIF coax")                         # one setting, on every tab
         self.assertIn("Line Out, Phones and IEM alike", s.toolTip())
 

@@ -20,7 +20,7 @@ from commander.ui import loaddialog as L
 from commander.ui import theme
 from commander.ui import window as W
 from commander.ui.widgets import INNER_GAP, SIDE
-from tests.gui import WindowTest
+from tests.gui import WindowTest, tab
 from tests.support import TEN_FILTERS
 
 OUT, LEFT, RIGHT = 3, 4, 5
@@ -418,7 +418,7 @@ class ProLoad(LoadTest):
     model = PRO
 
     def test_into_phones_3_4(self):
-        self.win.tabs.setCurrentIndex(2)
+        self.win.tabs.setCurrentIndex(tab(9))
         since = len(self.sim.received)
         self.win.load_file(self.file("three.txt", THREE))
         self.settle()

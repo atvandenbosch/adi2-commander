@@ -30,7 +30,7 @@ from commander.ui.output import PHONES_REF
 from commander.ui.untested import UntestedBox
 from commander.ui.window import PHONES_1_2, MainWindow
 from commander.ui.widgets import FRAME, SIDE, label_color, placement
-from tests.gui import Clock, WindowTest, tooltip_color
+from tests.gui import OUTPUT_TABS, Clock, WindowTest, hover, tab, tooltip_color
 from tests.support import DUMP, PRESETS
 
 
@@ -190,7 +190,7 @@ class Window(WindowTest):
         self.settle()
         self.assertEqual(self.sim.state[(3, 20)], 1 - line)
         self.assertNotIn((3, 20), self.win.marks.mismatch)
-        self.win.tabs.setCurrentIndex(1)                                    # every output has its own
+        self.win.tabs.setCurrentIndex(tab(6))                                    # every output has its own
         phones = self.sim.state[(6, 20)]
         QTest.mouseClick(switch, Qt.LeftButton)
         self.settle()
@@ -250,7 +250,7 @@ class Window(WindowTest):
         self.sim.front_panel([(3, 12, -90)])                                # -9 dB: 21 dB above it
         self.spin(300)
         self.assertEqual(g.boost, (0.0, 0.0))
-        self.win.tabs.setCurrentIndex(1)                                    # every output has its own
+        self.win.tabs.setCurrentIndex(tab(6))                                    # every output has its own
         self.assertAlmostEqual(g.boost[0], 7 * 0 / 20)                      # Phones at -10 dB: none
 
     def test_the_loudness_graph_takes_the_stage_while_one_works_in_its_table(self):
@@ -279,7 +279,7 @@ class Window(WindowTest):
         win.fs_box.setCurrentIndex(P.SAMPLE_RATES.index(705600))
         self.assertEqual(win.graph_note.text(), "No Loudness at 705.6 kHz")
         self.assertEqual(g.now.opts["pen"].color().rgb(), theme.OFF.rgb())
-        win.tabs.setCurrentIndex(1)                                         # another output: the stage stays
+        win.tabs.setCurrentIndex(tab(6))                                         # another output: the stage stays
         self.assertIs(stage.currentWidget(), g)
         band = win.band_views[0]
         band.setFocus()
@@ -486,15 +486,15 @@ class Window(WindowTest):
 
     def test_the_active_output_has_a_dot_on_its_tab(self):
         def marked():
-            return [bool(self.win.tabs.tabToolTip(i)) for i in range(self.win.tabs.count())]
+            return [bool(self.win.tabs.tabToolTip(i)) for i in OUTPUT_TABS]
         self.spin(1100)                                                          # the first status message
-        widths = [self.win.tabs.tabRect(i).width() for i in range(self.win.tabs.count())]
+        widths = [self.win.tabs.tabRect(i).width() for i in OUTPUT_TABS]
         self.assertEqual(marked(), [True, False, False])                         # Line Out, no plug
         self.sim.plug(6)
         self.spin(1100)
         self.assertEqual(marked(), [False, True, False])                         # a plug in Phones
-        self.assertEqual(self.win.tabs.currentIndex(), 0)                        # the tab shown stays
-        self.assertEqual([self.win.tabs.tabRect(i).width() for i in range(self.win.tabs.count())], widths)
+        self.assertEqual(self.win.tabs.currentIndex(), tab(3))                   # the tab shown stays
+        self.assertEqual([self.win.tabs.tabRect(i).width() for i in OUTPUT_TABS], widths)
         self.sim.power(False)
         self.spin(1000)
         self.assertEqual(marked(), [False, False, False])                        # no device, no dot
@@ -690,33 +690,36 @@ class ProWindow(WindowTest):
 
     def test_the_outputs_it_controls(self):
         tabs = self.win.tabs
-        self.assertEqual([tabs.tabText(i) for i in range(3)], ["Line Out", "Phones 1/2", "Phones 3/4"])
-        self.assertEqual([tabs.isTabEnabled(i) for i in range(3)], [True, False, True])
+        self.assertEqual([tabs.tabText(i) for i in range(tabs.count())],
+                         ["Analog In", "Line Out", "Phones 1/2", "Phones 3/4"])
+        self.assertEqual([tabs.isTabVisible(i) and tabs.isTabEnabled(i) for i in range(tabs.count())],
+                         [True, True, False, True])
+        self.assertEqual(tabs.currentIndex(), tab(3))
         self.win.next_tab(1)
-        self.assertEqual(tabs.currentIndex(), 2)
+        self.assertEqual(tabs.currentIndex(), tab(9))
         self.win.next_tab(1)
-        self.assertEqual(tabs.currentIndex(), 0)
+        self.assertEqual(tabs.currentIndex(), tab(0))
         self.win.next_tab(-1)
-        self.assertEqual(tabs.currentIndex(), 2)
+        self.assertEqual(tabs.currentIndex(), tab(9))
         self.assertEqual(self.win.presets.output_title.text(), "PHONES 3/4")
 
     def test_phones_1_2_with_settings_of_its_own(self):
         """Dual Phones (12/8) and Mute v. TRS 1/2 (12/11) on: Phones 1/2 has settings of its own, and Commander
         controls its EQ; Dual Phones off again: its tab grey, and the window on another output."""
         tabs = self.win.tabs
-        self.assertEqual(tabs.tabToolTip(1), PHONES_1_2["off"])
+        self.assertEqual(tabs.tabToolTip(tab(6)), PHONES_1_2["off"])
         self.sim.state[(12, 8)] = 1                                   # read back by the idle refresh
         self.spin(4000)
-        self.assertEqual([tabs.isTabEnabled(i) for i in range(3)], [True, True, True])
-        self.assertEqual(tabs.tabToolTip(1), "")
-        tabs.setCurrentIndex(1)
+        self.assertEqual([tabs.isTabEnabled(i) for i in OUTPUT_TABS], [True, True, True])
+        self.assertEqual(tabs.tabToolTip(tab(6)), "")
+        tabs.setCurrentIndex(tab(6))
         self.assertTrue(self.session.writable((7, 4)) and self.session.writable((6, 12)))       # a gain, Volume
         self.win.eq_switches[0].click()
         self.spin(1500)
         self.assertEqual(self.sim.state[(7, 2)], 1)
         self.sim.state[(12, 8)] = 0
         self.spin(4000)
-        self.assertEqual((tabs.isTabEnabled(1), tabs.currentIndex() == 1), (False, False))
+        self.assertEqual((tabs.isTabEnabled(tab(6)), tabs.currentIndex() == tab(6)), (False, False))
         self.assertFalse(self.session.writable((7, 4)))
 
     def test_phones_1_2_with_some_settings_of_line_out(self):
@@ -727,7 +730,7 @@ class ProWindow(WindowTest):
         sim.state[(12, 8)] = 1
         self.spin(4000)
         QTest.mouseClick(self.win.output_tab, Qt.LeftButton)
-        self.win.tabs.setCurrentIndex(1)
+        self.win.tabs.setCurrentIndex(tab(6))
         volume = sim.state[(6, P.VOLUME)], sim.state[(3, P.VOLUME)]
         QTest.mouseClick(panel.options[P.MUTE], Qt.LeftButton)
         s = panel.volume
@@ -743,9 +746,9 @@ class ProWindow(WindowTest):
         self.session.device_status = self.session.device_status._replace(output=0)
         self.win.refresh()
         self.assertFalse(panel.options[P.DIM].isEnabled())
-        self.win.tabs.setCurrentIndex(0)
+        self.win.tabs.setCurrentIndex(tab(3))
         self.assertIn(shared, panel.options[P.MUTE].toolTip())
-        self.win.tabs.setCurrentIndex(2)
+        self.win.tabs.setCurrentIndex(tab(9))
         self.assertNotIn(shared, panel.options[P.MUTE].toolTip())
 
     def test_ref_level_of_phones_1_2_beside_line_out(self):
@@ -774,7 +777,7 @@ class ProWindow(WindowTest):
         self.sim.state.update({(12, 8): 1, (4, P.LOAD_BT): 1, (7, P.LOAD_BT): 0})
         self.spin(4000)
         self.assertIn("One setting for Line Out and Phones 1/2", load_bt.toolTip())
-        self.win.tabs.setCurrentIndex(1)
+        self.win.tabs.setCurrentIndex(tab(6))
         self.assertTrue(load_bt.on)
         self.assertIn("One setting for Line Out and Phones 1/2", load_bt.toolTip())
         QTest.mouseClick(load_bt, Qt.LeftButton)
@@ -783,7 +786,7 @@ class ProWindow(WindowTest):
 
     def shown_tabs(self):
         tabs = self.win.tabs
-        return [tabs.tabText(i) for i in range(3) if tabs.isTabVisible(i)]
+        return [tabs.tabText(i) for i in OUTPUT_TABS if tabs.isTabVisible(i)]
 
     def test_phones_1_2_with_the_settings_of_line_out(self):
         """Dual Phones on, Mute v. TRS 1/2 off: Phones 1/2 uses the settings of Line Out, and shares its tab, named
@@ -792,34 +795,34 @@ class ProWindow(WindowTest):
         tabs = self.win.tabs
         self.sim.state[(12, 8)] = 1
         self.spin(4000)
-        tabs.setCurrentIndex(1)
+        tabs.setCurrentIndex(tab(6))
         self.sim.state[(12, 11)] = 0
         self.spin(4000)
         self.assertEqual(self.shown_tabs(), ["Line Out · Phones 1/2", "Phones 3/4"])
-        self.assertEqual((tabs.currentIndex(), self.win.output[1]), (0, 3))
-        self.assertEqual(tabs.tabToolTip(0), PHONES_1_2["shared"] + "\nActive on the device")
+        self.assertEqual((tabs.currentIndex(), self.win.output[1]), (tab(3), 3))
+        self.assertEqual(tabs.tabToolTip(tab(3)), PHONES_1_2["shared"] + "\nActive on the device")
         self.win.eq_switches[0].click()
         self.spin(1500)
         self.assertEqual((self.sim.state[(4, 2)], self.sim.state[(7, 2)]), (1, 0))
         self.win.next_tab(1)
-        self.assertEqual(tabs.currentIndex(), 2)
+        self.assertEqual(tabs.currentIndex(), tab(9))
         self.win.next_tab(1)
-        self.assertEqual(tabs.currentIndex(), 0)
+        self.assertEqual(tabs.currentIndex(), tab(0))                         # Analog In
         self.sim.state[(12, 11)] = 1
         self.spin(4000)
         self.assertEqual(self.shown_tabs(), ["Line Out", "Phones 1/2", "Phones 3/4"])
-        self.assertEqual(tabs.tabToolTip(0), "Active on the device")
+        self.assertEqual(tabs.tabToolTip(tab(3)), "Active on the device")
 
     def test_phones_1_2_in_balanced_phones_mode(self):
         """Bal Phones on: Phones 1/2 is the right channel of Phones 3/4, whose settings it uses, and shares its tab;
         also with Dual Phones off."""
         tabs = self.win.tabs
-        tabs.setCurrentIndex(2)
+        tabs.setCurrentIndex(tab(9))
         self.sim.state[(12, 9)] = 1
         self.spin(4000)
         self.assertEqual(self.shown_tabs(), ["Line Out", "Phones 3/4 · Phones 1/2"])
-        self.assertEqual((tabs.currentIndex(), self.win.output[1]), (2, 9))
-        self.assertEqual(tabs.tabToolTip(2), PHONES_1_2["balanced"] + "\nAlways active on the device")
+        self.assertEqual((tabs.currentIndex(), self.win.output[1]), (tab(9), 9))
+        self.assertEqual(tabs.tabToolTip(tab(9)), PHONES_1_2["balanced"] + "\nAlways active on the device")
 
     def test_the_outputs_the_device_has_active(self):
         """Line Out or Phones 1/2, which share a signal, or neither; Phones 3/4 always. A dot also on Phones 1/2,
@@ -827,31 +830,31 @@ class ProWindow(WindowTest):
         tabs, why = self.win.tabs, PHONES_1_2["off"]
 
         def dots():
-            return [tabs.tabIcon(i).cacheKey() == self.win.dot.cacheKey() for i in range(3)]
+            return [tabs.tabIcon(i).cacheKey() == self.win.dot.cacheKey() for i in OUTPUT_TABS]
         self.spin(1100)                                                         # the first status message
         self.assertEqual(dots(), [True, False, True])                           # the simulator: Line Out
-        self.assertEqual([tabs.tabToolTip(i) for i in range(3)],
+        self.assertEqual([tabs.tabToolTip(i) for i in OUTPUT_TABS],
                          ["Active on the device", why, "Always active on the device"])
         for code, expected in ((2, [False, True, True]), (3, [False, True, True]), (0, [False, False, True])):
             self.win.on_device_status(self.session.device_status._replace(output=code))
             self.assertEqual(dots(), expected)
-        self.assertEqual(tabs.tabToolTip(1), why)                               # code 0: Phones 1/2 not active
+        self.assertEqual(tabs.tabToolTip(tab(6)), why)                               # code 0: Phones 1/2 not active
         self.win.on_device_status(self.session.device_status._replace(output=2))
-        self.assertEqual(tabs.tabToolTip(1), why + "\nActive on the device")
+        self.assertEqual(tabs.tabToolTip(tab(6)), why + "\nActive on the device")
         self.win.on_device_status(None)
         self.assertEqual(dots(), [False, False, False])
 
     def test_the_output_panel(self):
         """Open, on the settings of the output shown, with the names of the model."""
-        tab, area, panel = self.win.output_tab, self.win.output_area, self.win.output_panel
-        QTest.mouseClick(tab, Qt.LeftButton)
+        side, area, panel = self.win.output_tab, self.win.output_area, self.win.output_panel
+        QTest.mouseClick(side, Qt.LeftButton)
         self.assertFalse(area.isHidden())
         self.assertEqual(panel.steppers[P.REF_LEVEL].text(panel.steppers[P.REF_LEVEL].value), "+19 dBu")
         self.assertEqual(panel.volume_label.text(), "Volume (dBr)")                  # Auto Ref Level on
         QTest.mouseClick(panel.options[P.MUTE], Qt.LeftButton)
         self.spin(1500)
         self.assertEqual(self.sim.state[(3, P.MUTE)], 1)
-        self.win.tabs.setCurrentIndex(2)
+        self.win.tabs.setCurrentIndex(tab(9))
         QTest.mouseClick(panel.options[P.AUTO_REF_LEVEL], Qt.LeftButton)
         self.spin(1500)
         self.assertEqual((self.sim.state[(9, P.AUTO_REF_LEVEL)], panel.volume_label.text()), (0, "Volume (dB)"))
@@ -904,7 +907,7 @@ class ProWindow(WindowTest):
         self.assertEqual(self.win.presets.rows[3].tags.text(), "P34")
 
     def test_save_names_the_device_and_the_output(self):
-        self.win.tabs.setCurrentIndex(2)
+        self.win.tabs.setCurrentIndex(tab(9))
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "eq.txt")
             self.win.save_file(path)
@@ -919,8 +922,9 @@ class ProWindow(WindowTest):
         self.spin(3000)
         self.assertTrue(self.session.ready())
         tabs = self.win.tabs
-        self.assertEqual([tabs.tabText(i) for i in range(3)], ["Line Out", "Phones 1/2", "Phones 3/4 · IEM"])
-        self.assertTrue(all(tabs.isTabEnabled(i) for i in range(3)) and self.win.input_tab.isEnabled())
+        self.assertEqual([tabs.tabText(i) for i in OUTPUT_TABS], ["Line Out", "Phones 1/2", "Phones 3/4 · IEM"])
+        self.assertFalse(tabs.isTabVisible(tab(0)))                            # no analog input
+        self.assertTrue(all(tabs.isTabEnabled(i) for i in OUTPUT_TABS) and self.win.input_tab.isEnabled())
         self.assertEqual(self.win.input_text.isHidden(), False)
 
 
@@ -930,7 +934,7 @@ class Pro24Window(WindowTest):
     bypassed_by_the_input = ProWindow.bypassed_by_the_input
 
     def test_the_eq_of_the_input_bypasses_that_of_the_outputs_from_705_6_khz(self):
-        self.assertEqual(self.win.tabs.tabToolTip(1), PHONES_1_2["off"])
+        self.assertEqual(self.win.tabs.tabToolTip(tab(6)), PHONES_1_2["off"])
         self.sim.state.update({(4, 2): 1, (1, 2): 1, (12, 16): 7})   # 384 kHz: no Bass/Treble, the EQ as before
         self.assertEqual(self.bypassed_by_the_input(), (False, False, False, True))
         self.sim.state[(12, 16)] = 8                                  # 705.6 kHz
@@ -942,7 +946,7 @@ class Pro24Window(WindowTest):
         QTest.mouseClick(self.win.output_tab, Qt.LeftButton)
         row, trs = panel.rows[P.REAR_TRS_SOURCE], panel.steppers[P.REAR_TRS_SOURCE]
         self.assertFalse(row.isVisible())                             # Line Out
-        self.win.tabs.setCurrentIndex(2)
+        self.win.tabs.setCurrentIndex(tab(9))
         self.assertTrue(row.isVisible())
         self.assertEqual(trs.text(trs.value), "Line 1/2")
         QTest.mouseClick(trs, Qt.LeftButton, pos=QPoint(trs.width() - 4, trs.height() // 2))
@@ -965,6 +969,69 @@ class Pro24Window(WindowTest):
         self.assertEqual((self.sim.state[(6, P.REF_LEVEL)], self.sim.state[(3, P.REF_LEVEL)]), (2, line))
         self.assertTrue(phones.warned)                                # Hi-Power, Volume -10 dB, no plug in
         self.assertIn("Plugging in headphones", phones.toolTip())
+
+
+class AnalogIn(WindowTest):
+    """The EQ of the analog input on its own tab, first: its bands and presets; no Bass/Treble, no Loudness, no
+    output settings, except Bass/Treble in a preset opened in the edit stand."""
+
+    model = PRO_24
+
+    def setUp(self):
+        super().setUp()
+        for _ in range(120):
+            if len(self.session.slots) == 20:
+                break
+            self.spin(100)
+        self.win.presets_tab.set_open(True)
+        QTest.mouseClick(self.win.output_tab, Qt.LeftButton)          # on Line Out
+        self.win.tabs.setCurrentIndex(tab(0))
+        self.spin(50)
+
+    def test_its_tab_has_its_eq_only(self):
+        win = self.win
+        self.assertEqual((win.tabs.tabText(tab(0)), win.output[1], win.presets.output_title.text()),
+                         ("Analog In", 0, "ANALOG IN"))
+        self.assertTrue(win.band_views[0].isVisible())
+        self.assertFalse(win.bt_view.isVisible() or win.loudness_view.isVisible() or win.load_bt.isVisible())
+        self.assertFalse(win.legend.items["BT"].isVisible())
+        self.assertFalse(win.output_tab.isEnabled() or win.output_area.isVisible())
+        self.assertEqual(win.output_tab.toolTip(), "The settings of Analog In are in the input panel")
+        win.tabs.setCurrentIndex(tab(3))
+        self.assertTrue(win.bt_view.isVisible() and win.output_area.isVisible() and win.load_bt.isVisible())
+
+    def test_its_eq_and_presets_on_the_device(self):
+        win = self.win
+        win.eq_switches[0].click()
+        win.dual_action(0)                                            # Split: Dual EQ on, at 0/8
+        self.spin(1500)
+        self.assertEqual((self.sim.state[(1, 2)], self.sim.state[(0, 8)], self.sim.state[(0, 11)]), (1, 1, 0))
+        win.select_preset(3)                                          # Preset 2
+        self.spin(1500)
+        self.assertEqual(self.sim.state[(1, 28)], 3)
+        self.assertTrue(win.presets.rows[3].dot.on)
+        win.tabs.setCurrentIndex(tab(3))
+        self.assertEqual(win.presets.rows[3].tags.text(), "In")       # selected on Analog In
+
+    def test_select_and_store_say_what_they_do_without_its_bass_treble(self):
+        hover(self.win, self.win.presets.rows[3])
+        self.spin(20)
+        preview = self.win.preview
+        self.assertEqual(preview.select.toolTip(), "Select it on Analog In: its EQ is loaded there")
+        self.assertTrue(preview.store.toolTip().startswith(
+            "Store the current EQ of Analog In in Preset 2, with Bass/Treble at 0 dB\n"))
+        clear = self.win.presets.rows[22]
+        self.assertTrue(clear.toolTip().endswith("Store sets the Bass/Treble of the preset to 0 dB."))
+        self.win.tabs.setCurrentIndex(tab(3))
+        self.assertTrue(clear.toolTip().endswith("Store takes this output's Bass/Treble into the preset too."))
+
+    def test_a_preset_opened_here_shows_its_bass_treble(self):
+        self.win.edit_preset(2)
+        self.spin(50)
+        self.assertTrue(self.win.bt_view.isVisible())
+        self.assertFalse(self.win.loudness_view.isVisible())
+        self.win.leave_edit()
+        self.assertFalse(self.win.bt_view.isVisible())
 
 
 class Placement(unittest.TestCase):

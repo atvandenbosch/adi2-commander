@@ -40,13 +40,15 @@ from .widgets import ATTACHED_GAP, GROUP_STYLE, INNER_GAP, TITLE_STYLE, Action, 
 MANUAL, TEMP, CLEAR, RUMBLE = 0, 1, 22, P.RUMBLE  # EQ Preset Select; Preset n is n + 1
 BUILT_IN = (CLEAR, RUMBLE)                       # presets that are no slot: Select only
 TAGS = {3: "L", 6: "P", 9: "I"}                  # output address -> its letter
+INPUT_TAG = "In"                                 # the analog input's mark, on a model that has one
+CLEAR_TIP = ("The factory state, all bands 0 dB.\n"
+             "To reset a preset: select Clear, then Store in the preview of that preset.\n")
 TIPS = {MANUAL: "This output's own EQ, apart from the presets.\n"
                 "After standby it holds what was selected then: a preset, Temp, or itself.",
         TEMP: "A selected preset, changed.\nStandby moves it into Manual.",
-        CLEAR: "The factory state, all bands 0 dB.\n"
-               "To reset a preset: select Clear, then Store in the preview of that preset.\n"
-               "Store takes this output's Bass/Treble into the preset too.",
+        CLEAR: CLEAR_TIP + "Store takes this output's Bass/Treble into the preset too.",
         RUMBLE: "A rumble filter for a turntable: a high pass at 35 Hz, and -12 dB at 20 Hz."}
+CLEAR_INPUT_TIP = CLEAR_TIP + "Store sets the Bass/Treble of the preset to 0 dB."   # the input has no Bass/Treble
 NAME_RULE = "Up to %d signs: letters, digits, space and %s" % (P.NAME_LENGTH, " ".join(P.NAME_MARKS))
 OK_TIP = "Write this preset to the device as it is now"
 STALE_TIP = "This output has an earlier copy of this preset.\nSelect it again to load it as it is now."
@@ -230,7 +232,8 @@ class PresetPanel(QWidget):
         lay.setSpacing(0)
         lay.addWidget(head(title))
         self.output_title = self._group(lay, "")              # the output's name, as its tab
-        lay.addWidget(head(load_bt))                           # per output, and about what Select does here
+        self.load_bt_row = head(load_bt)                       # per output, and about what Select does here
+        lay.addWidget(self.load_bt_row)
         lay.addSpacing(ATTACHED_GAP)
         for value in (MANUAL, TEMP):
             self._add(lay, _Row(self, value))
@@ -274,9 +277,11 @@ class PresetPanel(QWidget):
         name, out, left, _ = output
         tags_of = TAGS if tags is None else tags
         self.output_title.setText(name.upper())
+        self.load_bt_row.setVisible(P.has_bt(out))             # the input has no Bass/Treble
+        self.rows[CLEAR].setToolTip(TIPS[CLEAR] if P.has_bt(out) else CLEAR_INPUT_TIP)
         issues = issues or {}
         enabled = ready and operation is None and editing is None
-        chosen = {o: state.get((l, P.EQ_PRESET_SELECT)) for _, o, l, _ in P.OUTPUTS if o in tags_of}
+        chosen = {o: state.get((l, P.EQ_PRESET_SELECT)) for _, o, l, _ in P.CHANNELS if o in tags_of}
         for value, row in self.rows.items():
             busy, edited = "", editing is not None and editing[0] == row.slot
             if row.slot is None:
@@ -368,7 +373,7 @@ class SideTab(QWidget):
 
     def paintEvent(self, e):
         p = QPainter(self)
-        if self.open:
+        if self.open and self.isEnabled():
             p.fillRect(self.width() - 2, 0, 2, self.height(), theme.ACCENT)
         p.setPen(theme.TEXT if self.open else theme.LABEL if self.isEnabled() else theme.SECONDARY)
         p.translate(0, self.height())
