@@ -793,11 +793,19 @@ class OtherModels(unittest.TestCase):
         self.send((3, 2, 0))                                        # +4 dBu: 9 dB less
         self.assertEqual(sim.state[(3, 12)], -200)
 
-    def test_the_input_eq_is_not_simulated_yet(self):
-        sim = self.use("Pro")
+    def test_the_input_eq_follows_the_rules_of_the_outputs(self):
+        """Its Dual EQ is 0/8: on, it copies left to right; a preset loads its bands and Dual EQ, no Bass/Treble."""
+        sim = self.use("2/4 SE")
         self.send((1, 4, 6))
-        self.assertEqual(sim.unsimulated, ["input EQ address 1 index 4"])
-        sim.unsimulated.clear()
+        self.assertEqual(sim.reported()[(2, 4)], 6)                     # Dual EQ off: the right is the left
+        self.send((0, 8, 1))
+        self.assertEqual((sim.state[(0, 8)], sim.state[(2, 4)], sim.state[(0, 11)]), (1, 6, 0))   # RIAA Mode stays
+        self.send((2, 4, -6), (1, 27, 1), (1, 28, 22))                  # Clear, with Load B/T on
+        self.assertEqual((sim.state[(0, 8)], sim.state[(1, 4)], sim.state[(2, 4)]), (0, 0, 0))
+        self.assertEqual([k for k in sim.state if k[0] == 1 and 20 <= k[1] <= 26], [])
+        sim = self.use("Pro")
+        self.send((1, 28, 2), (1, 4, 2))                                # Preset 1, then changed: Temp
+        self.assertEqual(sim.state[(1, 28)], 1)
 
     def test_the_eq_and_presets_follow_the_rules_of_the_dac_fs(self):
         sim = self.use("Pro")

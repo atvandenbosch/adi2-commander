@@ -832,14 +832,14 @@ class ProOutputs(Harness):
 
     def test_what_it_writes(self):
         writable = [k for k in [(4, 4), (5, 4), (10, 4), (4, 21), (4, 28), (3, 20), (3, 23), (9, 21), (3, 3), (3, 12),
-                                (3, 15), (9, 9), (9, 17)] if self.session.writable(k)]
+                                (3, 15), (9, 9), (9, 17), (1, 4), (1, 28), (2, 4)] if self.session.writable(k)]
         self.assertEqual(writable, [(4, 4), (10, 4), (4, 21), (4, 28), (3, 20), (3, 23), (9, 21), (3, 3), (3, 12),
-                                    (3, 15), (9, 9), (9, 17)])                  # right: Dual EQ off
-        # Phones 1/2 off; Source: not in Basic Mode USB; Ref Level: with Auto Ref Level on; the EQ of the input
-        for key in [(7, 4), (8, 4), (6, 20), (6, 12), (3, 1), (3, 2), (9, 2), (0, 8), (1, 4), (12, 6)]:
+                                    (3, 15), (9, 9), (9, 17), (1, 4), (1, 28)])  # right: Dual EQ off
+        # Phones 1/2 off; Source: not in Basic Mode USB; Ref Level: with Auto Ref Level on; the input: Dual EQ by
+        # set_dual, and no Bass/Treble
+        for key in [(7, 4), (8, 4), (6, 20), (6, 12), (3, 1), (3, 2), (9, 2), (0, 8), (1, 21), (12, 6)]:
             self.assertFalse(self.session.writable(key), key)
-        self.assertEqual((self.session.controls(3), self.session.controls(6), self.session.controls(9)),
-                         (True, False, True))
+        self.assertEqual([self.session.controls(out) for out in (0, 3, 6, 9)], [True, True, False, True])
 
     def test_how_phones_1_2_is_used(self):
         """Dual Phones (12/8) off: off. On, with Mute v. TRS 1/2 (12/11) on: settings of its own, which Commander
@@ -894,6 +894,30 @@ class ProOutputs(Harness):
         self.assertEqual(self.operations, [("store", 2, {})])
         self.assertEqual({k for k in self.written(since) if k[1] == P.EQ_PRESET_SELECT}, {(4, 28), (10, 28)})
         self.assertNotIn(7, {a for a, _ in self.written()})
+
+    def test_the_eq_of_the_input(self):
+        """Dual EQ on 0/8; Store takes its bands with the factory Bass/Treble and selects the preset there again;
+        compared with its source without Bass/Treble."""
+        s = self.session
+        s.set_dual(0, True)
+        s.set((1, 4), 6)
+        s.set((2, 4), -4)
+        s.store(0, 7)
+        self.run_for(10.0)
+        self.assertEqual(self.operations, [("store", 7, {})])
+        self.assertEqual(self.sim.state[(0, 8)], 1)
+        slot = self.sim.slots[7]
+        self.assertEqual((slot["dual"], slot["vals"][(13, 4)], slot["vals"][(14, 4)]), (1, 6, -4))
+        self.assertEqual({i: slot["vals"][(13, i)] for i in P.FACTORY_BT}, P.FACTORY_BT)
+        self.assertEqual(self.sim.state[(1, 28)], 8)                    # Preset 7, selected again
+        s.set((4, 21), 8)                                               # Line Out's Bass into Preset 6
+        s.store(3, 6)
+        self.run_for(10.0)
+        s.set((1, 27), 1)                                               # Load B/T on, on the input
+        s.set((1, 28), 7)                                               # Preset 6
+        self.run_for(3.0)
+        self.assertEqual((self.session.slots[6]["vals"][(13, 21)], s.state[(1, 28)]), (8, 7))
+        self.assertEqual(s.stale(0), {})                                # its Bass/Treble does not count here
 
 
 class ProSource(Harness):

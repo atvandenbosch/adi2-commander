@@ -38,6 +38,7 @@ class Channels(unittest.TestCase):
         self.assertEqual(p.channel(9), p.OUTPUTS[2])
         self.assertEqual([p.dual_eq_key(out) for out in (0, 3, 6, 9)], [(0, 8), (3, 11), (6, 11), (9, 11)])
         self.assertNotEqual(p.dual_eq_key(0), (0, p.RIAA_MODE))                  # 0/11 is the input's RIAA Mode
+        self.assertEqual([p.has_bt(out) for out in (0, 3, 6, 9)], [False, True, True, True])
 
 
 class Output(unittest.TestCase):

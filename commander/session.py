@@ -21,7 +21,8 @@ No Qt here; listeners are plain callables:
     on_changed(keys, origin)        origin: 'load', 'device' (front panel), 'write' (our own, optimistic)
     on_verified(results)            {(address, index): (sent, actual)} after a write was read back
     on_slots(numbers)               preset slots that read differently than before, or are gone
-    on_stale(outputs)               outputs that came to differ from the preset they have as source, or no longer do
+    on_stale(outputs)               outputs, or the input, that came to differ from the preset they have as source,
+                                    or no longer do
     on_operation(kind, slot, result)
                                     kind: 'store' or 'write'; result: {} when the slot read back as sent, else
                                     {key: (sent, actual)} with key (13|14, index), 'name', 'dual', or the
@@ -67,8 +68,8 @@ TRANSFER_SETTLE = 1.0          # after the flag word, before reading the slot ba
 RELOAD = {P.EQ_ENABLE, P.EQ_PRESET_SELECT}  # make the device rebuild its filters: sent on their own and read
                                            # back before anything follows
 
-LEFT = {left: out for _, out, left, _ in P.OUTPUTS}
-RIGHT = {right: out for _, out, _, right in P.OUTPUTS}
+LEFT = {left: out for _, out, left, _ in P.CHANNELS}
+RIGHT = {right: out for _, out, _, right in P.CHANNELS}
 # one Source setting (Session.source_rows): the key its value is read from and written to, the output addresses it
 # is for, the names of its choices
 SourceRow = namedtuple("SourceRow", "key outputs names")
@@ -76,10 +77,12 @@ LINE_SOURCE, PHONES_34_SOURCE = (3, P.SOURCE), (9, P.SOURCE)
 
 
 def output_content(state, out):
-    """The EQ of output out as a slot holds it: {'dual', 'vals' {(13|14, index): value}}. With Dual EQ off the
-    right side is the left's, as the device reports it."""
+    """The EQ of output out, or of the input, as a slot holds it: {'dual', 'vals' {(13|14, index): value}}. With
+    Dual EQ off the right side is the left's, as the device reports it. The input has no Bass/Treble: the slot gets
+    the factory Bass/Treble, 0 dB."""
     _, out, left, right = P.channel(out)
-    vals = {(13, i): state[(left, i)] for i in SLOT_LEFT}
+    bt = state if P.has_bt(out) else {(left, i): v for i, v in P.FACTORY_BT.items()}
+    vals = {(13, i): (state if i < P.BASS[0] else bt)[(left, i)] for i in SLOT_LEFT}
     vals.update({(14, i): state[(right, i)] for i in SLOT_RIGHT})
     return {"dual": state[P.dual_eq_key(out)], "vals": vals}
 
@@ -178,10 +181,12 @@ class Session:
         return self.state.get((left, P.EQ_ENABLE)) == 1 or dual and self.state.get((right, P.EQ_ENABLE)) == 1
 
     def controls(self, out):
-        """Whether Commander controls output out of the device connected: on an ADI-2 Pro and ADI-2/4 Pro Phones 1/2
-        only while it has settings of its own (phones_1_2)."""
+        """Whether Commander controls output out of the device connected, or its analog input (an ADI-2 Pro and
+        ADI-2/4 Pro): on those Phones 1/2 only while it has settings of its own (phones_1_2)."""
         if self.model is None:
             return False
+        if out == P.INPUT_ADDRESS:
+            return self.model.input is not None
         return out in self.model.controlled or self.phones_1_2(out) == "own"
 
     def phones_1_2(self, out):
@@ -363,11 +368,11 @@ class Session:
         self._emit(self.on_changed, [key] + [(right, i) for i in range(2, 20)], "write")
 
     def store(self, out, slot):
-        """The EQ of output out as it is now, Bass/Treble included, goes to preset slot n, under the name the slot
-        has. Queued writes go first, and what is stored is what a dump after them reports. Afterwards the slot is
-        selected again on out and on every output that has it as source: the device itself updates only the active
-        output."""
-        if out not in P.OUTPUT_ADDRESSES or (self.model is not None and not self.controls(out)):
+        """The EQ of output out, or of the input, as it is now, Bass/Treble included (output_content), goes to preset
+        slot n, under the name the slot has. Queued writes go first, and what is stored is what a dump after them
+        reports. Afterwards the slot is selected again on out and on every channel that has it as source: the device
+        itself updates only the active output."""
+        if out not in LEFT.values() or (self.model is not None and not self.controls(out)):
             raise ValueError("output %s" % out)
         self._start("store", slot, out=out)
 
@@ -611,15 +616,15 @@ class Session:
         if self.pending or self.sent or self._dump is not None or self._refresh_at is not None:
             return
         judged = {}
-        for _, out, left, _ in P.OUTPUTS:
+        for _, out, left, _ in P.CHANNELS:
             source = self.state.get((left, P.EQ_PRESET_SELECT))
             slot = self.slots.get(source - 1) if source is not None else None   # Preset n is n + 1
             if slot is not None:
                 diff = differences(output_content(self.state, out), loaded(slot),
-                                   self.state.get(self.at((left, P.LOAD_BT))) == 1)
+                                   P.has_bt(out) and self.state.get(self.at((left, P.LOAD_BT))) == 1)
                 if diff:
                     judged[out] = (source, diff)
-        changed = [o for o in P.OUTPUT_ADDRESSES if judged.get(o) != self._stale.get(o)]
+        changed = [o for o in LEFT.values() if judged.get(o) != self._stale.get(o)]
         self._stale = judged
         if changed:
             self._emit(self.on_stale, changed)
@@ -743,7 +748,7 @@ class Session:
             op["result"].update(diff)
             self._finish()
         else:
-            op["selects"] = [left for _, out, left, _ in P.OUTPUTS if self.controls(out) and (
+            op["selects"] = [left for _, out, left, _ in P.CHANNELS if self.controls(out) and (
                 out == op.get("out") or self.state.get((left, P.EQ_PRESET_SELECT)) == op["slot"] + 1)]
             op["step"] = "select"
 

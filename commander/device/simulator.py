@@ -19,7 +19,7 @@ from collections import namedtuple
 
 from . import codec, models
 from .connection import DeviceNotFound, PortBusy
-from .params import EQ_RANGES, FACTORY_BANDS, FACTORY_BT, RUMBLE, RUMBLE_BANDS, SAMPLE_RATES, limits
+from .params import EQ_RANGES, FACTORY_BANDS, FACTORY_BT, RUMBLE, RUMBLE_BANDS, SAMPLE_RATES, dual_eq_key, limits
 
 # The device's answers for an invented setup: what --simulate starts from, and the tests too
 DEMO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo")
@@ -31,9 +31,10 @@ DEMO_PRESETS = os.path.join(DEMO, "presets.txt")
 
 OUTPUT_ADDRESSES = (3, 6, 9)                     # Line Out, Phones 1/2, Phones 3/4 / IEM
 EQ_PAIRS = {3: (4, 5), 6: (7, 8), 9: (10, 11)}   # output address -> (left EQ, right EQ)
-LEFT_EQ = {l: o for o, (l, r) in EQ_PAIRS.items()}
-RIGHT_EQ = {r: l for o, (l, r) in EQ_PAIRS.items()}
 INPUT_EQ = (1, 2)                                # ADI-2 Pro and ADI-2/4 Pro: the EQ of the input, left and right
+CHANNEL_EQ = {0: INPUT_EQ, **EQ_PAIRS}           # the input and the outputs: their EQ follows the same rules
+LEFT_EQ = {l: o for o, (l, r) in CHANNEL_EQ.items()}
+RIGHT_EQ = {r: l for o, (l, r) in CHANNEL_EQ.items()}
 
 # output channel settings, ADI-2 DAC; index 2 differs between line and phones
 OUTPUT_RANGES = {
@@ -290,18 +291,18 @@ class SimulatedAdi2:
         """The bands of one output, left and right, with its Dual EQ state (a source carries it),
         and Bass/Treble, which a source carries only with Load B/T on."""
         out = LEFT_EQ[left]
-        right = EQ_PAIRS[out][1]
+        right = CHANNEL_EQ[out][1]
         bank = {(a, i): self.state[(a, i)] for a in (left, right) for i in BAND_INDICES if (a, i) in self.state}
         bank.update({(left, i): self.state[(left, i)] for i in BT_INDICES if (left, i) in self.state})
-        bank[(out, 11)] = self.state.get((out, 11), 1)
+        bank[dual_eq_key(out)] = self.state.get(dual_eq_key(out), 1)
         return bank
 
     def _factory(self, left):
         """Temp after power on: flat, Dual EQ off, factory Bass/Treble."""
         out = LEFT_EQ[left]
-        right = EQ_PAIRS[out][1]
+        right = CHANNEL_EQ[out][1]
         bank = {(x, i): w for x in (left, right) for i, w in FACTORY_BANDS.items() if (x, i) in self.state}
-        bank[(out, 11)] = 0
+        bank[dual_eq_key(out)] = 0
         bank.update({(left, i): w for i, w in FACTORY_BT.items()})
         return bank
 
@@ -319,9 +320,11 @@ class SimulatedAdi2:
         self.banks[left][source] = bank
 
     def _apply(self, left, bank):
-        """Load a source into the live EQ; Bass/Treble only with Load B/T on."""
+        """Load a source into the live EQ; Bass/Treble only with Load B/T on, and only where there is any (the
+        input has none)."""
         load_bt = self.state.get((left, 27)) == 1
-        self.state.update({k: v for k, v in bank.items() if not (k[0] == left and k[1] in BT_INDICES) or load_bt})
+        self.state.update({k: v for k, v in bank.items()
+                           if k in self.state and (not (k[0] == left and k[1] in BT_INDICES) or load_bt)})
 
     def _active(self, a):
         """Whether output a is active: on the ADI-2 Pro and ADI-2/4 Pro Line Out (Phones 1/2 is not modelled) and
@@ -333,7 +336,7 @@ class SimulatedAdi2:
         return not self.dac_fs and self.state.get((12, BASIC_MODE)) == BASIC_MODE_DAC
 
     def _dual(self, left):
-        return self.state.get((LEFT_EQ[left], 11), 1) == 1
+        return self.state.get(dual_eq_key(LEFT_EQ[left]), 1) == 1
 
     def _note(self, what):
         self.unsimulated.append(what)
@@ -424,14 +427,14 @@ class SimulatedAdi2:
             self.state[(12, i)] = _clamp(v, self.tables.device[i])
         elif a in (13, 14):
             self._set_slot(a, i, v, is_freq)
+        elif (a, i) == dual_eq_key(0) and self.tables.input:
+            self._set_dual(0, _clamp(v, self.tables.input[i]))
         elif a == 0 and i in self.tables.input:
             self.state[(0, i)] = _clamp(v, self.tables.input[i])
             if i == RIAA_MODE and self.state[(0, i)] and self.state[(0, 1)] != RIAA_REF_LEVEL:
                 self.state[(0, 1)] = RIAA_REF_LEVEL          # RIAA sets the input's Ref Level, and says so
                 if self.session:
                     self._emit(self._said([codec.encode(0, 1, RIAA_REF_LEVEL)]))
-        elif a in INPUT_EQ and self.tables.input:
-            self._note("input EQ address %d index %d" % (a, i))
         else:
             self._note("address %d index %d" % (a, i))
 
@@ -482,10 +485,10 @@ class SimulatedAdi2:
     def _slot_bank(self, left, slot):
         """A slot as a bank for one output."""
         out = LEFT_EQ[left]
-        right = EQ_PAIRS[out][1]
+        right = CHANNEL_EQ[out][1]
         s = self.slots[slot]
         bank = {(left if a == 13 else right, i): v for (a, i), v in s["vals"].items()}
-        bank[(out, 11)] = s["dual"]
+        bank[dual_eq_key(out)] = s["dual"]
         return bank
 
     def _answer_preset(self, slot):
@@ -575,7 +578,7 @@ class SimulatedAdi2:
             if self.session:
                 if key is not None and key[1] in BAND_INDICES and not self._dual(left):
                     a, i = key
-                    other = EQ_PAIRS[LEFT_EQ[left]][1] if a == left else left
+                    other = CHANNEL_EQ[LEFT_EQ[left]][1] if a == left else left
                     self._emit(self._said([codec.encode(other, i, self.state[(left, i)], i in codec.FREQ_INDICES)]))
                 self._emit(self._said([codec.encode(left, 28, TEMP)]))
         # a new Temp takes the Bass/Treble of the preset it came from
@@ -598,10 +601,10 @@ class SimulatedAdi2:
         if v == MANUAL or v == TEMP:
             bands = self.banks[left][v]                              # Manual survives switching
         elif v in (CLEAR, RUMBLE):
-            right = EQ_PAIRS[LEFT_EQ[left]][1]
+            right = CHANNEL_EQ[LEFT_EQ[left]][1]
             preset = RUMBLE_BANDS if v == RUMBLE else FACTORY_BANDS
             bands = {(x, i): w for x in (left, right) for i, w in preset.items() if (x, i) in self.state}
-            bands[(LEFT_EQ[left], 11)] = 0
+            bands[dual_eq_key(LEFT_EQ[left])] = 0
             if self.state.get((left, 27)) == 1:
                 # with Load B/T on, clear and rumble load the factory Bass/Treble and switch B/T Enable on;
                 # with Load B/T off they leave both
@@ -616,9 +619,9 @@ class SimulatedAdi2:
                 bands = self._slot_bank(left, slot)                  # the same slot again reloads it
             else:
                 # an unused slot loads like 'clear' (with Load B/T on too) and stays unused
-                right = EQ_PAIRS[LEFT_EQ[left]][1]
+                right = CHANNEL_EQ[LEFT_EQ[left]][1]
                 bands = {(x, i): w for x in (left, right) for i, w in FACTORY_BANDS.items() if (x, i) in self.state}
-                bands[(LEFT_EQ[left], 11)] = 0
+                bands[dual_eq_key(LEFT_EQ[left])] = 0
                 if self.state.get((left, 27)) == 1:
                     bands.update({(left, i): w for i, w in FACTORY_BT.items()})
                     bands[(left, 20)] = 1
@@ -706,9 +709,9 @@ class SimulatedAdi2:
         self._follow_rate()                      # another source can bring another clock
 
     def _set_dual(self, a, v):
-        left, right = EQ_PAIRS[a]
-        was = self.state.get((a, 11), 1)
-        self.state[(a, 11)] = v
+        left, right = CHANNEL_EQ[a]
+        was = self.state.get(dual_eq_key(a), 1)
+        self.state[dual_eq_key(a)] = v
         if was == 0 and v == 1:
             for i in range(2, 20):                                  # switching on copies left to right
                 if (right, i) in self.state:
@@ -778,8 +781,8 @@ class SimulatedAdi2:
     def reported(self):
         """The state as a dump reports it: with Dual EQ off, the right EQ shows the left values."""
         out = dict(self.state)
-        for o, (left, right) in EQ_PAIRS.items():
-            if self.state.get((o, 11), 1) == 0:
+        for o, (left, right) in CHANNEL_EQ.items():
+            if self.state.get(dual_eq_key(o), 1) == 0:
                 for i in range(2, 20):
                     if (right, i) in out:
                         out[(right, i)] = self.state[(left, i)]
