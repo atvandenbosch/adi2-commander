@@ -42,9 +42,9 @@ def write(state, out, name, model=models.DAC, revision=None):
     """The EQ of output out (or of the preset being edited, held at its addresses) as a preset file named name.
     revision: the device's, or None when not known, which leaves it out. Raises ValueError when the state of the
     output is incomplete."""
-    _, out, left, right = next(o for o in P.OUTPUTS if o[1] == out)
+    _, out, left, right = P.channel(out)
     keys = [(left, i) for i in BAND_INDICES + sorted(BT_NAMES) + [P.LOAD_BT]] + [(right, i) for i in BAND_INDICES]
-    if any(k not in state for k in keys + [(out, P.DUAL_EQ)]):
+    if any(k not in state for k in keys + [P.dual_eq_key(out)]):
         raise ValueError("EQ of %s not read yet" % model.outputs[P.OUTPUT_ADDRESSES.index(out)])
     root = ROOT[model.id]
     lines = ["\t<%s>" % root, "\t\t<General>", '\t\t\t<val e="Version" v="2"/>']
@@ -57,7 +57,7 @@ def write(state, out, name, model=models.DAC, revision=None):
         lines += [val(BAND_NAMES[i], units(i, state[(addr, i)])) for i in BAND_INDICES]
         if side == "Left":
             lines += [val(BT_NAMES[i], units(i, state[(addr, i)])) for i in sorted(BT_NAMES)]
-            lines += [val("DualEQ", state[(out, P.DUAL_EQ)]), val("EQ Preset Select", 0),
+            lines += [val("DualEQ", state[P.dual_eq_key(out)]), val("EQ Preset Select", 0),
                       val("Load BT w. EQ", state[(addr, P.LOAD_BT)])]
         lines.append("\t\t</%s>" % block)
     lines += ["\t\t<PresetNames>", '\t\t\t<val e="EQPresetName%d" v="%s"/>' % (SLOT, name), "\t\t</PresetNames>",

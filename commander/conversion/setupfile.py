@@ -22,11 +22,10 @@ OUTPUT = [("Source", 1, 1), ("AutoRef", 3, 1), ("RefLevel", 2, 1), ("Mono", 4, 1
           ("LoopBack", 17, 1), ("DCProtection", 18, 1), ("RearTRSSource", 19, 1), ("LoudnessEn", 20, 1),
           ("LDBassGain", 21, 2), ("LDTrebleGain", 22, 2), ("LDVolumeRef", 23, 2)]
 REMOTE_OWN = [("LinkVolume", 0), ("RecallVolume", -20), ("VolumeLimit", 120)]
-# the input, address 0: its settings, and where its Dual EQ is
+# the input, address 0: its settings
 INPUT = [("AutoRef", 2, 1), ("RefLevel", 1, 1), ("TrimGainLeft", 3, 2), ("TrimGainRight", 4, 2), ("Polarity", 5, 1),
          ("MSProcessing", 6, 1), ("ADFilter", 7, 1), ("ADConversion", 9, 1), ("DCFilter", 10, 1), ("RIAAMode", 11, 1),
          ("RIAAMonoBass", 12, 1), ("BalImpedance", 13, 1)]
-INPUT_DUAL_EQ = 8
 INPUT_BT = {P.BT_ENABLE: 1, **P.FACTORY_BT}
 # the device settings (address 12) by place, their names, and per model the places it has no setting for
 DEVICE = [6, 7, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 40, 41, 42, 43, 25, 26, 27, 28, 29, 22, 23, 24,
@@ -104,10 +103,10 @@ def write(state, slots, model=models.DAC, revision=None):
     try:
         if model.id != models.DAC.id:
             lines += _settings("Input", state, 0, INPUT)
-            lines += _eq("EQInput", state, 1, 2, state[(0, INPUT_DUAL_EQ)], INPUT_BT)
+            lines += _eq("EQInput", state, 1, 2, state[P.INPUT_DUAL_EQ], INPUT_BT)
         for k, (_, out, left, right) in enumerate(P.OUTPUTS, 1):
             lines += _settings("Output%d" % k, state, out, OUTPUT, REMOTE_OWN, P.OUTPUT_ADDRESSES[0])
-            lines += _eq("EQOut%d" % k, state, left, right, state[(out, P.DUAL_EQ)])
+            lines += _eq("EQOut%d" % k, state, left, right, state[P.dual_eq_key(out)])
         names = {**DEVICE_NAMES, **NAMED.get(model.id, {})}
         lines.append("\t\t<DevSettings>")
         for i in DEVICE:

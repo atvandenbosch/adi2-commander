@@ -89,7 +89,7 @@ def write(state, out, fs=F.FS, now=None, preset=None, model=models.DAC):
     model: the device, with its names of the outputs. Raises ValueError when the state of the output is incomplete."""
     k = next(k for k, o in enumerate(P.OUTPUTS) if o[1] == out)
     (_, _, left, right), name = P.OUTPUTS[k], model.outputs[k]
-    dual = state.get((out, P.DUAL_EQ))
+    dual = state.get(P.dual_eq_key(out))
     sets = [("L", left), ("R", right)] if dual == 1 else [("all", left)]
     bands = {ch: F.band_filters(state, addr, left) for ch, addr in sets}
     bt = F.bt_filters(state, left)

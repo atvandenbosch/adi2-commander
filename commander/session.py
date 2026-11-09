@@ -78,10 +78,10 @@ LINE_SOURCE, PHONES_34_SOURCE = (3, P.SOURCE), (9, P.SOURCE)
 def output_content(state, out):
     """The EQ of output out as a slot holds it: {'dual', 'vals' {(13|14, index): value}}. With Dual EQ off the
     right side is the left's, as the device reports it."""
-    _, out, left, right = next(o for o in P.OUTPUTS if o[1] == out)
+    _, out, left, right = P.channel(out)
     vals = {(13, i): state[(left, i)] for i in SLOT_LEFT}
     vals.update({(14, i): state[(right, i)] for i in SLOT_RIGHT})
-    return {"dual": state[(out, P.DUAL_EQ)], "vals": vals}
+    return {"dual": state[P.dual_eq_key(out)], "vals": vals}
 
 
 def built_in(rumble=False):
@@ -155,7 +155,7 @@ class Session:
         return self.status == "ready"
 
     def dual(self, out):
-        return self.state.get((out, P.DUAL_EQ), 1) == 1
+        return self.state.get(P.dual_eq_key(out), 1) == 1
 
     def revision(self):
         """The device revision from its status message; None before the first."""
@@ -346,21 +346,21 @@ class Session:
         Off: one EQ for both channels. keep='left' or 'right' says which channel's bands become the shared
         set; the device uses the left set, so for 'right' the left bands get the right values first.
         On: the device starts both channels from the shared set (it copies left to right)."""
-        if (not self.ready() or self._op is not None or (out, P.DUAL_EQ) not in self.state
-                or not self.controls(out)):
+        key = P.dual_eq_key(out)
+        if not self.ready() or self._op is not None or key not in self.state or not self.controls(out):
             raise ValueError("Dual EQ of output %d is not writable now" % out)
-        left, right = next((l, r) for _, o, l, r in P.OUTPUTS if o == out)
+        _, _, left, right = P.channel(out)
         if not on and self.dual(out) and keep == "right":
             for i in range(2, 20):                       # EQ Enable too: the right channel as it is
                 if (right, i) in self.state and self.state.get((left, i)) != self.state[(right, i)]:
                     self.set((left, i), self.state[(right, i)])
-        self.pending[(out, P.DUAL_EQ)] = 1 if on else 0
-        self.sent.pop((out, P.DUAL_EQ), None)
-        self.state[(out, P.DUAL_EQ)] = 1 if on else 0
+        self.pending[key] = 1 if on else 0
+        self.sent.pop(key, None)
+        self.state[key] = 1 if on else 0
         for i in range(2, 20):                           # what the device will report for the right channel
             if (right, i) in self.state:
                 self.state[(right, i)] = self.state[(left, i)]
-        self._emit(self.on_changed, [(out, P.DUAL_EQ)] + [(right, i) for i in range(2, 20)], "write")
+        self._emit(self.on_changed, [key] + [(right, i) for i in range(2, 20)], "write")
 
     def store(self, out, slot):
         """The EQ of output out as it is now, Bass/Treble included, goes to preset slot n, under the name the slot
@@ -393,7 +393,7 @@ class Session:
         """Where output out differs from the preset it has as source, as differences() gives it. A preset written
         while it is the source changes the EQ only on the active output; the others keep an earlier copy. Judged
         only when nothing is under way, so a choice or a change still in flight does not count: {} meanwhile."""
-        key = (next(l for _, o, l, _ in P.OUTPUTS if o == out), P.EQ_PRESET_SELECT)
+        key = (P.channel(out)[2], P.EQ_PRESET_SELECT)
         source, diff = self._stale.get(out, (None, {}))
         if source != self.state.get(key) or key in self.pending or key in self.sent:
             return {}

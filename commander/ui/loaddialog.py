@@ -672,7 +672,7 @@ class LoadDialog(QDialog):
         self.setModal(True)
         self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)    # a large dialog: it may take the whole screen
         self.setAcceptDrops(True)                           # another file dropped on it: that file instead
-        default, _, self.left, self.right = next(o for o in P.OUTPUTS if o[1] == out)
+        default, _, self.left, self.right = P.channel(out)
         self.name = default if name is None else name
         self.dual = session.dual(out)
         self.connected = session.ready()
@@ -1021,7 +1021,7 @@ class LoadDialog(QDialog):
             self.show_result()
 
     def changed(self, keys, origin):
-        if (self.out, P.DUAL_EQ) in keys and self.session.dual(self.out) != self.dual:
+        if P.dual_eq_key(self.out) in keys and self.session.dual(self.out) != self.dual:
             self.dual = self.session.dual(self.out)
             self.show_dual()
             self.recompute(fit_now=True)

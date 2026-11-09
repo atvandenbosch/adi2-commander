@@ -376,7 +376,7 @@ class ResponseGraph(pg.PlotWidget):
         s = self.session.state
         _, out, left, right = output
         ready = self.session.ready()
-        dual = self.dual = s.get((out, P.DUAL_EQ)) == 1
+        dual = self.dual = s.get(P.dual_eq_key(out)) == 1
         sides = [(0, left)] + ([(1, right)] if dual else []) if ready else []
         bt = self._bt_at(F.bt_filters(s, left), self.fs) if ready else []
         self._off = {(None, f.name) for f in bt if not f.active}     # set, but out of the path

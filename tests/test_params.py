@@ -32,6 +32,14 @@ class Loudness(unittest.TestCase):
         self.assertEqual(p.step(p.spec((3, 23)), -40, +1), -40)              # -20 dB is the limit
 
 
+class Channels(unittest.TestCase):
+    def test_the_input_and_the_outputs_with_their_eq_and_dual_eq(self):
+        self.assertEqual([c[1:] for c in p.CHANNELS], [(0, 1, 2), (3, 4, 5), (6, 7, 8), (9, 10, 11)])
+        self.assertEqual(p.channel(9), p.OUTPUTS[2])
+        self.assertEqual([p.dual_eq_key(out) for out in (0, 3, 6, 9)], [(0, 8), (3, 11), (6, 11), (9, 11)])
+        self.assertNotEqual(p.dual_eq_key(0), (0, p.RIAA_MODE))                  # 0/11 is the input's RIAA Mode
+
+
 class Output(unittest.TestCase):
     def test_width_as_the_device_shows_it_with_its_names(self):
         w = p.spec((3, p.WIDTH))

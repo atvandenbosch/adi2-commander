@@ -27,7 +27,7 @@ class Draft:
         self.base = dict(start, name=(stored or {}).get("name", ""))
         self.name = self.base["name"].strip()
         self.state = dict(state)
-        self.state[(out, P.DUAL_EQ)] = start["dual"]
+        self.state[P.dual_eq_key(out)] = start["dual"]
         for (a, i), v in start["vals"].items():
             self.state[((left, right)[a - 13], i)] = v
         self.state[(left, P.EQ_ENABLE)] = self.state[(right, P.EQ_ENABLE)] = 1
@@ -47,7 +47,7 @@ class Draft:
         return False
 
     def dual(self, out):
-        return self.state.get((out, P.DUAL_EQ), 1) == 1
+        return self.state.get(P.dual_eq_key(out), 1) == 1
 
     def hold(self, on):
         pass
@@ -85,8 +85,8 @@ class Draft:
                 self.state[(left, i)] = self.state[(right, i)]
         for i in SLOT_RIGHT:
             self.state[(right, i)] = self.state[(left, i)]
-        self.state[(out, P.DUAL_EQ)] = 1 if on else 0
-        self._emit([(out, P.DUAL_EQ)] + [(a, i) for a in (left, right) for i in SLOT_RIGHT])
+        self.state[P.dual_eq_key(out)] = 1 if on else 0
+        self._emit([P.dual_eq_key(out)] + [(a, i) for a in (left, right) for i in SLOT_RIGHT])
 
     # -- the preset -----------------------------------------------------------------------------
     def set_name(self, name):
@@ -105,7 +105,7 @@ class Draft:
         vals = {(13, i): self.state[(left, i)] for i in SLOT_LEFT}
         vals.update({(14, i): self.state[(right, i)] for i in SLOT_RIGHT})
         name = self.base["name"] if self.name == self.base["name"].strip() else self.name
-        return {"name": name, "dual": self.state[(out, P.DUAL_EQ)], "vals": vals}
+        return {"name": name, "dual": self.state[P.dual_eq_key(out)], "vals": vals}
 
     def changed(self):
         """Whether it differs from the slot as it was opened. An unused slot opens as the factory state with the name

@@ -326,14 +326,14 @@ def from_fit(result):
 
 def addresses(out, dual):
     """{block: address} of the EQ blocks of an output: 'L' and 'R' with Dual EQ, else 'all' (on the left)."""
-    _, _, left, right = next(o for o in P.OUTPUTS if o[1] == out)
+    _, _, left, right = P.channel(out)
     return {"L": left, "R": right} if dual else {"all": left}
 
 
 def shown(outcome, out, dual):
     """The values of what the outcome sets, {(address, index): increment}: the bands of each EQ block and Bass/Treble.
     outcome: {block: {target: Placed}}."""
-    left = next(o for o in P.OUTPUTS if o[1] == out)[2]
+    left = P.channel(out)[2]
     values = {}
     for block, addr in addresses(out, dual).items():
         for t, p in outcome.get(block, {}).items():
@@ -354,7 +354,7 @@ def _values(addr, target, p):
 def writes(outcome, out, dual, blocks):
     """What OK writes for the blocks taken to the device: every band of each, the undefined ones at their factory
     default; Bass and Treble likewise."""
-    left = next(o for o in P.OUTPUTS if o[1] == out)[2]
+    left = P.channel(out)[2]
     defined = shown(outcome, out, dual)
     values = {}
     for block, addr in addresses(out, dual).items():

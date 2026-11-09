@@ -1341,7 +1341,7 @@ class MainWindow(QMainWindow):
         self.show_tabs()                                 # Phones 1/2 can come and go with the device's settings
         eq, (_, out, left, _) = self.eq(), self.output
         s, ready, editing = eq.state, eq.ready(), self.draft is not None
-        dual = not ready or s.get((out, P.DUAL_EQ)) == 1
+        dual = not ready or s.get(P.dual_eq_key(out)) == 1
         eq_on = [ready and s.get((band_address(self.output, side, eq), P.EQ_ENABLE)) == 1 for side in (0, 1)]
         bt_on = ready and s.get((left, P.BT_ENABLE)) == 1
         loudness_on = ready and s.get((out, P.LOUDNESS_ENABLE)) == 1

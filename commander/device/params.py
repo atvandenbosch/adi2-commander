@@ -31,6 +31,19 @@ LOAD_BT = 27                                     # Load B/T with Preset: a prese
 DUAL_EQ = 11                                     # on the output address
 INPUT_EQ = (1, 2)                                # ADI-2 Pro and ADI-2/4 Pro: the EQ of the input, left and right
 INPUT_DUAL_EQ = (0, 8)                           # and its Dual EQ
+# the analog input as a channel with an EQ, as OUTPUTS has them: no Bass/Treble, no Loudness
+INPUT_CHANNEL = ("Analog In", 0) + INPUT_EQ
+CHANNELS = [INPUT_CHANNEL] + OUTPUTS
+
+
+def channel(out):
+    """(name, address, left EQ address, right EQ address) of the output or the input at address out."""
+    return next(c for c in CHANNELS if c[1] == out)
+
+
+def dual_eq_key(out):
+    """Where Dual EQ of the output or the input at address out is."""
+    return INPUT_DUAL_EQ if out == INPUT_CHANNEL[1] else (out, DUAL_EQ)
 AUTO_REF_LEVEL = 3                               # on the output address; Line Out and Phones
 VOLUME = 12                                      # on the output address, in 0.1 dB
 SOURCE = 1                                       # on the output address: the input, in the device's own names
