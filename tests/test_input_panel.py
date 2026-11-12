@@ -122,7 +122,7 @@ class ProSource(WindowTest):
 
     def test_the_rows_in_each_basic_mode(self):
         self.assertEqual(self.panel.values["mode"].text(), "Auto: USB")
-        self.assertTrue(self.panel.mode_row.toolTip().startswith("The Basic Mode in use\nSet on the device"))
+        self.assertEqual(self.panel.mode_row.toolTip(), "The Basic Mode in use\nSet in DEVICE › DEVICE MODE")
         self.assertEqual(self.shown(), [("Ln. Out · Ph. 1/2", "USB 1/2", False), ("Phones 3/4", "Auto", True)])
         self.assertEqual(self.panel.rows[0][2].toolTip(), "The input of Line Out and Phones 1/2\nSet by Basic Mode USB")
         self.assertFalse(self.panel.dac_fs[0].isVisible())                     # what the DAC FS inputs receive
@@ -140,6 +140,19 @@ class ProSource(WindowTest):
         self.panel.rows[1][2].step(+1)                                          # Phones 3/4: AES
         self.settle()
         self.assertEqual([self.sim.state.get((out, P.SOURCE)) for out in (3, 6, 9)], [1, None, 1])  # 6: Line Out's
+
+    def test_the_clock(self):
+        """Sample Rate as the device reports it; Clock Source, which cannot be set in Basic Mode DAC."""
+        c = self.panel.clock_source
+        self.assertEqual((self.panel.values["rate"].text(), c.text(c.value), c.isEnabled()), ("48 kHz", "Auto", True))
+        self.assertFalse(self.panel.dac_fs[-1].isVisible())                    # the clock the DAC FS follows
+        c.step(+1)
+        self.settle()
+        self.assertEqual(self.sim.state[(P.DEVICE_ADDRESS, P.CLOCK_SOURCE)], 1)
+        self.assertEqual(c.text(c.value), "INT")
+        self.mode(5)
+        self.assertFalse(c.isEnabled())
+        self.assertTrue(c.toolTip().endswith("In Basic Mode DAC Source sets it"))
 
 
 class AnalogInput(WindowTest):

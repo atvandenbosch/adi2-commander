@@ -1,7 +1,8 @@
-"""The main window: output tabs; on the left edge the output's other settings and the presets, each opened and
-closed by its tab; the response graph, which takes the room left; beside it, one under the other, what shapes the
-sound: the parametric EQ (a table per channel; with Dual EQ off both show the one EQ of both channels, in the
-shared colour), Bass/Treble, and Loudness with a graph of what it does; and a status bar with the connection.
+"""The main window: output tabs; on the left edge the input, the output's other settings, the presets and the settings
+of the device, each opened and closed by its tab; the response graph, which takes the room left; beside it, one under
+the other, what shapes the sound: the parametric EQ (a table per channel; with Dual EQ off both show the one EQ of
+both channels, in the shared colour), Bass/Treble, and Loudness with a graph of what it does; and a status bar with
+the connection.
 
 One title, EQ, over the column, with what the EQ was loaded from and, on the right, Save and Load of the EQ of
 this output as a file. Close above the tables Dual EQ: Share L > R and Share R > L, or Split L <> R. Below that each
@@ -44,6 +45,7 @@ from ..device import params as P
 from ..draft import Draft
 from . import theme
 from .about import AboutDialog
+from .device import DevicePanel
 from .graph import LEGEND_GAP, SAMPLE_RATES, TITLE_ROOM, ZONE_INK, ResponseGraph, side_color
 from .inputs import InputPanel
 from .legend import ITEM_PAD, Legend
@@ -69,7 +71,7 @@ OUTPUT_TAB_TIP = "Show or hide the output"         # as SideTab says it
 INPUT_SETTINGS = "The settings of Analog In are in the input panel"
 # Phones 1/2 of an ADI-2 Pro and ADI-2/4 Pro, as the device uses it (Session.phones_1_2); None: not known yet. Grey,
 # its own tab says why; using the settings of another output, it shares that output's tab, which says how
-PHONES_MENU = "SETUP › Options › Phones on the device"
+PHONES_MENU = "DEVICE › PHONES"
 PHONES_1_2 = {None: "Active with Dual Phones on: " + PHONES_MENU,
               "off": "Dual Phones is off: " + PHONES_MENU,
               "shared": "Phones 1/2 uses the settings of Line Out.\nSettings of its own with Mute v. TRS 1/2 on: "
@@ -465,20 +467,33 @@ class MainWindow(QMainWindow):
         self.input_area.hide()
         self.input_tab = SideTab("INPUT")
         self.input_tab.toggled.connect(self.input_area.setVisible)
+        # the settings of the device itself: after the presets
+        self.device_panel = DevicePanel(session, self.marks)
+        self.device_panel.edited.connect(self.write)
+        self.device_area = QScrollArea()
+        self.device_area.setWidget(self.device_panel)
+        self.device_area.setWidgetResizable(True)
+        self.device_area.setFrameShape(QFrame.NoFrame)
+        self.device_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.device_area.setFixedWidth(self.PRESETS_WIDTH)
+        self.device_area.hide()
+        self.device_tab = SideTab("DEVICE")
+        self.device_tab.toggled.connect(self.device_area.setVisible)
         # a line between two open panels: they stand on the same ground
         self.panel_lines = []
-        for _ in range(2):
+        for _ in range(3):
             line = QFrame()
             line.setFixedWidth(1)
             line.setStyleSheet("background: %s;" % theme.GRID.name())
             line.hide()
             self.panel_lines.append(line)
-        for tab in (self.input_tab, self.output_tab, self.presets_tab):
+        for tab in (self.input_tab, self.output_tab, self.presets_tab, self.device_tab):
             tab.toggled.connect(self.show_panel_lines)
         strip = QVBoxLayout()
         strip.addWidget(self.input_tab)
         strip.addWidget(self.output_tab)
         strip.addWidget(self.presets_tab)
+        strip.addWidget(self.device_tab)
         strip.addStretch()
 
         # the graph's zone, darker than the columns beside it, from the tabs down to the status bar; beside it
@@ -501,6 +516,8 @@ class MainWindow(QMainWindow):
         left.addWidget(self.output_area)
         left.addWidget(self.panel_lines[1])
         left.addWidget(self.presets_area)
+        left.addWidget(self.panel_lines[2])
+        left.addWidget(self.device_area)
         right = QVBoxLayout()
         right.setContentsMargins(0, below_tabs, 0, above_status)
         right.setSpacing(0)
@@ -588,6 +605,7 @@ class MainWindow(QMainWindow):
         model has it; the tabs: show_tabs."""
         self.model = model
         self.presets.rows[P.RUMBLE].setVisible(model.rumble)
+        self.device_panel.set_model(model)
         self.graph.no_bt_from = self.loudness_graph.no_bt_from = self.preview.no_bt_from = model.no_bt_from
         for name, output in zip(model.outputs, P.OUTPUTS):
             self.tabs.setTabText(P.CHANNELS.index(output), name)
@@ -1201,7 +1219,8 @@ class MainWindow(QMainWindow):
 
     def under_veil(self):
         """What the edit stand puts out of reach, besides the other presets' rows (the panel's own)."""
-        return [self.tabs, self.input_tab, self.output_tab, self.presets_tab, self.input_area, self.output_area]
+        return [self.tabs, self.input_tab, self.output_tab, self.presets_tab, self.device_tab, self.input_area,
+                self.output_area, self.device_area]
 
     def show_eq(self, source, marks):
         """The tables and the graph on the output's EQ (the session) or on the preset being edited (a Draft)."""
@@ -1310,7 +1329,7 @@ class MainWindow(QMainWindow):
 
     def show_panel_lines(self):
         """A line before each open panel that has an open panel before it."""
-        areas = (self.input_area, self.output_area, self.presets_area)
+        areas = (self.input_area, self.output_area, self.presets_area, self.device_area)
         for n, line in enumerate(self.panel_lines):
             line.setVisible(not areas[n + 1].isHidden() and any(not a.isHidden() for a in areas[:n + 1]))
 
@@ -1417,6 +1436,7 @@ class MainWindow(QMainWindow):
         self.refresh_edit()
         self.input_panel.refresh()
         self.output_panel.refresh()
+        self.device_panel.refresh()
         for m in self.band_models + [self.bt_model, self.loudness_model]:
             m.refresh()
         rate = self.live_rate()                          # compared: the rate the device runs at, when it is another

@@ -1047,17 +1047,18 @@ class DeviceSettings(Harness):
     def test_the_settings_of_each_model(self):
         self.connect()                                                  # an ADI-2 DAC FS with an ESS D/A converter
         self.assertEqual(self.shown(), [
-            ("DEVICE MODE", ["Mute Line", "Auto Standby", "DSD Detection", "DSD Filter"]),
+            ("PHONES", ["Mute Line"]), ("DSD", ["DSD Filter", "DSD Detection"]), ("POWER", ["Auto Standby"]),
             ("DISPLAY", ["Display Mode", "Meter Color", "Hor. Meter", "AutoDark Mode", "Show Vol. Screen", "Lock UI"])])
         self.assertEqual(self.session.device_setting(P.DSD_FILTER).names, ["50 kHz", "70 kHz"])
         self.use(PRO)
-        self.assertEqual([g for g, _ in self.shown()], ["DEVICE MODE", "PHONES", "DIGITAL I/O", "DISPLAY"])
+        self.assertEqual([g for g, _ in self.shown()], ["DEVICE MODE", "PHONES", "DSD", "SPDIF", "DISPLAY"])
         self.assertEqual(self.shown()[1][1], ["Dual Phones", "Bal Phones Mode", "Toggle Ph/Line", "Mute v. TRS 1/2",
                                               "Mute v. TRS 3/4"])
         self.assertEqual(self.session.device_setting(P.DSD_FILTER).names, ["50 kHz", "150 kHz"])
         self.use(PRO_24)
-        self.assertEqual(self.shown()[0][1], ["Basic Mode", "Auto Standby", "DSD Detection", "Dig. Out Source"])
-        self.assertEqual(self.shown()[1][1][1], "Bal TRS Phones Mode")
+        self.assertEqual(self.shown()[0][1], ["Basic Mode", "Dig. Out Source", "Auto Standby"])
+        self.assertEqual(self.shown()[1][1][1], "Bal TRS Mode")
+        self.assertEqual(self.shown()[2], ("DSD", ["DSD Detection"]))
 
     def test_written_within_the_list(self):
         self.connect()
@@ -1082,7 +1083,7 @@ class DeviceSettings(Harness):
         self.assertTrue(self.session.writable((12, P.MUTE_V_PH_1_2)))
         self.assertEqual(self.session.phones_1_2(6), "own")
 
-    def test_clock_source_but_not_in_basic_mode_dac(self):
+    def test_clock_source_and_spdif_in_but_not_in_basic_mode_dac(self):
         self.use(PRO_24)
         self.assertEqual(self.session.device_setting(P.CLOCK_SOURCE).names, ["Auto", "INT", "AES", "SPDIF"])
         self.session.set((12, P.CLOCK_SOURCE), 1)                       # INT
@@ -1091,6 +1092,7 @@ class DeviceSettings(Harness):
         self.assertEqual(self.sim.state[(12, P.CLOCK_SOURCE)], 1)
         self.assertEqual(self.session.basic_mode(), P.MODE_DAC)
         self.assertFalse(self.session.writable((12, P.CLOCK_SOURCE)))
+        self.assertFalse(self.session.writable((12, P.SPDIF_IN)))
 
 
 if __name__ == "__main__":

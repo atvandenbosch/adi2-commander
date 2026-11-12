@@ -44,15 +44,19 @@ class OutputSettings(WindowTest):
     def test_a_line_between_two_open_panels(self):
         lines = self.win.panel_lines
         shown = lambda: [line.isVisible() for line in lines]                    # noqa: E731
-        self.assertEqual(shown(), [False, False])                               # Output alone
+        self.assertEqual(shown(), [False, False, False])                        # Output alone
         QTest.mouseClick(self.win.presets_tab, Qt.LeftButton)
-        self.assertEqual(shown(), [False, True])
+        self.assertEqual(shown(), [False, True, False])
         QTest.mouseClick(self.win.input_tab, Qt.LeftButton)
-        self.assertEqual(shown(), [True, True])
+        self.assertEqual(shown(), [True, True, False])
+        QTest.mouseClick(self.win.device_tab, Qt.LeftButton)
+        self.assertEqual(shown(), [True, True, True])
         QTest.mouseClick(self.win.output_tab, Qt.LeftButton)
-        self.assertEqual(shown(), [False, True])                                # Input, then Presets
+        self.assertEqual(shown(), [False, True, True])                          # Input, Presets, Device
         QTest.mouseClick(self.win.presets_tab, Qt.LeftButton)
-        self.assertEqual(shown(), [False, False])
+        self.assertEqual(shown(), [False, False, True])                         # Input, Device
+        QTest.mouseClick(self.win.input_tab, Qt.LeftButton)
+        self.assertEqual(shown(), [False, False, False])
 
     def volume_arrow(self, direction, modifier=Qt.NoModifier):
         v = self.panel.volume

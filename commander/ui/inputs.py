@@ -12,8 +12,9 @@ is amber. USB shows the rate set on the computer: whether audio comes with it, t
 
 ADI-2 Pro and ADI-2/4 Pro: the Basic Mode in use, then one Source for Line Out and Phones 1/2 and one for Phones
 3/4; in Basic Mode DAC one for all outputs (Session.source_rows). Outside AD/DA and DAC the Basic Mode in use sets
-the input of Line Out and Phones 1/2, and their row shows that input. Under it the settings of the analog input, in
-the groups LEVEL, PROCESSING, ADC and RIAA, each row as far as the device has the setting.
+the input of Line Out and Phones 1/2, and their row shows that input. Under CLOCK the rate the device runs at and
+Clock Source, which cannot be set in Basic Mode DAC. Under it the settings of the analog input, in the groups LEVEL,
+PROCESSING, ADC and RIAA, each row as far as the device has the setting.
 """
 
 from PySide6.QtCore import Qt, Signal
@@ -28,7 +29,9 @@ from .widgets import ATTACHED_GAP, DOT_GAP, GROUP_STYLE, INNER_GAP, TITLE_STYLE,
 INPUTS = [("coax", "SPDIF coax"), ("optical", "Optical"), ("usb", "USB")]
 SOURCE_TIP = ("The input of the whole device: Line Out, Phones and IEM alike.\n"
               "Auto prefers SPDIF to USB; the USB (Rec …) choices select USB and record the SPDIF input over USB.")
-MODE_TIP = "The Basic Mode in use\nSet on the device: SETUP → Options → Device Mode / DSD"
+MODE_TIP = "The Basic Mode in use\nSet in DEVICE › DEVICE MODE"
+CLOCK_SOURCE_TIP = "The clock the device runs on\nAuto: the digital input with a signal; INT: its own"
+NOT_IN_DAC_MODE = "In Basic Mode DAC Source sets it"
 OUTPUTS_TIP = "The input of %s"                      # with the names of the outputs
 SHORT = {"Line Out": "Ln. Out", "Phones 1/2": "Ph. 1/2"}   # in the name of a row of two outputs
 ALL_TIP = "The input of all outputs, and the clock of the device"
@@ -140,17 +143,18 @@ class InputPanel(QWidget):
         for name, text in INPUTS:
             self.dac_fs.append(self._shown(name, text, dot=True))
             lay.addWidget(self.dac_fs[-1])
-        self.dac_fs.append(QWidget())
-        self.dac_fs[-1].setFixedHeight(INNER_GAP)
+        lay.addSpacing(INNER_GAP)
+        lay.addWidget(self._group("CLOCK"))
+        lay.addSpacing(ATTACHED_GAP)
+        lay.addWidget(self._shown("rate", "Sample Rate"))
+        self.dac_fs.append(self._shown("clock", "Clock"))
         lay.addWidget(self.dac_fs[-1])
-        self.dac_fs.append(self._group("CLOCK"))
-        lay.addWidget(self.dac_fs[-1])
-        self.dac_fs.append(QWidget())
-        self.dac_fs[-1].setFixedHeight(ATTACHED_GAP)
-        lay.addWidget(self.dac_fs[-1])
-        for key, text in (("rate", "Sample Rate"), ("clock", "Clock")):
-            self.dac_fs.append(self._shown(key, text))
-            lay.addWidget(self.dac_fs[-1])
+        self.clock_source = Stepper([""])
+        self.clock_source.setFixedWidth(VALUE_WIDTH)
+        self.clock_source.chosen.connect(
+            lambda value: self.edited.emit((P.DEVICE_ADDRESS, P.CLOCK_SOURCE), value, False))
+        self.clock_source_row = _row(_label("Clock Source"), self.clock_source)
+        lay.addWidget(self.clock_source_row)
         self.analog, self.analog_rows, self.analog_groups = {}, {}, []   # steppers, rows, (widgets, indices)
         self.auto_ref = Option("Auto Ref Level")
         self.auto_ref.clicked.connect(self.toggle_auto_ref)
@@ -228,9 +232,11 @@ class InputPanel(QWidget):
         self.mode_row.setVisible(own)
         for w in self.dac_fs:
             w.setVisible(not own)
+        self.clock_source_row.setVisible(own)
         self.refresh_analog(own)
         if own:
             self.refresh_rows(model)
+            self.refresh_clock()
             return
         self.rows[1][0].hide()
         self.rows[0][1].setText("Source")
@@ -312,6 +318,22 @@ class InputPanel(QWidget):
                 sent, actual = self.marks.mismatch[r.key]
                 tip += "\nSent %s, device has %s" % (stepper.text(sent), stepper.text(actual))
             stepper.show_state(value, self.session.writable(r.key), tip, bad=bad, held=takes is not None)
+
+    def refresh_clock(self):
+        """ADI-2 Pro and ADI-2/4 Pro: the rate the device runs at (Sample Rate), and Clock Source."""
+        session, s, ready = self.session, self.session.state, self.session.ready()
+        index = s.get(P.SAMPLE_RATE) if ready else None
+        self.values["rate"].setText(_khz(P.SAMPLE_RATES[index]) if index in range(len(P.SAMPLE_RATES)) else "")
+        key = (P.DEVICE_ADDRESS, P.CLOCK_SOURCE)
+        setting = session.device_setting(P.CLOCK_SOURCE) if ready else None
+        if setting is not None:
+            self.clock_source.names = setting.names
+        tip = [CLOCK_SOURCE_TIP, NOT_IN_DAC_MODE if ready and session.basic_mode() == P.MODE_DAC else None]
+        bad = key in self.marks.mismatch
+        if bad:
+            tip.append("Sent %s, device has %s" % tuple(self.clock_source.text(v) for v in self.marks.mismatch[key]))
+        self.clock_source.show_state(s.get(key) if ready else None, session.writable(key),
+                                     "\n".join(filter(None, tip)), bad=bad)
 
     def refresh_analog(self, shown):
         """ADI-2 Pro and ADI-2/4 Pro: the settings of the analog input, a row for each the device has, a group as far

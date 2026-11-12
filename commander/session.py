@@ -307,8 +307,8 @@ class Session:
                 return False
             if i == P.MUTE_V_PH_1_2:
                 return self.state.get((a, P.DUAL_PHONES)) == 1          # only with Dual Phones on
-            if i == P.CLOCK_SOURCE:
-                return self.basic_mode() not in (None, P.MODE_DAC)      # in Basic Mode DAC it cannot be set
+            if i in (P.CLOCK_SOURCE, P.SPDIF_IN):
+                return self.basic_mode() not in (None, P.MODE_DAC)      # in Basic Mode DAC Source sets them
             return True
         if a in P.OUTPUT_ADDRESSES:
             if not (self.controls(a) or key == self.kept_ref_level()):

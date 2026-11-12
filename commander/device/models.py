@@ -45,8 +45,8 @@ from . import params as P
 # sources: the names of Source: of Line Out ("line"), of Phones 3/4 ("phones"; "phones_ex" on an ADI-2/4 Pro EX),
 #   and in Basic Mode DAC ("dac"). None for one input of the whole device, params.INPUTS
 # rumble: it has Rumble, a preset built in behind Clear (params.RUMBLE)
-# device: the settings of the device that can be set (params.DEVICE_ADDRESS), as on its front panel: (group,
-#   (params.Setting, ...)) each. A device has those it reports
+# device: the settings of the device that can be set (params.DEVICE_ADDRESS), grouped and named as on its front panel,
+#   a group for each subject of a page: (group, (params.Setting, ...)) each. A device has those it reports
 # clock: Clock Source, a params.Setting, where it can be chosen; None where the device follows Source
 class Model(namedtuple("Model", "id name port supported tested outputs tags controlled separate borrowed no_bt_from "
                                 "one_eq_from active ref_levels ref_dbu shared_ref_level da_filters choices input "
@@ -69,10 +69,11 @@ DAC =Model(0x71, MODEL, "ADI-2 DAC", True, True, ("Line Out", "Phones 1/2", "Pho
             (3, 6, 9), (), {}, 705600, None, ((3,), (6,), (9,), ()),
             ref_levels=P.REF_LEVELS, ref_dbu=P.REF_DBU, shared_ref_level=None, da_filters=P.DA_FILTERS,
             choices={}, input=None, input_ex={}, ad_filter_fixed_from=None, sources=None, rumble=False,
-            device=(("DEVICE MODE", (_S(P.MUTE_LINE, "Mute Line", ["Off", "vs. Phones", "Toggle Ph/Line",
-                                                                   "Toggle Plugged"]),
-                                     _STANDBY, _DETECTION, _S(P.DSD_DIRECT, "DSD Direct (Line)", None),
-                                     _S(P.DSD_FILTER, "DSD Filter", ["50 kHz", "70 kHz"]))),
+            device=(("PHONES", (_S(P.MUTE_LINE, "Mute Line", ["Off", "vs. Phones", "Toggle Ph/Line",
+                                                              "Toggle Plugged"]),)),
+                    ("DSD", (_S(P.DSD_DIRECT, "DSD Direct (Line)", None),
+                             _S(P.DSD_FILTER, "DSD Filter", ["50 kHz", "70 kHz"]), _DETECTION)),
+                    ("POWER", (_STANDBY,)),
                     _DISPLAY),
             clock=None)
 
@@ -84,13 +85,13 @@ _LOOPBACK = ["Off"] + [name % ch for ch in ("1/2", "3/4", "5/6")
                        for name in ("pre FX to %s", "post FX to %s", "post %s -6 dB")]
 _RIAA = ["+14 dB", "+20 dB", "+26 dB", "+32 dB", "+38 dB"]      # RIAA Mode: the gains
 _AUTO = ["Off", "On", "Auto"]
-_PRO_MODE = (_S(P.BASIC_MODE[1], "Basic Mode", P.BASIC_MODES), _STANDBY, _DETECTION,
-             _S(P.DIG_OUT_SOURCE, "Dig. Out Source", ["Default", "Main Out"]))
+_PRO_MODE = ("DEVICE MODE", (_S(P.BASIC_MODE[1], "Basic Mode", P.BASIC_MODES),
+                             _S(P.DIG_OUT_SOURCE, "Dig. Out Source", ["Default", "Main Out"]), _STANDBY))
 _TOGGLE = _S(P.TOGGLE_PH_LINE, "Toggle Ph/Line", ["Off", "1/2", "3/4", "1/2+3/4", "All Plugged", "Line/Digital"])
-_DIGITAL = ("DIGITAL I/O", (_S(P.SPDIF_IN, "SPDIF In", ["Auto", "Coax", "Optical"]),
-                            _S(P.SRC, "SRC", ["Off", "AES In", "SPDIF In"]),
-                            _S(P.SRC_GAIN, "SRC Gain dig.", ["0 dB", "-3 dB"]),
-                            _S(P.OPTICAL_OUT, "Optical Out", ["SPDIF", "ADAT"])))
+_SPDIF = ("SPDIF", (_S(P.SPDIF_IN, "SPDIF In", ["Auto", "Coax", "Optical"]),
+                      _S(P.SRC, "SRC", ["Off", "AES In", "SPDIF In"]),
+                      _S(P.SRC_GAIN, "SRC Gain dig.", ["0 dB", "-3 dB"]),
+                      _S(P.OPTICAL_OUT, "Optical Out", ["SPDIF", "ADAT"])))
 # Phones 1/2 of the ADI-2 Pro: Line Out's Source, Mono, Width, DA Filter, De-Emphasis, Lock Volume, Mute, Dim,
 # Loopback, Dig. DC Protection and Load B/T
 _BORROWED = {6: (3, (P.SOURCE, P.MONO, P.WIDTH, P.DA_FILTER, P.DE_EMPHASIS, P.LOCK_VOLUME, P.MUTE, P.DIM, P.LOOPBACK,
@@ -108,12 +109,13 @@ PRO = Model(0x72, "ADI-2 Pro", "ADI-2 Pro", True, False, ("Line Out", "Phones 1/
             input_ex={}, ad_filter_fixed_from=352800,
             sources={"line": _INPUTS[:4], "phones": _INPUTS + _USB,
                      "dac": ["Auto", "AES", "SPDIF coax", "Optical", "Analog"] + _USB}, rumble=False,
-            device=(("DEVICE MODE", _PRO_MODE + (_S(P.DSD_DIRECT, "DSD Direct 1/2", None),
-                                                 _S(P.DSD_FILTER, "DSD Filter", ["50 kHz", "150 kHz"]))),
+            device=(_PRO_MODE,
                     ("PHONES", (_S(P.DUAL_PHONES, "Dual Phones", None), _S(P.BAL_PHONES, "Bal Phones Mode", _AUTO),
                                 _TOGGLE, _S(P.MUTE_V_PH_1_2, "Mute v. TRS 1/2", None),
                                 _S(P.MUTE_V_PH_3_4, "Mute v. TRS 3/4", None))),
-                    _DIGITAL, _DISPLAY),
+                    ("DSD", (_S(P.DSD_DIRECT, "DSD Direct 1/2", None),
+                             _S(P.DSD_FILTER, "DSD Filter", ["50 kHz", "150 kHz"]), _DETECTION)),
+                    _SPDIF, _DISPLAY),
             clock=_S(P.CLOCK_SOURCE, "Clock Source", ["Auto", "INT", "AES", "SPDIF"]))
 PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", borrowed={}, one_eq_from=705600,
                       sources={**PRO.sources, "phones_ex": _INPUTS + _USB + ["ADAT 3/4"]},
@@ -130,12 +132,12 @@ PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", borrowed={}, o
                                 P.RIAA_MODE: P.Choices(["Off", "0 dB"] + _RIAA),
                                 P.BAL_IMPEDANCE: P.Choices(["94 kΩ", "47 kΩ"])},
                       ad_filter_fixed_from=705600, rumble=True,
-                      device=(("DEVICE MODE", _PRO_MODE),
+                      device=(_PRO_MODE,
                               ("PHONES", (_S(P.DUAL_PHONES, "Dual Phones", None),
-                                          _S(P.BAL_PHONES, "Bal TRS Phones Mode", _AUTO), _TOGGLE,
+                                          _S(P.BAL_PHONES, "Bal TRS Mode", _AUTO), _TOGGLE,
                                           _S(P.MUTE_V_PH_1_2, "Mute v. Ph 1/2", None),
                                           _S(P.MUTE_V_PH_3_4, "Mute v. Ph 3/4", None))),
-                              _DIGITAL, _DISPLAY))
+                              ("DSD", (_DETECTION,)), _SPDIF, _DISPLAY))
 MODELS = (DAC, PRO, PRO_24)
 BY_ID = {m.id: m for m in MODELS}
 
