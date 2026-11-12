@@ -5,7 +5,7 @@ import unittest
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
 from PySide6.QtGui import QHelpEvent, QKeyEvent, QMouseEvent, QWheelEvent
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QToolTip
+from PySide6.QtWidgets import QApplication, QStyle, QStyleFactory, QToolTip
 
 from commander.device import codec
 from commander.device import params as P
@@ -42,18 +42,27 @@ class OutputSettings(WindowTest):
         self.assertTrue(self.win.presets_area.isVisible())                      # each its own
 
     def test_the_name_of_a_setting_shows_its_tooltip(self):
-        """The name and the room beside the control show what the control shows."""
+        """The name shows what the control shows; the room beside the control shows nothing."""
         def tip(widget, pos):
+            """The tooltip shown, None where none is."""
             QToolTip.hideText()
-            QApplication.sendEvent(widget, QHelpEvent(QEvent.ToolTip, pos, widget.mapToGlobal(pos)))
-            return QToolTip.text()
+            e = QHelpEvent(QEvent.ToolTip, pos, widget.mapToGlobal(pos))
+            QApplication.sendEvent(widget, e)
+            return QToolTip.text() if e.isAccepted() else None
 
         label, stepper = self.panel.labels[P.POLARITY], self.panel.steppers[P.POLARITY]
         self.assertTrue(stepper.toolTip())
         row = self.panel.rows[P.POLARITY]
         self.assertEqual(tip(label, QPoint(4, 4)), stepper.toolTip())
-        self.assertEqual(tip(row, QPoint(row.width() - 2, 4)), stepper.toolTip())
+        self.assertIsNone(tip(row, QPoint(row.width() - 2, 4)))
         QToolTip.hideText()
+
+    def test_each_tooltip_waits_for_the_mouse_to_rest(self):
+        """As long as in Fusion, also right after another tooltip."""
+        style = self.panel.steppers[P.POLARITY].style()
+        wake_up = QStyle.SH_ToolTip_WakeUpDelay
+        self.assertEqual(style.styleHint(wake_up), QStyleFactory.create("Fusion").styleHint(wake_up))
+        self.assertEqual(style.styleHint(QStyle.SH_ToolTip_FallAsleepDelay), 0)
 
     def test_a_line_between_two_open_panels(self):
         lines = self.win.panel_lines

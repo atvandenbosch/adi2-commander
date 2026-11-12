@@ -498,18 +498,20 @@ def _label(text):
 
 
 class Row(QWidget):
-    """A setting's row: its name, then what sets it, the last widget. Its tooltip is the row's own, else that of what
-    sets it: the name and the room beside it show the same as the control."""
+    """A setting's row: its name, then what sets it, the last widget. Its tooltip is the row's own, else on the name
+    that of what sets it."""
 
     def __init__(self, control):
         super().__init__()
         self.control = control
 
     def event(self, e):
-        if e.type() == QEvent.ToolTip:
-            text = self.toolTip() or self.control.toolTip()
-            if text:
-                QToolTip.showText(e.globalPos(), text, self)
+        if e.type() == QEvent.ToolTip and not self.toolTip():
+            child = self.childAt(e.pos())
+            name = child is not None and child is not self.control and not self.control.isAncestorOf(child)
+            if name and self.control.toolTip():
+                QToolTip.showText(e.globalPos(), self.control.toolTip(), self)
+                e.accept()
             else:
                 QToolTip.hideText()
                 e.ignore()

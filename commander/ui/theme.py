@@ -1,6 +1,8 @@
-"""Dark look: Qt's Fusion style with a dark palette, a neutral accent, and a colour for each part of the sound."""
+"""Dark look: Qt's Fusion style with tooltips that wait, a dark palette, a neutral accent, and a colour for each part
+of the sound."""
 
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QGuiApplication, QPalette
+from PySide6.QtWidgets import QProxyStyle, QStyle
 
 DISPLAY = QColor("#121314")       # the graph's zone, from line to line: the darkest, as the device's display
 DISPLAY_GRID = QColor("#2e3034")
@@ -37,8 +39,18 @@ def faded(color):
     return QColor(*[round(p + (c - p) * 0.6) for p, c in zip(PANEL.getRgb()[:3], color.getRgb()[:3])])
 
 
+class _Style(QProxyStyle):
+    """Fusion, with each tooltip waiting for the mouse to rest, also right after another: using the controls does not
+    bring up one tooltip after the other."""
+
+    def styleHint(self, hint, option=None, widget=None, data=None):
+        if hint == QStyle.SH_ToolTip_FallAsleepDelay:
+            return 0
+        return super().styleHint(hint, option, widget, data)
+
+
 def apply(app):
-    app.setStyle("Fusion")
+    app.setStyle(_Style("Fusion"))
     p = QPalette()
     p.setColor(QPalette.Window, BACKGROUND)
     p.setColor(QPalette.WindowText, TEXT)
