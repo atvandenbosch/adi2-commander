@@ -684,6 +684,13 @@ class OtherModels(unittest.TestCase):
                 self.assertEqual(sorted(i for a, i in params if a == 1), list(range(2, 20)) + [27, 28])
                 self.assertEqual(sorted(i for a, i in params if a == 0 and i >= 20), [])
 
+    def test_dsd_filter_and_dsd_direct_on_the_pro_only(self):
+        for name in self.MODELS:
+            with self.subTest(name):
+                self.use(name)
+                params = client.parse([m for m in self.dump() if m[5] == 0x01])
+                self.assertEqual([(12, i) in params for i in (4, 5)], [name == "Pro"] * 2)
+
     def test_the_ranges_of_each_model(self):
         writes = [(9, 2, 9), (3, 2, 9), (3, 9, 9), (3, 17, 12), (0, 1, -9), (0, 10, 9)]
         expect = {"Pro": [1, 3, 5, 9, 0, 3], "2/4 SE": [2, 4, 6, 9, 0, 1], "2/4 EX": [2, 4, 6, 9, -6, 2]}

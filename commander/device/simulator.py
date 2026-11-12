@@ -104,7 +104,7 @@ PRO_DEVICE = {
     32: (0, 1, 0), 33: (0, 5, 0), 34: (0, 3, 0), 35: (0, 1, 0), 36: (0, 1, 1), 37: (0, 3, 0),
     40: (0, 2, 0), 41: (0, 2, 2), 42: (0, 1, 0), 43: (0, 2, 0),
 }
-PRO_24_DEVICE = {i: r for i, r in PRO_DEVICE.items() if i != 5}             # no DSD Direct
+PRO_24_DEVICE = {i: r for i, r in PRO_DEVICE.items() if i not in (4, 5)}    # no DSD Filter, no DSD Direct
 PRO_24_DEVICE.update({22: (0, 65, 49), 23: (0, 65, 50), 24: (0, 65, 52),
                       26: (0, 65, 51), 27: (0, 65, 48), 28: (0, 65, 53), 29: (0, 65, 42)})
 # in a dump, not set by the simulator: Sample Rate (48 kHz) and Load Volume
