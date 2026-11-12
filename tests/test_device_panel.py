@@ -141,7 +141,7 @@ class DevicePanel24(DevicePanel):
                                              "Mute v. Ph 3/4"])
         self.assertIn("Pentaconn", self.panel.steppers[P.BAL_PHONES][1].toolTip())
         self.assertEqual(self.rows()[4][1][-3:], ["IR 5", "IR 6", "IR 7"])
-        self.assertEqual(self.text(24), "Source USB 1/2")                         # IR 7
+        self.assertEqual((self.text(22), self.text(24)), ("Source SPDIF coax", "Source USB 1/2"))     # IR 5, IR 7
 
     def test_a_source_on_a_key_in_basic_mode_dac(self):
         key = self.panel.steppers[26][1]                                        # VOL (1): Source Analog

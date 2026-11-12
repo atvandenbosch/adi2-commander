@@ -137,7 +137,7 @@ _PRO_OUTPUTS = ("Mono 1/2", "Mono 3/4", "Mono all", None, "Mono 1/2 to L", "Mono
                 "EQ Out 1/2", "EQ Out 3/4", "EQ Out all", None, "B/T Out 1/2", "B/T Out 3/4", "BT all", None,
                 "EQ+B/T+Ld 1/2", "EQ+B/T+Ld 3/4", "EQ+B/T+Ld 1-4", None, "DIM", "Polarity", "Toggle Ph/Line",
                 "EQ In 1/2")
-_PRO_SOURCES = ("Source AES", "Source SPDIF c", "Source Optical", "Source Analog", "Source USB 1/2")
+_PRO_SOURCES = ("Source AES", "Source SPDIF coax", "Source Optical", "Source Analog", "Source USB 1/2")
 _PRO_KEYS_TO = ["Toggle View", "DIM", "Mono all", "Mono all to L", "Loudness all", "EQ Out all", "BT all",
                 *_PRO_SOURCES, "AutoDark"] + _EQ_PRESETS
 _RIAA_KEYS = ("RIAA Mode +", "RIAA Mode -", "RIAA Mono B.")

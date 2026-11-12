@@ -594,7 +594,7 @@ class GroupedChoice(Stepper):
             color = (theme.DISABLED if not self.isEnabled() else theme.faded(theme.TEXT) if self.faded
                      else theme.TEXT)
             p.setPen(color)
-            p.drawText(QRectF(self.ARROW, 0, w - 2 * self.ARROW, h), Qt.AlignCenter, self.text(self.value))
+            p.drawText(QRectF(self.ARROW / 2, 0, w - 1.5 * self.ARROW, h), Qt.AlignCenter, self.text(self.value))
         if self.bad or self.hasFocus():
             p.setPen(QPen(theme.BAD, 2) if self.bad else QPen(theme.LABEL, 1))
             p.setBrush(Qt.NoBrush)
