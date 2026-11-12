@@ -836,8 +836,8 @@ class ProOutputs(Harness):
         self.assertEqual(writable, [(4, 4), (10, 4), (4, 21), (4, 28), (3, 20), (3, 23), (9, 21), (3, 3), (3, 12),
                                     (3, 15), (9, 9), (9, 17), (1, 4), (1, 28)])  # right: Dual EQ off
         # Phones 1/2 off; Source: not in Basic Mode USB; Ref Level: with Auto Ref Level on; the input: Dual EQ by
-        # set_dual, and no Bass/Treble
-        for key in [(7, 4), (8, 4), (6, 20), (6, 12), (3, 1), (3, 2), (9, 2), (0, 8), (1, 21), (12, 6)]:
+        # set_dual, and no Bass/Treble; Sample Rate: shown only
+        for key in [(7, 4), (8, 4), (6, 20), (6, 12), (3, 1), (3, 2), (9, 2), (0, 8), (1, 21), (12, 16)]:
             self.assertFalse(self.session.writable(key), key)
         self.assertEqual([self.session.controls(out) for out in (0, 3, 6, 9)], [True, True, False, True])
 
@@ -1029,6 +1029,68 @@ class AnalogInput(Harness):
         self.assertIsNone(self.session.input_choices(P.IN_REF_LEVEL))
         self.assertFalse(self.session.writable((0, P.IN_REF_LEVEL)))
 
+
+
+class DeviceSettings(Harness):
+    """The settings of the device (address 12), as each model has them and as far as the device reports them."""
+
+    def use(self, model, revision=None):
+        """A new session on this model."""
+        self.session.close()
+        self.sim = SimulatedAdi2.factory(model, revision, presets=PRESETS, clock=self.clock)
+        self.session = Session(self.open_port, clock=self.clock)
+        self.connect()
+
+    def shown(self):
+        return [(g, [x.name for x in xs]) for g, xs in self.session.device_settings()]
+
+    def test_the_settings_of_each_model(self):
+        self.connect()                                                  # an ADI-2 DAC FS with an ESS D/A converter
+        self.assertEqual(self.shown(), [
+            ("DEVICE MODE", ["Mute Line", "Auto Standby", "DSD Detection", "DSD Filter"]),
+            ("DISPLAY", ["Display Mode", "Meter Color", "Hor. Meter", "AutoDark Mode", "Show Vol. Screen", "Lock UI"])])
+        self.assertEqual(self.session.device_setting(P.DSD_FILTER).names, ["50 kHz", "70 kHz"])
+        self.use(PRO)
+        self.assertEqual([g for g, _ in self.shown()], ["DEVICE MODE", "PHONES", "DIGITAL I/O", "DISPLAY"])
+        self.assertEqual(self.shown()[1][1], ["Dual Phones", "Bal Phones Mode", "Toggle Ph/Line", "Mute v. TRS 1/2",
+                                              "Mute v. TRS 3/4"])
+        self.assertEqual(self.session.device_setting(P.DSD_FILTER).names, ["50 kHz", "150 kHz"])
+        self.use(PRO_24)
+        self.assertEqual(self.shown()[0][1], ["Basic Mode", "Auto Standby", "DSD Detection", "Dig. Out Source"])
+        self.assertEqual(self.shown()[1][1][1], "Bal TRS Phones Mode")
+
+    def test_written_within_the_list(self):
+        self.connect()
+        s = self.session
+        s.set((12, P.METER_COLOR), 4)                                   # Red
+        s.set((12, P.DSD_DETECTION), 1)
+        with self.assertRaises(ValueError):
+            s.set((12, P.DSD_FILTER), 2)
+        with self.assertRaises(ValueError):
+            s.set((12, P.DSD_DETECTION), 2)
+        self.run_for(2.0)
+        self.assertEqual((self.sim.state[(12, 33)], self.sim.state[(12, 3)]), (4, 1))
+        # Clock Source follows Source; Sample Rate is shown only; Remap Keys is not among them
+        self.assertEqual([s.writable((12, i)) for i in (P.LOCK_UI, P.CLOCK_SOURCE, 16, 25, 26, P.DSD_DIRECT)],
+                         [True, False, False, False, False, False])
+
+    def test_mute_v_ph_1_2_only_with_dual_phones_on(self):
+        self.use(PRO)
+        self.assertFalse(self.session.writable((12, P.MUTE_V_PH_1_2)))
+        self.session.set((12, P.DUAL_PHONES), 1)
+        self.run_for(2.0)
+        self.assertTrue(self.session.writable((12, P.MUTE_V_PH_1_2)))
+        self.assertEqual(self.session.phones_1_2(6), "own")
+
+    def test_clock_source_but_not_in_basic_mode_dac(self):
+        self.use(PRO_24)
+        self.assertEqual(self.session.device_setting(P.CLOCK_SOURCE).names, ["Auto", "INT", "AES", "SPDIF"])
+        self.session.set((12, P.CLOCK_SOURCE), 1)                       # INT
+        self.session.set(P.BASIC_MODE, P.MODE_DAC)
+        self.run_for(2.0)                                               # and a status message
+        self.assertEqual(self.sim.state[(12, P.CLOCK_SOURCE)], 1)
+        self.assertEqual(self.session.basic_mode(), P.MODE_DAC)
+        self.assertFalse(self.session.writable((12, P.CLOCK_SOURCE)))
 
 
 if __name__ == "__main__":

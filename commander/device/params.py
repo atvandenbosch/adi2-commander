@@ -101,6 +101,16 @@ BASIC_MODE = (12, 6)
 BASIC_MODES = ["Auto", "AD/DA", "USB", "Preamp", "Dig Thru", "DAC"]
 MODE_AD_DA, MODE_DAC = 1, 5
 
+# the settings of the device, on their own address; models.Model.device has those of each model, with their names
+DEVICE_ADDRESS = 12
+MUTE_LINE, AUTO_STANDBY, DSD_DETECTION, DSD_FILTER, DSD_DIRECT = 1, 2, 3, 4, 5
+DIG_OUT_SOURCE, DUAL_PHONES, BAL_PHONES, TOGGLE_PH_LINE, MUTE_V_PH_1_2, MUTE_V_PH_3_4 = 7, 8, 9, 10, 11, 12
+CLOCK_SOURCE = 15
+DISPLAY_MODE, METER_COLOR, HOR_METER, AUTODARK, VOLUME_SCREEN, LOCK_UI = 32, 33, 34, 35, 36, 37
+SPDIF_IN, SRC, SRC_GAIN, OPTICAL_OUT = 40, 41, 42, 43
+# one setting: its index on DEVICE_ADDRESS, its name, the names of its values; None for a switch, Off or On
+Setting = namedtuple("Setting", "index name names")
+
 # ADI-2 Pro and ADI-2/4 Pro: the settings of the analog input, on its own address. Each is a list of names
 # (Choices); these are the same on both models, models.Model.input has the others
 INPUT_ADDRESS = 0

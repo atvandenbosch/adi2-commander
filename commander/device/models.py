@@ -6,8 +6,8 @@ presets, Loudness) and the other settings of Line Out and Phones 3/4, and of Pho
 own. Phones 1/2 shares
 the signal of Line Out and is active with Dual Phones on; with Mute v. TRS 1/2 on as well it has settings of its own,
 otherwise it uses those of Line Out (ADI-2 Pro manual, 14.1.4, 21.4). In Balanced Phones mode it is the right channel
-of Phones 3/4 (chapter 18). Commander also controls their Source, as far as the Basic Mode in use allows, and the
-settings of their analog input."""
+of Phones 3/4 (chapter 18). Commander also controls their Source, as far as the Basic Mode in use allows, the
+settings of their analog input, and the settings of the device."""
 
 from collections import namedtuple
 
@@ -45,19 +45,36 @@ from . import params as P
 # sources: the names of Source: of Line Out ("line"), of Phones 3/4 ("phones"; "phones_ex" on an ADI-2/4 Pro EX),
 #   and in Basic Mode DAC ("dac"). None for one input of the whole device, params.INPUTS
 # rumble: it has Rumble, a preset built in behind Clear (params.RUMBLE)
+# device: the settings of the device that can be set (params.DEVICE_ADDRESS), as on its front panel: (group,
+#   (params.Setting, ...)) each. A device has those it reports
+# clock: Clock Source, a params.Setting, where it can be chosen; None where the device follows Source
 class Model(namedtuple("Model", "id name port supported tested outputs tags controlled separate borrowed no_bt_from "
                                 "one_eq_from active ref_levels ref_dbu shared_ref_level da_filters choices input "
-                                "input_ex ad_filter_fixed_from sources rumble")):
+                                "input_ex ad_filter_fixed_from sources rumble device clock")):
     __slots__ = ()
 
     def __hash__(self):                          # a model is its device ID
         return hash(self.id)
 
 
+_S = P.Setting
+_STANDBY = _S(P.AUTO_STANDBY, "Auto Standby", ["Off", "30 min", "1 h", "2 h", "4 h"])
+_DETECTION = _S(P.DSD_DETECTION, "DSD Detection", None)
+_DISPLAY = ("DISPLAY", (_S(P.DISPLAY_MODE, "Display Mode", ["Default", "Dark"]),
+                        _S(P.METER_COLOR, "Meter Color", ["Green", "Cyan", "Amber", "Monochrome", "Red", "Orange"]),
+                        _S(P.HOR_METER, "Hor. Meter", ["Post FX", "Pre FX", "Dual", "Post FX dBu"]),
+                        _S(P.AUTODARK, "AutoDark Mode", None), _S(P.VOLUME_SCREEN, "Show Vol. Screen", None),
+                        _S(P.LOCK_UI, "Lock UI", ["Off", "Remote", "Keys", "Keys+Remote"])))
 DAC =Model(0x71, MODEL, "ADI-2 DAC", True, True, ("Line Out", "Phones 1/2", "Phones 3/4 · IEM"), ("L", "P", "I"),
             (3, 6, 9), (), {}, 705600, None, ((3,), (6,), (9,), ()),
             ref_levels=P.REF_LEVELS, ref_dbu=P.REF_DBU, shared_ref_level=None, da_filters=P.DA_FILTERS,
-            choices={}, input=None, input_ex={}, ad_filter_fixed_from=None, sources=None, rumble=False)
+            choices={}, input=None, input_ex={}, ad_filter_fixed_from=None, sources=None, rumble=False,
+            device=(("DEVICE MODE", (_S(P.MUTE_LINE, "Mute Line", ["Off", "vs. Phones", "Toggle Ph/Line",
+                                                                   "Toggle Plugged"]),
+                                     _STANDBY, _DETECTION, _S(P.DSD_DIRECT, "DSD Direct (Line)", None),
+                                     _S(P.DSD_FILTER, "DSD Filter", ["50 kHz", "70 kHz"]))),
+                    _DISPLAY),
+            clock=None)
 
 _FILTERS = ["SD Sharp", "SD Slow", "Sharp", "Slow"]
 _PHONES = ["Lo-Power", "Hi-Power"]
@@ -66,6 +83,14 @@ _INPUTS, _USB = ["Auto", "AES", "SPDIF", "Analog"], ["USB 1/2", "USB 3/4"]
 _LOOPBACK = ["Off"] + [name % ch for ch in ("1/2", "3/4", "5/6")
                        for name in ("pre FX to %s", "post FX to %s", "post %s -6 dB")]
 _RIAA = ["+14 dB", "+20 dB", "+26 dB", "+32 dB", "+38 dB"]      # RIAA Mode: the gains
+_AUTO = ["Off", "On", "Auto"]
+_PRO_MODE = (_S(P.BASIC_MODE[1], "Basic Mode", P.BASIC_MODES), _STANDBY, _DETECTION,
+             _S(P.DIG_OUT_SOURCE, "Dig. Out Source", ["Default", "Main Out"]))
+_TOGGLE = _S(P.TOGGLE_PH_LINE, "Toggle Ph/Line", ["Off", "1/2", "3/4", "1/2+3/4", "All Plugged", "Line/Digital"])
+_DIGITAL = ("DIGITAL I/O", (_S(P.SPDIF_IN, "SPDIF In", ["Auto", "Coax", "Optical"]),
+                            _S(P.SRC, "SRC", ["Off", "AES In", "SPDIF In"]),
+                            _S(P.SRC_GAIN, "SRC Gain dig.", ["0 dB", "-3 dB"]),
+                            _S(P.OPTICAL_OUT, "Optical Out", ["SPDIF", "ADAT"])))
 # Phones 1/2 of the ADI-2 Pro: Line Out's Source, Mono, Width, DA Filter, De-Emphasis, Lock Volume, Mute, Dim,
 # Loopback, Dig. DC Protection and Load B/T
 _BORROWED = {6: (3, (P.SOURCE, P.MONO, P.WIDTH, P.DA_FILTER, P.DE_EMPHASIS, P.LOCK_VOLUME, P.MUTE, P.DIM, P.LOOPBACK,
@@ -82,7 +107,14 @@ PRO = Model(0x72, "ADI-2 Pro", "ADI-2 Pro", True, False, ("Line Out", "Phones 1/
                    P.DC_FILTER: P.Choices(["Auto", "ADC", "RME", "None"])},
             input_ex={}, ad_filter_fixed_from=352800,
             sources={"line": _INPUTS[:4], "phones": _INPUTS + _USB,
-                     "dac": ["Auto", "AES", "SPDIF coax", "Optical", "Analog"] + _USB}, rumble=False)
+                     "dac": ["Auto", "AES", "SPDIF coax", "Optical", "Analog"] + _USB}, rumble=False,
+            device=(("DEVICE MODE", _PRO_MODE + (_S(P.DSD_DIRECT, "DSD Direct 1/2", None),
+                                                 _S(P.DSD_FILTER, "DSD Filter", ["50 kHz", "150 kHz"]))),
+                    ("PHONES", (_S(P.DUAL_PHONES, "Dual Phones", None), _S(P.BAL_PHONES, "Bal Phones Mode", _AUTO),
+                                _TOGGLE, _S(P.MUTE_V_PH_1_2, "Mute v. TRS 1/2", None),
+                                _S(P.MUTE_V_PH_3_4, "Mute v. TRS 3/4", None))),
+                    _DIGITAL, _DISPLAY),
+            clock=_S(P.CLOCK_SOURCE, "Clock Source", ["Auto", "INT", "AES", "SPDIF"]))
 PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", borrowed={}, one_eq_from=705600,
                       sources={**PRO.sources, "phones_ex": _INPUTS + _USB + ["ADAT 3/4"]},
                       ref_levels={3: ["+1 dBu", "+7 dBu", "+13 dBu", "+19 dBu", "+24 dBu"],
@@ -97,7 +129,13 @@ PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", borrowed={}, o
                                 P.DC_FILTER: P.Choices(["ADC", "RME", "None"]),
                                 P.RIAA_MODE: P.Choices(["Off", "0 dB"] + _RIAA),
                                 P.BAL_IMPEDANCE: P.Choices(["94 kΩ", "47 kΩ"])},
-                      ad_filter_fixed_from=705600, rumble=True)
+                      ad_filter_fixed_from=705600, rumble=True,
+                      device=(("DEVICE MODE", _PRO_MODE),
+                              ("PHONES", (_S(P.DUAL_PHONES, "Dual Phones", None),
+                                          _S(P.BAL_PHONES, "Bal TRS Phones Mode", _AUTO), _TOGGLE,
+                                          _S(P.MUTE_V_PH_1_2, "Mute v. Ph 1/2", None),
+                                          _S(P.MUTE_V_PH_3_4, "Mute v. Ph 3/4", None))),
+                              _DIGITAL, _DISPLAY))
 MODELS = (DAC, PRO, PRO_24)
 BY_ID = {m.id: m for m in MODELS}
 

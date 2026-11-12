@@ -268,6 +268,24 @@ class Session:
         """The names of the Source setting at key; None where there is none."""
         return next((row.names for row in self.source_rows() if row.key == key), None)
 
+    def device_settings(self):
+        """The settings of the device connected (Model.device) as far as it reports them: (group, [params.Setting])
+        each, a group as far as it has any."""
+        m = self.model
+        if m is None:
+            return []
+        groups = [(g, [x for x in xs if (P.DEVICE_ADDRESS, x.index) in self.state]) for g, xs in m.device]
+        return [(g, xs) for g, xs in groups if xs]
+
+    def device_setting(self, index):
+        """The params.Setting at index on the device's address: one of device_settings, or Clock Source where it can
+        be chosen (Model.clock); None otherwise."""
+        m = self.model
+        if m is None or (P.DEVICE_ADDRESS, index) not in self.state:
+            return None
+        settings = [x for _, xs in m.device for x in xs] + ([] if m.clock is None else [m.clock])
+        return next((x for x in settings if x.index == index), None)
+
     def _source_choosable(self, key):
         """ADI-2 Pro and ADI-2/4 Pro: Line Out's Source can be chosen in AD/DA and DAC, Phones 3/4's in every other
         mode; in DAC Line Out's is that of all outputs."""
@@ -284,6 +302,14 @@ class Session:
             if i in (P.IN_REF_LEVEL, P.IN_AUTO_REF_LEVEL) and self.riaa():
                 return False
             return self.input_choices(i) is not None
+        if a == P.DEVICE_ADDRESS:
+            if self.device_setting(i) is None:
+                return False
+            if i == P.MUTE_V_PH_1_2:
+                return self.state.get((a, P.DUAL_PHONES)) == 1          # only with Dual Phones on
+            if i == P.CLOCK_SOURCE:
+                return self.basic_mode() not in (None, P.MODE_DAC)      # in Basic Mode DAC it cannot be set
+            return True
         if a in P.OUTPUT_ADDRESSES:
             if not (self.controls(a) or key == self.kept_ref_level()):
                 return False
@@ -318,6 +344,9 @@ class Session:
         if key[0] == P.INPUT_ADDRESS:
             c = self.input_choices(key[1])
             lo, hi = c.first, c.first + len(c.names) - 1
+        elif key[0] == P.DEVICE_ADDRESS:
+            names = self.device_setting(key[1]).names
+            lo, hi = 0, 1 if names is None else len(names) - 1
         elif names is not None:
             lo, hi = 0, len(names) - 1
         else:
