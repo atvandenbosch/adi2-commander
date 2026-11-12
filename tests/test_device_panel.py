@@ -55,6 +55,18 @@ class DevicePanel(WindowTest):
         self.assertEqual(self.text(P.METER_COLOR), "Red")
         self.assertTrue(self.option(P.DSD_DETECTION).on)
 
+    def test_two_pages_the_one_chosen_kept(self):
+        meter, remap = self.panel.steppers[P.METER_COLOR][1], self.panel.steppers[P.REMAP_KEYS][1]
+        self.assertEqual((meter.isVisibleTo(self.panel), remap.isVisibleTo(self.panel)), (False, False))
+        QTest.mouseClick(self.panel.choice.buttons[1], Qt.LeftButton)          # Controls
+        self.assertEqual((meter.isVisibleTo(self.panel), remap.isVisibleTo(self.panel)), (True, True))
+        self.assertFalse(self.panel.steppers[P.AUTO_STANDBY][1].isVisibleTo(self.panel))
+        QTest.mouseClick(self.win.device_tab, Qt.LeftButton)                     # closed and opened again
+        QTest.mouseClick(self.win.device_tab, Qt.LeftButton)
+        self.spin(50)
+        self.assertTrue(meter.isVisible())
+        self.assertEqual(self.panel.choice.current, 1)
+
     def test_a_key_chosen_from_its_menu(self):
         key = self.panel.steppers[26][1]                                        # VOL (1)
         menu = key.menu()

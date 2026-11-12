@@ -1,5 +1,6 @@
 """The settings of the device itself, grouped and named as on its front panel: those of the model (Model.device), as
-far as the device reports them (Session.device_settings).
+far as the device reports them (Session.device_settings). On two pages: Audio, what the signal goes through, and
+Controls, the keys and the display of the device. The page chosen stays while Commander runs.
 
     one of a few values     a stepper (‹ value ›)
     on or off               an option
@@ -16,8 +17,9 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from ..device import models
 from ..device import params as P
 from .inputs import NOT_IN_DAC_MODE
-from .output import NAME_INDENT, VALUE_WIDTH, _label, _row
-from .widgets import ATTACHED_GAP, GROUP_STYLE, INNER_GAP, TITLE_STYLE, GroupedChoice, Option, Stepper, head
+from .output import LABEL_WIDTH, NAME_INDENT, VALUE_WIDTH, _label, _row
+from .widgets import (ATTACHED_GAP, GROUP_STYLE, INNER_GAP, TITLE_STYLE, GroupedChoice, Option, Segmented, Stepper,
+                      head)
 
 # what each setting chooses; below it, briefly, a value whose name does not say it all
 TIPS = {
@@ -61,6 +63,8 @@ REMOTE_KEY_TIP = "The function of key %d on the remote control"
 EXTRA = {(models.PRO.id, P.BAL_PHONES): "Line Out is then muted",
          (models.PRO_24.id, P.BAL_PHONES): "The Pentaconn jack is always balanced"}
 NEEDS_DUAL_PHONES = "Can be set with Dual Phones on"
+PAGES = ("Audio", "Controls")
+CONTROLS = {"KEYS", "DISPLAY"}                   # the groups on the second page
 NOT_IN_USE = "Not in use: DSD Direct is off"
 KEYS_OFF = "Not in use: Remap Keys is off"
 DAC_MODE_ONLY = "Takes effect in Basic Mode DAC"
@@ -87,12 +91,18 @@ class DevicePanel(QWidget):
         self.session, self.marks, self.model = session, marks, None
         self.built = None                                # the groups and settings the rows are for
         self.steppers, self.options = {}, {}
+        self.page, self.pages = 0, []                    # the page shown; the widget of each
         title = QLabel("DEVICE")
         title.setStyleSheet(TITLE_STYLE)
+        self.choice = Segmented(PAGES)
+        self.choice.changed.connect(self.show_page)
+        self.choice.setFixedWidth(LABEL_WIDTH + VALUE_WIDTH)                  # as wide as the rows
         self.lay = QVBoxLayout(self)
         self.lay.setContentsMargins(0, 0, 0, 0)
         self.lay.setSpacing(0)
         self.lay.addWidget(head(title))
+        self.lay.addSpacing(ATTACHED_GAP)
+        self.lay.addWidget(self.choice)
         self.body = QWidget()
         self.lay.addWidget(self.body)
         self.lay.addStretch()
@@ -109,10 +119,19 @@ class DevicePanel(QWidget):
         self.built = groups
         self.steppers, self.options = {}, {}
         body = QWidget()
-        lay = QVBoxLayout(body)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
+        outer = QVBoxLayout(body)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        self.pages, pages = [], []
+        for _ in PAGES:
+            page = QWidget()
+            pages.append(QVBoxLayout(page))
+            pages[-1].setContentsMargins(0, 0, 0, 0)
+            pages[-1].setSpacing(0)
+            outer.addWidget(page)
+            self.pages.append(page)
         for g, xs in groups:
+            lay = pages[g in CONTROLS]
             lay.addSpacing(INNER_GAP)
             group = QLabel(g)
             group.setStyleSheet(GROUP_STYLE)
@@ -124,6 +143,13 @@ class DevicePanel(QWidget):
         self.body.setParent(None)
         self.body.deleteLater()
         self.body = body
+        self.show_page(self.page)
+
+    def show_page(self, i):
+        self.page = i
+        self.choice.set_current(i)
+        for n, page in enumerate(self.pages):
+            page.setVisible(n == i)
 
     def _control(self, x):
         """The row of one setting: its name, then what sets it; an option carries its own name."""
