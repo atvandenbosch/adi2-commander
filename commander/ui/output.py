@@ -12,9 +12,9 @@ ADI-2/4 Pro has) is left out. The input is in the Input panel.
 
 import math
 
-from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QPainter, QPen
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QToolTip, QVBoxLayout, QWidget
 
 from ..device import params as P
 from . import theme
@@ -497,8 +497,28 @@ def _label(text):
     return label
 
 
+class Row(QWidget):
+    """A setting's row: its name, then what sets it, the last widget. Its tooltip is the row's own, else that of what
+    sets it: the name and the room beside it show the same as the control."""
+
+    def __init__(self, control):
+        super().__init__()
+        self.control = control
+
+    def event(self, e):
+        if e.type() == QEvent.ToolTip:
+            text = self.toolTip() or self.control.toolTip()
+            if text:
+                QToolTip.showText(e.globalPos(), text, self)
+            else:
+                QToolTip.hideText()
+                e.ignore()
+            return True
+        return super().event(e)
+
+
 def _row(*widgets, indent=0):
-    row = QWidget()
+    row = Row(widgets[-1])
     row.setFixedHeight(ROW_HEIGHT)
     lay = QHBoxLayout(row)
     lay.setContentsMargins(indent, 0, 0, 0)

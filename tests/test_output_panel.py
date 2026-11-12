@@ -3,9 +3,9 @@
 import unittest
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
-from PySide6.QtGui import QKeyEvent, QMouseEvent, QWheelEvent
+from PySide6.QtGui import QHelpEvent, QKeyEvent, QMouseEvent, QWheelEvent
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QToolTip
 
 from commander.device import codec
 from commander.device import params as P
@@ -40,6 +40,20 @@ class OutputSettings(WindowTest):
         QTest.mouseClick(self.win.output_tab, Qt.LeftButton)
         self.assertFalse(self.win.output_area.isVisible())
         self.assertTrue(self.win.presets_area.isVisible())                      # each its own
+
+    def test_the_name_of_a_setting_shows_its_tooltip(self):
+        """The name and the room beside the control show what the control shows."""
+        def tip(widget, pos):
+            QToolTip.hideText()
+            QApplication.sendEvent(widget, QHelpEvent(QEvent.ToolTip, pos, widget.mapToGlobal(pos)))
+            return QToolTip.text()
+
+        label, stepper = self.panel.labels[P.POLARITY], self.panel.steppers[P.POLARITY]
+        self.assertTrue(stepper.toolTip())
+        row = self.panel.rows[P.POLARITY]
+        self.assertEqual(tip(label, QPoint(4, 4)), stepper.toolTip())
+        self.assertEqual(tip(row, QPoint(row.width() - 2, 4)), stepper.toolTip())
+        QToolTip.hideText()
 
     def test_a_line_between_two_open_panels(self):
         lines = self.win.panel_lines
