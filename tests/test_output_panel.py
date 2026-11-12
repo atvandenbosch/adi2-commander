@@ -2,7 +2,7 @@
 
 import unittest
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, Qt
 from PySide6.QtGui import QHelpEvent, QKeyEvent, QMouseEvent, QWheelEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QStyle, QStyleFactory, QToolTip
@@ -65,6 +65,7 @@ class OutputSettings(WindowTest):
         self.assertEqual(style.styleHint(QStyle.SH_ToolTip_FallAsleepDelay), 0)
 
     def test_a_line_between_two_open_panels(self):
+        self.win.room = lambda: QRect(0, 0, 2560, 1400)                       # room for all four
         lines = self.win.panel_lines
         shown = lambda: [line.isVisible() for line in lines]                    # noqa: E731
         self.assertEqual(shown(), [False, False, False])                        # Output alone

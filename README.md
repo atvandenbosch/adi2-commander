@@ -35,7 +35,7 @@ A personal project, shared as is.
 - An ADI-2 DAC FS, ADI-2 Pro (all versions, including EX) or ADI-2/4 Pro over USB, with MIDI Control set to ON (menu
   Remap Keys/Diag on the ADI-2 DAC FS, Device Mode on the ADI-2 Pro and ADI-2/4 Pro). Simulated mode needs no device.
 - Windows' built-in USB MIDI class driver, or RME's MADIface driver (tested with 1.015).
-- A screen of at least 1280×720.
+- A 1920×1080 screen at up to 150% scaling (1280×720).
 
 ## Install
 

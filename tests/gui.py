@@ -6,7 +6,7 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QEventLoop, QPoint, QSettings, QTimer   # noqa: E402
+from PySide6.QtCore import QEventLoop, QPoint, QRect, QSettings, QTimer   # noqa: E402
 from PySide6.QtWidgets import QApplication, QToolTip         # noqa: E402
 
 from commander.device import params as P                     # noqa: E402
@@ -68,6 +68,7 @@ class WindowTest(unittest.TestCase):
     size = None
     model = None                                 # a models.Model to start from its factory values instead of the dump
     revision = None                              # and its device revision
+    room = QRect(0, 0, 1920, 1032)               # MainWindow.room: full HD; offscreen has 800 px
     TICK = 20                                    # ms, as the window's timer
 
     def setUp(self):
@@ -83,6 +84,7 @@ class WindowTest(unittest.TestCase):
         self.win = MainWindow(self.session, settings=self.settings)
         self.dialogs = []                            # what the window asked while it connected: answered OK
         self.win.ask = lambda dialog: self.dialogs.append(dialog) or True
+        self.win.room = lambda: self.room
         self.win.timer.setInterval(24 * 3600 * 1000)   # still running while the window talks, but spin ticks
         if self.size:
             self.win.resize(*self.size)

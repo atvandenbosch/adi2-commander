@@ -29,6 +29,8 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 
 - DA Filter follows the device's D/A converter: SD LD with the AK4493, Brickwall with the ES9028Q2M, five filters
   with the AK4490. The sixth was always shown as Brickwall.
+- The window stays on the screen: the side panels open as far as there is room, and opening one more closes the one
+  open longest.
 
 ## [0.1.0] - 2026-11-04
 

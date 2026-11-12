@@ -525,6 +525,27 @@ class Window(WindowTest):
         for tab in (self.win.input_tab, self.win.output_tab, self.win.presets_tab):
             self.assertEqual(tab.width(), tab.sizeHint().width())
 
+    def test_as_many_panels_as_the_screen_has_room_for(self):
+        win = self.win
+        win.resize(1200, 700)
+        win.move(0, 0)
+        tabs = (win.input_tab, win.output_tab, win.presets_tab, win.device_tab)
+        opened = lambda: [t.text for t in tabs if t.open]                       # noqa: E731
+        for t in tabs:                                                          # full HD: three of them
+            QTest.mouseClick(t, Qt.LeftButton)
+            self.spin(50)
+        self.assertEqual(opened(), ["OUTPUT", "PRESETS", "DEVICE"])          # the one open longest closed
+        self.assertFalse(win.input_area.isVisible())
+        self.assertLessEqual(win.frameGeometry().right(), self.room.right())
+        QTest.mouseClick(win.input_tab, Qt.LeftButton)
+        self.spin(50)
+        self.assertEqual(opened(), ["INPUT", "PRESETS", "DEVICE"])
+        win.room = lambda: QRect(0, 0, 1280, 680)                             # 1920 x 1080 at 150 %
+        QTest.mouseClick(win.output_tab, Qt.LeftButton)
+        self.spin(50)
+        self.assertEqual(opened(), ["OUTPUT"])
+        self.assertLessEqual(win.frameGeometry().width(), 1280)
+
     def test_legend_in_the_middle_above_the_graph(self):
         self.win.resize(2560, 1000)
         self.spin(50)

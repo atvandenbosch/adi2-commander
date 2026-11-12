@@ -1,8 +1,8 @@
 """The main window: output tabs; on the left edge the input, the output's other settings, the presets and the settings
-of the device, each opened and closed by its tab; the response graph, which takes the room left; beside it, one under
-the other, what shapes the sound: the parametric EQ (a table per channel; with Dual EQ off both show the one EQ of
-both channels, in the shared colour), Bass/Treble, and Loudness with a graph of what it does; and a status bar with
-the connection.
+of the device, each opened and closed by its tab, as many as the screen has room for; the response graph, which takes
+the room left; beside it, one under the other, what shapes the sound: the parametric EQ (a table per channel; with
+Dual EQ off both show the one EQ of both channels, in the shared colour), Bass/Treble, and Loudness with a graph of
+what it does; and a status bar with the connection.
 
 One title, EQ, over the column, with what the EQ was loaded from and, on the right, Save and Load of the EQ of
 this output as a file. Close above the tables Dual EQ: Share L > R and Share R > L, or Split L <> R. Below that each
@@ -27,7 +27,8 @@ writing."""
 import datetime
 import os
 
-from PySide6.QtCore import QModelIndex, QPoint, QRect, QRectF, QSettings, QSize, QStandardPaths, Qt, QTimer, QUrl
+from PySide6.QtCore import (QEvent, QModelIndex, QPoint, QRect, QRectF, QSettings, QSize, QStandardPaths, Qt,
+                            QTimer, QUrl)
 from PySide6.QtGui import (QColor, QCursor, QDesktopServices, QFont, QIcon, QKeySequence, QPainter, QPalette,
                            QShortcut)
 from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
@@ -58,9 +59,9 @@ from .scrim import RISE, Scrim
 from . import untested
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, LOUDNESS_COLUMNS, CellDelegate, Marks,
                      ParamModel, ParamView, band_address, band_rows, bt_rows, loudness_rows)
-from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, DSD_BYPASS, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE, Action,
-                      MoreButton, Option, Switch, Choice, dot_icon, dot_pixmap, dropped_file, head, input_eq_bypass,
-                      label_color, pulse, switch_tip)
+from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, DSD_BYPASS, FRAME, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE,
+                      Action, MoreButton, Option, Switch, Choice, dot_icon, dot_pixmap, dropped_file, head,
+                      input_eq_bypass, label_color, pulse, switch_tip)
 
 FS_TIP = "Sample rate the curves are computed at"
 ACTIVE_TIP = "Active on the device: its display and volume knob are on this output."
@@ -442,7 +443,6 @@ class MainWindow(QMainWindow):
         self.presets_area.setFixedWidth(self.PRESETS_WIDTH)
         self.presets_area.hide()
         self.presets_tab = SideTab("PRESETS")
-        self.presets_tab.toggled.connect(self.presets_area.setVisible)
         # the output's other settings: on the left edge too, before the presets
         self.output_panel = OutputPanel(session, self.marks)
         self.output_panel.edited.connect(self.write)
@@ -454,7 +454,6 @@ class MainWindow(QMainWindow):
         self.output_area.setFixedWidth(self.PRESETS_WIDTH)
         self.output_area.hide()
         self.output_tab = SideTab("OUTPUT")
-        self.output_tab.toggled.connect(self.output_area.setVisible)
         # the input, of the whole device: first, where the signal comes in
         self.input_panel = InputPanel(session, self.marks)
         self.input_panel.edited.connect(self.write)
@@ -466,7 +465,6 @@ class MainWindow(QMainWindow):
         self.input_area.setFixedWidth(self.PRESETS_WIDTH)
         self.input_area.hide()
         self.input_tab = SideTab("INPUT")
-        self.input_tab.toggled.connect(self.input_area.setVisible)
         # the settings of the device itself: after the presets
         self.device_panel = DevicePanel(session, self.marks)
         self.device_panel.edited.connect(self.write)
@@ -478,7 +476,6 @@ class MainWindow(QMainWindow):
         self.device_area.setFixedWidth(self.PRESETS_WIDTH)
         self.device_area.hide()
         self.device_tab = SideTab("DEVICE")
-        self.device_tab.toggled.connect(self.device_area.setVisible)
         # a line between two open panels: they stand on the same ground
         self.panel_lines = []
         for _ in range(3):
@@ -487,7 +484,11 @@ class MainWindow(QMainWindow):
             line.setStyleSheet("background: %s;" % theme.GRID.name())
             line.hide()
             self.panel_lines.append(line)
-        for tab in (self.input_tab, self.output_tab, self.presets_tab, self.device_tab):
+        self.opened = []                                 # the open panels' tabs, the one opened last at the end
+        self.areas = {self.input_tab: self.input_area, self.output_tab: self.output_area,
+                      self.presets_tab: self.presets_area, self.device_tab: self.device_area}
+        for tab in self.areas:
+            tab.toggled.connect(lambda on, tab=tab: self.panel_toggled(tab, on))
             tab.toggled.connect(self.show_panel_lines)
         strip = QVBoxLayout()
         strip.addWidget(self.input_tab)
@@ -507,7 +508,7 @@ class MainWindow(QMainWindow):
         ground = display.palette()
         ground.setColor(QPalette.Window, theme.DISPLAY)
         display.setPalette(ground)
-        left = QHBoxLayout()
+        left = self.side_row = QHBoxLayout()
         left.setContentsMargins(0, below_tabs, 0, above_status)
         left.setSpacing(16)
         left.addLayout(strip)
@@ -1326,6 +1327,46 @@ class MainWindow(QMainWindow):
                         v.setFocus()
                         v.setCurrentIndex(m.index(r, c))
                         return
+
+    def panel_toggled(self, tab, on):
+        """A panel opened or closed. Before one opens, the panels open longest close until the window fits on its
+        screen with it, so the window never grows past the screen."""
+        if tab in self.opened:
+            self.opened.remove(tab)
+        if on:
+            while self.opened and self.least_width() + self.panel_width() > self.room().width():
+                self.opened[0].set_open(False)
+            self.opened.append(tab)
+        self.areas[tab].setVisible(on)
+        if on:
+            QTimer.singleShot(0, self.keep_on_screen)
+
+    def panel_width(self):
+        """What one more open panel adds to the window's width: the panel, and the line before it when another one
+        is open."""
+        gap = self.side_row.spacing()
+        line = 1 + gap if any(not a.isHidden() for a in self.areas.values()) else 0
+        return self.PRESETS_WIDTH + gap + line
+
+    def room(self):
+        """The part of the window's screen without the taskbar."""
+        return self.screen().availableGeometry()
+
+    def least_width(self):
+        """The narrowest the window can be with the panels shown now, its frame included."""
+        QApplication.sendPostedEvents(None, QEvent.LayoutRequest)
+        return self.minimumSizeHint().width() + FRAME.width()
+
+    def keep_on_screen(self):
+        """Back within the screen, a window that grew past its edge: narrowed to the screen, then moved left."""
+        if self.isMaximized():
+            return
+        room, frame = self.room(), self.frameGeometry()
+        if frame.width() > room.width():
+            self.resize(self.width() - (frame.width() - room.width()), self.height())
+            frame = self.frameGeometry()
+        if frame.right() > room.right():
+            self.move(max(room.left(), frame.left() - (frame.right() - room.right())), frame.top())
 
     def show_panel_lines(self):
         """A line before each open panel that has an open panel before it."""
