@@ -55,6 +55,8 @@ DEVICE_RANGES = {
     32: (0, 1), 33: (0, 5), 34: (0, 3), 35: (0, 1), 36: (0, 1), 37: (0, 3),
 }
 DEVICE_READ_ONLY = {16}                          # Sample Rate, display only
+# Clock Source of the ADI-2 DAC FS follows Source: a write is refused and answered at once with the value it keeps
+CLOCK_SOURCE_INDEX = 15
 
 # ---------------------------------------------------------------------------------------------
 # ADI-2 Pro and ADI-2/4 Pro: {index: (min, max, factory value)}. Where the table's maximum and its list of names
@@ -420,6 +422,10 @@ class SimulatedAdi2:
             self._set_output(a, i, v)
         elif a == 12:
             if i in DEVICE_READ_ONLY:
+                return
+            if self.dac_fs and i == CLOCK_SOURCE_INDEX:
+                if self.session:
+                    self._emit(self._said([codec.encode(12, i, self.state[(12, i)])]))
                 return
             if i not in self.tables.device:
                 self._note("device index %d" % i)

@@ -234,6 +234,14 @@ class Simulator(unittest.TestCase):
         st = self.dev.dump()
         self.assertEqual([st[k] for k in [(3, 1), (6, 1), (9, 1), (12, 15)]], [3, 3, 3, 1])
 
+    def test_clock_source_refuses_a_write_and_says_what_it_keeps(self):
+        clock_source = self.dev.dump()[(12, 15)]
+        self.dev.collect()
+        self.dev.send(raw((12, 15, (clock_source + 1) % 4)), pause=0)
+        self.assertEqual([codec.decode_triplet(*t)[:3] for t in codec.parameter_triplets(self.dev.collect())],
+                         [(12, 15, clock_source)])
+        self.assertEqual(self.dev.dump()[(12, 15)], clock_source)
+
     def reports(self, *params):
         """Send one message; what the device reports unsolicited."""
         self.dev.collect()
