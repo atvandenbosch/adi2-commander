@@ -3,9 +3,11 @@ far as the device reports them (Session.device_settings).
 
     one of a few values     a stepper (‹ value ›)
     on or off               an option
+    the function of a key   a field with a menu of the functions in groups (value ▾)
 
 Mute v. Ph 1/2 can be set with Dual Phones on only, SPDIF In outside Basic Mode DAC, where Source chooses the SPDIF
-input. DSD Filter, on a device with DSD Direct, is faded while DSD Direct is off. The clock is in the input panel.
+input. DSD Filter, on a device with DSD Direct, is faded while DSD Direct is off; the keys while Remap Keys is off,
+and a key whose function takes effect in Basic Mode DAC only, outside it. The clock is in the input panel.
 """
 
 from PySide6.QtCore import Signal
@@ -15,7 +17,7 @@ from ..device import models
 from ..device import params as P
 from .inputs import NOT_IN_DAC_MODE
 from .output import NAME_INDENT, VALUE_WIDTH, _label, _row
-from .widgets import ATTACHED_GAP, GROUP_STYLE, INNER_GAP, TITLE_STYLE, Option, Stepper, head
+from .widgets import ATTACHED_GAP, GROUP_STYLE, INNER_GAP, TITLE_STYLE, GroupedChoice, Option, Stepper, head
 
 # what each setting chooses; below it, briefly, a value whose name does not say it all
 TIPS = {
@@ -50,15 +52,25 @@ TIPS = {
     P.VOLUME_SCREEN: "Whether turning VOLUME shows the Volume screen",
     P.LOCK_UI: "What on the device is locked; VOLUME always works\n"
                "To unlock on the device, hold encoder 1. Commander can still change it.",
+    P.REMAP_KEYS: "Where the keys below have the functions chosen for them\n"
+                  "On: on the device and on the remote control; Remote: on the remote control only",
 }
+KEY_TIP = ("The function of key %d on the remote control, and of %s on the device with Remap Keys On\n"
+           "On the device %s keeps its own function when pushed for half a second")
+REMOTE_KEY_TIP = "The function of key %d on the remote control"
 EXTRA = {(models.PRO.id, P.BAL_PHONES): "Line Out is then muted",
          (models.PRO_24.id, P.BAL_PHONES): "The Pentaconn jack is always balanced"}
 NEEDS_DUAL_PHONES = "Can be set with Dual Phones on"
 NOT_IN_USE = "Not in use: DSD Direct is off"
+KEYS_OFF = "Not in use: Remap Keys is off"
+DAC_MODE_ONLY = "Takes effect in Basic Mode DAC"
 
 
 def tip(model, setting):
     """What setting chooses, on model."""
+    if setting.index in P.KEYS:
+        n, key = P.KEYS.index(setting.index) + 1, setting.name.split()[0]
+        return KEY_TIP % (n, key, key) if n <= 4 else REMOTE_KEY_TIP % n
     pro = model.sources is not None                   # an ADI-2 Pro or ADI-2/4 Pro
     text = TIPS[setting.index] % {"inputs": "AES, SPDIF and USB" if pro else "SPDIF and USB",
                                   "phones": "Phones 1/2 is" if pro else "Phones and IEM are",
@@ -120,7 +132,11 @@ class DevicePanel(QWidget):
             option.clicked.connect(lambda i=x.index: self.toggle(i))
             self.options[x.index] = (x, option)
             return _row(option, indent=NAME_INDENT - Option.RING - 1)        # the track where the names start
-        s = Stepper(x.names, off=x.names.index("Off") if "Off" in x.names else None)
+        if x.index in P.KEYS:
+            keys = self.model.keys
+            s = GroupedChoice(x.names, keys.groups, tips=dict.fromkeys(keys.dac_mode, DAC_MODE_ONLY))
+        else:
+            s = Stepper(x.names, off=x.names.index("Off") if "Off" in x.names else None)
         s.setFixedWidth(VALUE_WIDTH)
         s.chosen.connect(lambda value, i=x.index: self.edited.emit((P.DEVICE_ADDRESS, i), value, False))
         self.steppers[x.index] = (x, s)
@@ -144,6 +160,15 @@ class DevicePanel(QWidget):
             faded = i == P.DSD_FILTER and value(P.DSD_DIRECT) == 0
             if faded:
                 lines.append(NOT_IN_USE)
+            if i in P.KEYS:
+                if ready:
+                    stepper.names = session.key_names()
+                if value(P.REMAP_KEYS) == 0:
+                    faded = True
+                    lines.append(KEYS_OFF)
+                elif v in self.model.keys.dac_mode and session.basic_mode() != P.MODE_DAC:
+                    faded = True
+                    lines.append(DAC_MODE_ONLY)
             if i == P.SPDIF_IN and ready and session.basic_mode() == P.MODE_DAC:
                 lines.append(NOT_IN_DAC_MODE)
             if key in self.marks.mismatch:

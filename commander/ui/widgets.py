@@ -1,7 +1,7 @@
 """Small widgets shared by the window and its panels: switches (a part of the sound in or out of the path),
 options (a setting that decides how something behaves), a choice between ways (Segmented), steppers (one of a few
-values), actions (something done once), a list whose chosen value can stand out, dots, a row of them, the style of a
-title, the file dropped on a window, and where a window opens on the screen."""
+values), one of many values in groups, actions (something done once), a list whose chosen value can stand out,
+dots, a row of them, the style of a title, the file dropped on a window, and where a window opens on the screen."""
 
 import math
 import os
@@ -490,6 +490,109 @@ class Stepper(QWidget):
         if self.value is not None:
             color = (theme.DISABLED if not self.isEnabled() and not self.held else theme.WARN if self.warned
                      else theme.OFF if self.value == self.off else theme.faded(theme.TEXT) if self.faded else theme.TEXT)
+            p.setPen(color)
+            p.drawText(QRectF(self.ARROW, 0, w - 2 * self.ARROW, h), Qt.AlignCenter, self.text(self.value))
+        if self.bad or self.hasFocus():
+            p.setPen(QPen(theme.BAD, 2) if self.bad else QPen(theme.LABEL, 1))
+            p.setBrush(Qt.NoBrush)
+            p.drawRect(QRectF(1, 1, w - 2, h - 2) if self.bad else QRectF(0.5, 0.5, w - 1, h - 1))
+
+
+class GroupedChoice(Stepper):
+    """One of many values, in groups (the function of a key): value ▾. A click, or Space, Enter or F4, opens a menu:
+    the values before the groups, then a submenu per group, over the field with the current value's entry where the
+    field is. The current value is bold, and so is the group it is in. Its colours are those of a stepper.
+
+    names: per value its name, None where it has none; groups: (title, (value, ...)) each, None for a line; top: the
+    values before the groups; tips: per value what the menu tells about it."""
+
+    def __init__(self, names, groups, top=(0,), tips=None):
+        super().__init__(names)
+        self.groups, self.top, self.tips = groups, top, tips or {}
+        self.current_entry = None                        # in the menu last made: the current value's entry
+
+    def text(self, value):
+        name = self.names[value] if 0 <= value < len(self.names) else None
+        return str(value) if name is None else name
+
+    def neighbour(self, value, direction, fine):
+        return None
+
+    def widest(self):
+        return [self.text(v) for v in range(len(self.names))]
+
+    def sizeHint(self):
+        return QSize(max(map(self.fontMetrics().horizontalAdvance, self.widest())) + self.ARROW + 16, self.HEIGHT)
+
+    def _action(self, menu, v):
+        a = menu.addAction(self.text(v))
+        if v == self.value:
+            bold = a.font()
+            bold.setBold(True)
+            a.setFont(bold)
+        if v in self.tips:
+            a.setToolTip(self.tips[v])
+            menu.setToolTipsVisible(True)
+        a.triggered.connect(lambda _=False, v=v: v != self.value and self.chosen.emit(v))
+        return a
+
+    def menu(self):
+        m = QMenu(self)
+        m.setMinimumWidth(self.width())
+        self.current_entry = None
+        for v in self.top:
+            a = self._action(m, v)
+            if v == self.value:
+                self.current_entry = a
+        m.addSeparator()
+        for title, values in self.groups:
+            sub = m.addMenu(title)
+            for v in values:
+                if v is None:
+                    sub.addSeparator()
+                else:
+                    self._action(sub, v)
+            if self.value in values:
+                bold = sub.menuAction().font()
+                bold.setBold(True)
+                sub.menuAction().setFont(bold)
+                self.current_entry = sub.menuAction()
+        return m
+
+    def show_menu(self):
+        m = self.menu()
+        m.exec(self.mapToGlobal(QPoint(0, 0)), self.current_entry)
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton and self.isEnabled() and self.value is not None:
+            self.setFocus()
+            self.show_menu()
+
+    def wheelEvent(self, e):
+        e.ignore()
+
+    def keyPressEvent(self, e):
+        if e.key() in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter, Qt.Key_F4):
+            if self.isEnabled() and self.value is not None:
+                self.show_menu()
+        else:
+            QWidget.keyPressEvent(self, e)
+
+    def mouseMoveEvent(self, e):
+        pass
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        p.fillRect(self.rect(), theme.CELL)
+        cx, cy, s = w - self.ARROW / 2, h / 2, 3.5
+        p.setPen(Qt.NoPen)
+        p.setBrush(theme.SPIN if self.isEnabled() else theme.SPIN_OFF)
+        p.drawPolygon([QPointF(cx - s, cy - s / 2), QPointF(cx + s, cy - s / 2), QPointF(cx, cy + s / 2)])
+        if self.value is not None:
+            color = (theme.DISABLED if not self.isEnabled() else theme.faded(theme.TEXT) if self.faded
+                     else theme.TEXT)
             p.setPen(color)
             p.drawText(QRectF(self.ARROW, 0, w - 2 * self.ARROW, h), Qt.AlignCenter, self.text(self.value))
         if self.bad or self.hasFocus():

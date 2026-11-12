@@ -286,6 +286,12 @@ class Session:
         settings = [x for _, xs in m.device for x in xs] + ([] if m.clock is None else [m.clock])
         return next((x for x in settings if x.index == index), None)
 
+    def key_names(self):
+        """The names of the functions the keys of the device connected can have (Model.keys), per value; None where
+        its revision has none."""
+        keys, revision = self.model.keys, self.revision()
+        return [keys.revised.get(v, {}).get(revision) if name is None else name for v, name in enumerate(keys.names)]
+
     def _source_choosable(self, key):
         """ADI-2 Pro and ADI-2/4 Pro: Line Out's Source can be chosen in AD/DA and DAC, Phones 3/4's in every other
         mode; in DAC Line Out's is that of all outputs."""

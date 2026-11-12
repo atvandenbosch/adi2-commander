@@ -46,11 +46,13 @@ from . import params as P
 #   and in Basic Mode DAC ("dac"). None for one input of the whole device, params.INPUTS
 # rumble: it has Rumble, a preset built in behind Clear (params.RUMBLE)
 # device: the settings of the device that can be set (params.DEVICE_ADDRESS), grouped and named as on its front panel,
-#   a group for each subject of a page: (group, (params.Setting, ...)) each. A device has those it reports
+#   a group for each subject of a page: (group, (params.Setting, ...)) each. A device has those it reports. A key
+#   (params.KEYS) has the names of keys
 # clock: Clock Source, a params.Setting, where it can be chosen; None where the device follows Source
+# keys: the functions its keys can have, a params.Keys
 class Model(namedtuple("Model", "id name port supported tested outputs tags controlled separate borrowed no_bt_from "
                                 "one_eq_from active ref_levels ref_dbu shared_ref_level da_filters choices input "
-                                "input_ex ad_filter_fixed_from sources rumble device clock")):
+                                "input_ex ad_filter_fixed_from sources rumble device clock keys")):
     __slots__ = ()
 
     def __hash__(self):                          # a model is its device ID
@@ -65,6 +67,38 @@ _DISPLAY = ("DISPLAY", (_S(P.DISPLAY_MODE, "Display Mode", ["Default", "Dark"]),
                         _S(P.HOR_METER, "Hor. Meter", ["Post FX", "Pre FX", "Dual", "Post FX dBu"]),
                         _S(P.AUTODARK, "AutoDark Mode", None), _S(P.VOLUME_SCREEN, "Show Vol. Screen", None),
                         _S(P.LOCK_UI, "Lock UI", ["Off", "Remote", "Keys", "Keys+Remote"])))
+_SETUPS = ["Setup %d" % n for n in range(1, 10)]
+_EQ_PRESETS = ["EQ Preset %d" % n for n in range(1, 10)]
+_CROSSFEEDS = ["Crossfeed %d" % n for n in range(1, 6)]
+
+
+def _keys(names, groups, revised=None, dac_mode=()):
+    """A params.Keys whose groups and dac_mode name their values, or give a value whose name is revised."""
+    at = {name: v for v, name in enumerate(names) if name is not None}
+    value = lambda x: None if x is None else at.get(x, x)                      # noqa: E731
+    return P.Keys(names, tuple((g, tuple(map(value, xs))) for g, xs in groups), revised or {},
+                  frozenset(map(value, dac_mode)))
+
+
+def _keys_group(keys, settings):
+    """The group KEYS: Remap Keys, then each key (params.KEYS) of settings, (index, name) each, with the names of
+    keys."""
+    return ("KEYS", (_S(P.REMAP_KEYS, "Remap Keys", ["Off", "On", "Remote"]),)
+            + tuple(_S(i, name, keys.names) for i, name in settings))
+
+
+_DAC_FILTER_KEY = 32                             # DA SD LD on an AK4493, DA Brickwall on an ES9028Q2M
+_DAC_KEYS = _keys(["Default"] + _SETUPS
+                  + ["Mono", "Mono to L", "Mute", "Loudness", "EQ enable", "B/T enable", "EQ+B/T+Ld", "Toggle Ph/Line",
+                     "Polarity", "AutoDark", "Dim", "Toggle View"] + _CROSSFEEDS
+                  + ["DA SD Sharp", "DA SD Slow", "DA Sharp", "DA Slow", "DA NOS", None] + _EQ_PRESETS,
+                  (("Output", ("Mono", "Mono to L", "Mute", "Loudness", "EQ enable", "B/T enable", "EQ+B/T+Ld",
+                               None, "Dim", "Polarity", "Toggle Ph/Line")),
+                   ("Crossfeed", _CROSSFEEDS),
+                   ("DA Filter", ("DA SD Sharp", "DA SD Slow", "DA Sharp", "DA Slow", "DA NOS", _DAC_FILTER_KEY)),
+                   ("Setup", _SETUPS), ("EQ Preset", _EQ_PRESETS), ("Display", ("Toggle View", "AutoDark"))),
+                  revised={_DAC_FILTER_KEY: {1: "DA SD LD", 2: "DA Brickwall"}})
+_DAC_KEY_SETTINGS = ((26, "VOL (1)"), (27, "I/O (2)"), (28, "EQ (3)"), (29, "SETUP (4)"))
 DAC =Model(0x71, MODEL, "ADI-2 DAC", True, True, ("Line Out", "Phones 1/2", "Phones 3/4 · IEM"), ("L", "P", "I"),
             (3, 6, 9), (), {}, 705600, None, ((3,), (6,), (9,), ()),
             ref_levels=P.REF_LEVELS, ref_dbu=P.REF_DBU, shared_ref_level=None, da_filters=P.DA_FILTERS,
@@ -74,8 +108,9 @@ DAC =Model(0x71, MODEL, "ADI-2 DAC", True, True, ("Line Out", "Phones 1/2", "Pho
                     ("DSD", (_S(P.DSD_DIRECT, "DSD Direct (Line)", None),
                              _S(P.DSD_FILTER, "DSD Filter", ["50 kHz", "70 kHz"]), _DETECTION)),
                     ("POWER", (_STANDBY,)),
+                    _keys_group(_DAC_KEYS, _DAC_KEY_SETTINGS),
                     _DISPLAY),
-            clock=None)
+            clock=None, keys=_DAC_KEYS)
 
 _FILTERS = ["SD Sharp", "SD Slow", "Sharp", "Slow"]
 _PHONES = ["Lo-Power", "Hi-Power"]
@@ -92,6 +127,35 @@ _SPDIF = ("SPDIF", (_S(P.SPDIF_IN, "SPDIF In", ["Auto", "Coax", "Optical"]),
                       _S(P.SRC, "SRC", ["Off", "AES In", "SPDIF In"]),
                       _S(P.SRC_GAIN, "SRC Gain dig.", ["0 dB", "-3 dB"]),
                       _S(P.OPTICAL_OUT, "Optical Out", ["SPDIF", "ADAT"])))
+_PRO_KEYS_FROM = (["Default"] + _SETUPS
+                  + ["Mono 1/2", "Mono 3/4", "Mono 1/2 to L", "Mono 3/4 to L", "Mute 1/2", "Mute 3/4", "Mute all",
+                     "Loudness 1/2", "Loudness 3/4", "EQ In 1/2", "EQ Out 1/2", "EQ Out 3/4", "B/T Out 1/2",
+                     "B/T Out 3/4", "EQ+B/T+Ld 1/2", "EQ+B/T+Ld 3/4", "Toggle Ph/Line", "EQ+B/T+Ld 1-4", "Polarity"]
+                  + _CROSSFEEDS + ["DA SD Sharp", "DA SD Slow", "DA Sharp", "DA Slow"])        # 0 .. 37
+_PRO_OUTPUTS = ("Mono 1/2", "Mono 3/4", "Mono all", None, "Mono 1/2 to L", "Mono 3/4 to L", "Mono all to L", None,
+                "Mute 1/2", "Mute 3/4", "Mute all", None, "Loudness 1/2", "Loudness 3/4", "Loudness all", None,
+                "EQ Out 1/2", "EQ Out 3/4", "EQ Out all", None, "B/T Out 1/2", "B/T Out 3/4", "BT all", None,
+                "EQ+B/T+Ld 1/2", "EQ+B/T+Ld 3/4", "EQ+B/T+Ld 1-4", None, "DIM", "Polarity", "Toggle Ph/Line",
+                "EQ In 1/2")
+_PRO_SOURCES = ("Source AES", "Source SPDIF c", "Source Optical", "Source Analog", "Source USB 1/2")
+_PRO_KEYS_TO = ["Toggle View", "DIM", "Mono all", "Mono all to L", "Loudness all", "EQ Out all", "BT all",
+                *_PRO_SOURCES, "AutoDark"] + _EQ_PRESETS
+_RIAA_KEYS = ("RIAA Mode +", "RIAA Mode -", "RIAA Mono B.")
+
+
+def _pro_keys(filters, riaa=()):
+    """The functions of the keys of an ADI-2 Pro or ADI-2/4 Pro, with its DA Filter functions 38 and up."""
+    return _keys(_PRO_KEYS_FROM + filters + _PRO_KEYS_TO + list(riaa),
+                 (("Outputs", _PRO_OUTPUTS), ("Crossfeed", _CROSSFEEDS),
+                  ("DA Filter", ("DA SD Sharp", "DA SD Slow", "DA Sharp", "DA Slow", *filters)),
+                  ("Source", _PRO_SOURCES)) + ((("RIAA", riaa),) if riaa else ())
+                 + (("Setup", _SETUPS), ("EQ Preset", _EQ_PRESETS), ("Display", ("Toggle View", "AutoDark"))),
+                 dac_mode=_PRO_SOURCES)
+
+
+_PRO_KEY_SETTINGS = _DAC_KEY_SETTINGS + ((22, "IR 5"), (23, "IR 6"), (24, "IR 7"))
+_PRO_KEYS = _pro_keys(["DA NOS", "DA SD LD"])
+_PRO_24_KEYS = _pro_keys(["DA SD LD", "DA Brickwall", "DA NOS"], _RIAA_KEYS)
 # Phones 1/2 of the ADI-2 Pro: Line Out's Source, Mono, Width, DA Filter, De-Emphasis, Lock Volume, Mute, Dim,
 # Loopback, Dig. DC Protection and Load B/T
 _BORROWED = {6: (3, (P.SOURCE, P.MONO, P.WIDTH, P.DA_FILTER, P.DE_EMPHASIS, P.LOCK_VOLUME, P.MUTE, P.DIM, P.LOOPBACK,
@@ -115,8 +179,8 @@ PRO = Model(0x72, "ADI-2 Pro", "ADI-2 Pro", True, False, ("Line Out", "Phones 1/
                                 _S(P.MUTE_V_PH_3_4, "Mute v. TRS 3/4", None))),
                     ("DSD", (_S(P.DSD_DIRECT, "DSD Direct 1/2", None),
                              _S(P.DSD_FILTER, "DSD Filter", ["50 kHz", "150 kHz"]), _DETECTION)),
-                    _SPDIF, _DISPLAY),
-            clock=_S(P.CLOCK_SOURCE, "Clock Source", ["Auto", "INT", "AES", "SPDIF"]))
+                    _SPDIF, _keys_group(_PRO_KEYS, _PRO_KEY_SETTINGS), _DISPLAY),
+            clock=_S(P.CLOCK_SOURCE, "Clock Source", ["Auto", "INT", "AES", "SPDIF"]), keys=_PRO_KEYS)
 PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", borrowed={}, one_eq_from=705600,
                       sources={**PRO.sources, "phones_ex": _INPUTS + _USB + ["ADAT 3/4"]},
                       ref_levels={3: ["+1 dBu", "+7 dBu", "+13 dBu", "+19 dBu", "+24 dBu"],
@@ -137,7 +201,9 @@ PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", borrowed={}, o
                                           _S(P.BAL_PHONES, "Bal TRS Mode", _AUTO), _TOGGLE,
                                           _S(P.MUTE_V_PH_1_2, "Mute v. Ph 1/2", None),
                                           _S(P.MUTE_V_PH_3_4, "Mute v. Ph 3/4", None))),
-                              ("DSD", (_DETECTION,)), _SPDIF, _DISPLAY))
+                              ("DSD", (_DETECTION,)), _SPDIF, _keys_group(_PRO_24_KEYS, _PRO_KEY_SETTINGS),
+                              _DISPLAY),
+                      keys=_PRO_24_KEYS)
 MODELS = (DAC, PRO, PRO_24)
 BY_ID = {m.id: m for m in MODELS}
 

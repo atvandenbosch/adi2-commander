@@ -41,6 +41,7 @@ class DevicePanel(WindowTest):
     def test_its_rows(self):
         self.assertEqual(self.rows(), [
             ("PHONES", ["Mute Line"]), ("DSD", ["DSD Filter", "DSD Detection"]), ("POWER", ["Auto Standby"]),
+            ("KEYS", ["Remap Keys", "VOL (1)", "I/O (2)", "EQ (3)", "SETUP (4)"]),
             ("DISPLAY", ["Display Mode", "Meter Color", "Hor. Meter", "AutoDark Mode", "Show Vol. Screen", "Lock UI"])])
         self.assertEqual((self.text(P.METER_COLOR), self.text(P.DSD_FILTER)), ("Monochrome", "50 kHz"))
         self.assertFalse(self.panel.steppers[P.DSD_FILTER][1].faded)          # it has no DSD Direct to wait for
@@ -54,6 +55,23 @@ class DevicePanel(WindowTest):
         self.assertEqual(self.text(P.METER_COLOR), "Red")
         self.assertTrue(self.option(P.DSD_DETECTION).on)
 
+    def test_a_key_chosen_from_its_menu(self):
+        key = self.panel.steppers[26][1]                                        # VOL (1)
+        menu = key.menu()
+        entry = key.current_entry                                               # the group of its function, bold
+        self.assertTrue(entry.font().bold())
+        self.assertIn(key.value, next(xs for g, xs in key.groups if g == entry.text()))
+        crossfeed = next(a.menu() for a in menu.actions() if a.text() == "Crossfeed")
+        crossfeed.actions()[0].trigger()
+        self.settle()
+        self.assertEqual(self.sim.state[(12, 26)], self.session.key_names().index("Crossfeed 1"))
+        self.assertEqual(self.text(26), "Crossfeed 1")
+        self.assertFalse(key.faded)
+        self.session.set((12, P.REMAP_KEYS), 0)
+        self.settle()
+        self.assertTrue(key.faded)
+        self.assertTrue(key.toolTip().endswith("Not in use: Remap Keys is off"))
+
     def test_a_change_on_the_device_is_shown(self):
         self.sim.front_panel([(12, P.LOCK_UI, 3)])
         self.spin(1500)
@@ -64,7 +82,7 @@ class DevicePanelPro(DevicePanel):
     model = PRO
 
     def test_its_rows(self):
-        self.assertEqual([g for g, _ in self.rows()], ["DEVICE MODE", "PHONES", "DSD", "SPDIF", "DISPLAY"])
+        self.assertEqual([g for g, _ in self.rows()], ["DEVICE MODE", "PHONES", "DSD", "SPDIF", "KEYS", "DISPLAY"])
         self.assertEqual(self.rows()[2][1], ["DSD Direct 1/2", "DSD Filter", "DSD Detection"])
         filter_ = self.panel.steppers[P.DSD_FILTER][1]
         self.assertTrue(filter_.faded)                                          # DSD Direct is off
@@ -110,6 +128,20 @@ class DevicePanel24(DevicePanel):
         self.assertEqual(self.rows()[1][1], ["Dual Phones", "Bal TRS Mode", "Toggle Ph/Line", "Mute v. Ph 1/2",
                                              "Mute v. Ph 3/4"])
         self.assertIn("Pentaconn", self.panel.steppers[P.BAL_PHONES][1].toolTip())
+        self.assertEqual(self.rows()[4][1][-3:], ["IR 5", "IR 6", "IR 7"])
+        self.assertEqual(self.text(24), "Source USB 1/2")                         # IR 7
+
+    def test_a_source_on_a_key_in_basic_mode_dac(self):
+        key = self.panel.steppers[26][1]                                        # VOL (1): Source Analog
+        self.assertTrue(key.faded)
+        self.assertTrue(key.toolTip().endswith("Takes effect in Basic Mode DAC"))
+        source = next(a.menu() for a in key.menu().actions() if a.text() == "Source")
+        self.assertTrue(source.toolTipsVisible())
+        self.assertEqual(source.actions()[0].toolTip(), "Takes effect in Basic Mode DAC")
+        self.session.set(P.BASIC_MODE, P.MODE_DAC)
+        self.settle()
+        self.spin(1100)
+        self.assertFalse(key.faded)
 
     def test_written_as_chosen(self):
         self.panel.steppers[P.HOR_METER][1].step(+1)                            # Pre FX

@@ -110,6 +110,13 @@ DISPLAY_MODE, METER_COLOR, HOR_METER, AUTODARK, VOLUME_SCREEN, LOCK_UI = 32, 33,
 SPDIF_IN, SRC, SRC_GAIN, OPTICAL_OUT = 40, 41, 42, 43
 # one setting: its index on DEVICE_ADDRESS, its name, the names of its values; None for a switch, Off or On
 Setting = namedtuple("Setting", "index name names")
+# Remap Keys: where the keys have the functions chosen for them; the keys, VOL (1) .. SETUP (4) and IR 5 .. IR 7
+REMAP_KEYS = 25
+KEYS = (26, 27, 28, 29, 22, 23, 24)
+# the functions a key can have, per value: names, None where the name depends on the device revision (revised: per
+# value its name per revision; a revision not in it has none). groups: the menu after Default (0), (group, (value,
+# ...)) each, None for a line between values. dac_mode: the values that take effect in Basic Mode DAC only
+Keys = namedtuple("Keys", "names groups revised dac_mode")
 
 # ADI-2 Pro and ADI-2/4 Pro: the settings of the analog input, on its own address. Each is a list of names
 # (Choices); these are the same on both models, models.Model.input has the others

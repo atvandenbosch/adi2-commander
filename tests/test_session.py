@@ -1048,10 +1048,13 @@ class DeviceSettings(Harness):
         self.connect()                                                  # an ADI-2 DAC FS with an ESS D/A converter
         self.assertEqual(self.shown(), [
             ("PHONES", ["Mute Line"]), ("DSD", ["DSD Filter", "DSD Detection"]), ("POWER", ["Auto Standby"]),
+            ("KEYS", ["Remap Keys", "VOL (1)", "I/O (2)", "EQ (3)", "SETUP (4)"]),
             ("DISPLAY", ["Display Mode", "Meter Color", "Hor. Meter", "AutoDark Mode", "Show Vol. Screen", "Lock UI"])])
         self.assertEqual(self.session.device_setting(P.DSD_FILTER).names, ["50 kHz", "70 kHz"])
         self.use(PRO)
-        self.assertEqual([g for g, _ in self.shown()], ["DEVICE MODE", "PHONES", "DSD", "SPDIF", "DISPLAY"])
+        self.assertEqual([g for g, _ in self.shown()], ["DEVICE MODE", "PHONES", "DSD", "SPDIF", "KEYS", "DISPLAY"])
+        self.assertEqual(self.shown()[4][1], ["Remap Keys", "VOL (1)", "I/O (2)", "EQ (3)", "SETUP (4)", "IR 5",
+                                              "IR 6", "IR 7"])
         self.assertEqual(self.shown()[1][1], ["Dual Phones", "Bal Phones Mode", "Toggle Ph/Line", "Mute v. TRS 1/2",
                                               "Mute v. TRS 3/4"])
         self.assertEqual(self.session.device_setting(P.DSD_FILTER).names, ["50 kHz", "150 kHz"])
@@ -1071,9 +1074,37 @@ class DeviceSettings(Harness):
             s.set((12, P.DSD_DETECTION), 2)
         self.run_for(2.0)
         self.assertEqual((self.sim.state[(12, 33)], self.sim.state[(12, 3)]), (4, 1))
-        # Clock Source follows Source; Sample Rate is shown only; Remap Keys is not among them
-        self.assertEqual([s.writable((12, i)) for i in (P.LOCK_UI, P.CLOCK_SOURCE, 16, 25, 26, P.DSD_DIRECT)],
-                         [True, False, False, False, False, False])
+        # Clock Source follows Source; Sample Rate is shown only; there is no DSD Direct
+        self.assertEqual([s.writable((12, i)) for i in (P.LOCK_UI, P.CLOCK_SOURCE, 16, P.REMAP_KEYS, 26,
+                                                        P.DSD_DIRECT)],
+                         [True, False, False, True, True, False])
+
+    def test_the_functions_of_the_keys(self):
+        names = {}
+        for revision in (0, 1, 2):                                      # AK4490, AK4493, ES9028Q2M
+            self.sim = SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=self.clock)
+            self.sim.revision = revision
+            self.session.close()
+            self.session = Session(self.open_port, clock=self.clock)
+            self.connect()
+            names[revision] = self.session.key_names()
+        self.assertEqual([len(n) for n in names.values()], [42, 42, 42])
+        self.assertEqual([n[32] for n in names.values()], [None, "DA SD LD", "DA Brickwall"])
+        self.assertEqual((names[2][0], names[2][21], names[2][41]), ("Default", "Toggle View", "EQ Preset 9"))
+        self.session.set((12, 26), 32)
+        with self.assertRaises(ValueError):
+            self.session.set((12, 26), 42)
+        self.run_for(2.0)
+        self.assertEqual(self.sim.state[(12, 26)], 32)
+        self.use(PRO)
+        self.assertEqual(self.session.key_names()[38:42], ["DA NOS", "DA SD LD", "Toggle View", "DIM"])
+        self.use(PRO_24)
+        names = self.session.key_names()
+        self.assertEqual((len(names), names[39], names[48], names[65]), (66, "DA Brickwall", "Source AES",
+                                                                         "RIAA Mono B."))
+        self.session.set((12, 24), 65)                                  # IR 7
+        self.run_for(2.0)
+        self.assertEqual(self.sim.state[(12, 24)], 65)
 
     def test_mute_v_ph_1_2_only_with_dual_phones_on(self):
         self.use(PRO)
