@@ -681,7 +681,7 @@ class ProWindow(WindowTest):
         self.assertEqual(box.body.text().replace("\u00a0", " "),                   # names kept whole
                          "Commander has not been tested with an actual ADI-2 Pro.\n\n"
                          "Commander keeps a copy of the device's state as it was when connected, in the backups "
-                         "folder. Restore it with ADI-2 Remote: File → Open Setup File…\n\n"
+                         "folder. Restore it with ADI-2 Remote: File › Open Setup File…\n\n"
                          "To explore the app first, or to convert filter sets and curves for your ADI-2 Pro, no "
                          "device is needed: start ADI-2 Commander (simulated) from the Start menu.")
         self.assertEqual([box.go.text(), box.quit.text()], ["Continue", "Quit"])

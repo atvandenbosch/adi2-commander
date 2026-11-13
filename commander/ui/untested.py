@@ -10,11 +10,11 @@ ORGANIZATION, APPLICATION = "ADI-2 Commander", "Commander"   # where QSettings k
 TITLE = "Not tested with the %(name)s"
 TEXT = ("Commander has not been tested with an actual %(name)s.\n\n"
         "Commander keeps a copy of the device's state as it was when connected, in the backups folder. "
-        "Restore it with ADI-2 Remote: File → Open Setup File…\n\n"
+        "Restore it with ADI-2 Remote: File › Open Setup File…\n\n"
         "To explore the app first, or to convert filter sets and curves for your %(name)s, no device is needed: "
         "start ADI-2 Commander (simulated) from the Start menu.")
 # kept on one line each when the text wraps
-WHOLE = ("ADI-2 Remote", "File → Open Setup File…", "ADI-2 Commander (simulated)")
+WHOLE = ("ADI-2 Remote", "File › Open Setup File…", "ADI-2 Commander (simulated)")
 NBSP = " "
 TEXT_GAP = 14                                    # from the title to the text
 BUTTONS_GAP = 24                                 # from the text to the row of buttons

@@ -47,7 +47,7 @@ Commander makes no internet connections and collects no data.
 ## Before first use
 
 Commander keeps a copy of the device's state at each connection, presets included, in the backups folder (menu ⋮).
-Restore it with ADI-2 Remote: File → Open Setup File…
+Restore it with ADI-2 Remote: File › Open Setup File…
 
 Commander writes every change to the device at once. Try Simulated mode first to get to know it: start
 ADI-2 Commander (simulated) from the Start menu.
