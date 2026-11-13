@@ -420,6 +420,12 @@ class Window(WindowTest):
         self.assertEqual(self.win.lamp_text.text(), "Connected")
         self.assertEqual(self.win.source.name.text(), "Manual")               # what the EQ was loaded from
 
+    def test_the_connected_model_in_the_title(self):
+        self.assertEqual(self.win.windowTitle(), "ADI-2 Commander – ADI-2 DAC FS")
+        self.sim.power(False)
+        self.spin(1000)
+        self.assertEqual(self.win.windowTitle(), "ADI-2 Commander")
+
     def test_a_model_that_is_not_supported(self):
         self.sim.power(False)
         self.spin(1000)
@@ -953,6 +959,10 @@ class Pro24Window(WindowTest):
     model = PRO_24
 
     bypassed_by_the_input = ProWindow.bypassed_by_the_input
+
+    def test_se_in_the_title(self):
+        self.spin(1000)                                               # the revision: in the status message
+        self.assertEqual(self.win.windowTitle(), "ADI-2 Commander – ADI-2/4 Pro SE")
 
     def test_the_eq_of_the_input_bypasses_that_of_the_outputs_from_705_6_khz(self):
         self.assertEqual(self.win.tabs.tabToolTip(tab(6)), PHONES_1_2["off"])

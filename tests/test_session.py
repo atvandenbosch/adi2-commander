@@ -144,6 +144,11 @@ class Recognition(Harness):
         self.assertEqual(models.probe_order("ADI-24 Pro Midi Port 1"), [PRO_24, DAC, PRO])
         self.assertEqual(models.probe_order("ADI-2"), [DAC, PRO, PRO_24])
 
+    def test_full_name(self):
+        self.assertEqual([models.full_name(DAC, 0), models.full_name(PRO, 0)], ["ADI-2 DAC FS", "ADI-2 Pro"])
+        self.assertEqual([models.full_name(PRO_24, r) for r in (None, 0, 1, 2)],
+                         ["ADI-2/4 Pro", "ADI-2/4 Pro SE", "ADI-2/4 Pro EX", "ADI-2/4 Pro EX"])
+
     def test_the_dac_is_asked_once(self):
         self.connect()
         self.assertEqual((self.session.model, self.asked()), (DAC, [DAC.id]))

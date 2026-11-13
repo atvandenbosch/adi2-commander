@@ -629,11 +629,22 @@ class MainWindow(QMainWindow):
         self.lamp_text.setToolTip(detail)
         if status != "ready":
             self.marks.mismatch.clear()
+        self.show_title()
         self.refresh()
 
     def on_device_status(self, status):
         self.status_shown = status
+        self.show_title()                                # the revision tells an ADI-2/4 Pro SE from the EX
         self.refresh()                                   # DSD bypasses the DSP: the switches, curves and cells follow
+
+    def show_title(self):
+        """The title names the connected model. In simulated mode the title is set once, with the simulated model."""
+        if self.simulated:
+            return
+        title = "ADI-2 Commander"
+        if self.session.ready() and self.session.model is not None:     # dropping, the model is gone first
+            title += " – " + models.full_name(self.session.model, self.session.revision())
+        self.setWindowTitle(title)
 
     def show_tabs(self):
         """Analog In has a tab on a model with an analog input. An output Commander does not control now has a grey

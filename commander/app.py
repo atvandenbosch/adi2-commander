@@ -89,7 +89,7 @@ def main(argv=None):
     session = Session(open_port)
     win = MainWindow(session, simulated=sim is not None, backups=backup.folder())
     if sim is not None:
-        win.setWindowTitle(win.windowTitle() + "  —  SIMULATED " + dict(SIMULATED_NAMES)[model])
+        win.setWindowTitle(win.windowTitle() + " – SIMULATED " + dict(SIMULATED_NAMES)[model])
         win.simulator = sim
     show_on_screen(win, win.sizeHint(), app.primaryScreen())
     code = app.exec()

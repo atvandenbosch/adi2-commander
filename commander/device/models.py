@@ -211,6 +211,13 @@ def channel_name(model, out):
     return P.channel(out)[0] if out == P.INPUT_ADDRESS else model.outputs[P.OUTPUT_ADDRESSES.index(out)]
 
 
+def full_name(model, revision):
+    """The name of the model; of an ADI-2/4 Pro with SE (revision 0) or EX (1 and up) once the revision is known."""
+    if model.id != PRO_24.id or revision is None:
+        return model.name
+    return model.name + (" EX" if revision >= 1 else " SE")
+
+
 def probe_order(port_name):
     """All models, the one the port name suggests first."""
     hinted = [m for m in MODELS if m.port in port_name]
