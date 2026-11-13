@@ -1112,7 +1112,7 @@ class SimulatedModel(unittest.TestCase):
         self.assertEqual((d.check.text(), d.check.isChecked()), ("Don't ask again", False))
         self.assertEqual(d.check.toolTip(),
                          "Start with this device without asking.\n"
-                         "To change that later, go to Menu › Simulated device.")
+                         "To change that later, go to More options (⋮) › Simulated device.")
         self.assertTrue(d.start.isDefault())
 
     def test_the_choice_made_last(self):
