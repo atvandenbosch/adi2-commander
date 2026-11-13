@@ -198,7 +198,7 @@ class DevicePanel(QWidget):
             if i == P.SPDIF_IN and ready and session.basic_mode() == P.MODE_DAC:
                 lines.append(NOT_IN_DAC_MODE)
             if key in self.marks.mismatch:
-                lines.append("Sent %s, device has %s." % tuple(stepper.text(n) for n in self.marks.mismatch[key]))
+                lines.append("Sent %s, the device has %s." % tuple(stepper.text(n) for n in self.marks.mismatch[key]))
             stepper.show_state(v, session.writable(key), "\n".join(lines), faded, key in self.marks.mismatch)
         for i, (x, option) in self.options.items():
             key, on = (P.DEVICE_ADDRESS, i), value(i) == 1

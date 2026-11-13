@@ -667,7 +667,7 @@ class OutputPanel(QWidget):
         if warned:
             tip += "\n" + PLUG_WARNING
         if key in self.marks.mismatch:
-            tip += "\nSent %s, device has %s." % tuple(self.phones_ref.text(v) for v in self.marks.mismatch[key])
+            tip += "\nSent %s, the device has %s." % tuple(self.phones_ref.text(v) for v in self.marks.mismatch[key])
         self.phones_ref.show_state(s.get(key), self.session.writable(key), tip, bad=key in self.marks.mismatch,
                                    held=held, warned=warned)
 
@@ -695,7 +695,7 @@ class OutputPanel(QWidget):
                "Adjust with the arrows or the mouse wheel.\nClick the value for a slider: up rises step by step.",
                "%s … +%s, step 0.5 dB" % (self.volume.text(lo), self.volume.text(hi))]
         if key in self.marks.mismatch:
-            tip.append("Sent %s, device has %s." % tuple(self.volume.text(v) for v in self.marks.mismatch[key]))
+            tip.append("Sent %s, the device has %s." % tuple(self.volume.text(v) for v in self.marks.mismatch[key]))
         self.volume.show_state(s.get(key) if ready else None, self.session.writable(key), "\n".join(filter(None, tip)),
                                bad=key in self.marks.mismatch, held=on(P.LOCK_VOLUME), warned=bool(lowering))
 
@@ -734,7 +734,7 @@ class OutputPanel(QWidget):
             tip = "\n".join(filter(None, (tip, shared_tip(self.session, key))))
             if key in self.marks.mismatch:
                 sent, actual = self.marks.mismatch[key]
-                tip += "\nSent %s, device has %s." % (stepper.text(sent), stepper.text(actual))
+                tip += "\nSent %s, the device has %s." % (stepper.text(sent), stepper.text(actual))
             stepper.show_state(v, self.session.writable(key), tip, faded, key in self.marks.mismatch, held, warned)
         self.refresh_phones_ref(ready)
         self.refresh_volume()

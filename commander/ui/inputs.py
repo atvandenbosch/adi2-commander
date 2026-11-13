@@ -248,7 +248,7 @@ class InputPanel(QWidget):
         tip = SOURCE_TIP
         if bad:
             sent, actual = self.marks.mismatch[bad[0]]
-            tip += "\nSent %s, device has %s." % (self.source.text(sent), self.source.text(actual))
+            tip += "\nSent %s, the device has %s." % (self.source.text(sent), self.source.text(actual))
         self.source.show_state(source, ready and all(self.session.writable(k) for k in keys), tip, bad=bool(bad))
         known = ready and st is not None and source is not None
         plays = played(source, st) if known else None
@@ -316,7 +316,7 @@ class InputPanel(QWidget):
             bad = r.key in self.marks.mismatch
             if bad:
                 sent, actual = self.marks.mismatch[r.key]
-                tip += "\nSent %s, device has %s." % (stepper.text(sent), stepper.text(actual))
+                tip += "\nSent %s, the device has %s." % (stepper.text(sent), stepper.text(actual))
             stepper.show_state(value, self.session.writable(r.key), tip, bad=bad, held=takes is not None)
 
     def refresh_clock(self):
@@ -331,7 +331,8 @@ class InputPanel(QWidget):
         tip = [CLOCK_SOURCE_TIP, NOT_IN_DAC_MODE if ready and session.basic_mode() == P.MODE_DAC else None]
         bad = key in self.marks.mismatch
         if bad:
-            tip.append("Sent %s, device has %s." % tuple(self.clock_source.text(v) for v in self.marks.mismatch[key]))
+            tip.append("Sent %s, the device has %s." % tuple(self.clock_source.text(v)
+                                                              for v in self.marks.mismatch[key]))
         self.clock_source.show_state(s.get(key) if ready else None, session.writable(key),
                                      "\n".join(filter(None, tip)), bad=bad)
 
@@ -378,6 +379,6 @@ class InputPanel(QWidget):
             bad = key in self.marks.mismatch
             if bad:
                 sent, actual = (stepper.text(n - c.first) for n in self.marks.mismatch[key])
-                tip.append("Sent %s, device has %s." % (sent, actual))
+                tip.append("Sent %s, the device has %s." % (sent, actual))
             stepper.show_state(None if v is None else v - c.first, session.writable(key), "\n".join(filter(None, tip)),
                                faded, bad, held=i == P.IN_REF_LEVEL and riaa)

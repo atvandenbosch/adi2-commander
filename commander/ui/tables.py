@@ -224,7 +224,7 @@ class Marks:
                 text = NOTES[i] + "\n" + text
         if cell.key in self.mismatch:
             sent, actual = self.mismatch[cell.key]
-            text += "\nSent %s, device has %s." % (P.to_text(i, sent, cell.band), P.to_text(i, actual, cell.band))
+            text += "\nSent %s, the device has %s." % (P.to_text(i, sent, cell.band), P.to_text(i, actual, cell.band))
         return text
 
 
