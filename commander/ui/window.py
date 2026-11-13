@@ -56,6 +56,7 @@ from .output import OutputPanel, shared_tip
 from .presets import INPUT_TAG, ChosenRow, NameEditor, PresetPanel, SideTab
 from .preview import PresetPreview
 from .scrim import RISE, Scrim
+from . import simulated as simulated_choice
 from . import untested
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, LOUDNESS_COLUMNS, CellDelegate, Marks,
                      ParamModel, ParamView, band_address, band_rows, bt_rows, loudness_rows)
@@ -219,13 +220,15 @@ class MainWindow(QMainWindow):
     PRESETS_WIDTH = 260
     LOUDNESS_WIDTHS = [88, 88, 88]
 
-    def __init__(self, session, simulated=False, settings=None, backups=None):
+    def __init__(self, session, simulated=False, settings=None, backups=None, simulation=None):
         """simulated: the session talks to the simulator; settings: a QSettings for what the app remembers (default
         the user's, untested.ORGANIZATION and APPLICATION); backups: the folder for a copy of the device's state at
-        each connection to a device (backup.keep), or None for none."""
+        each connection to a device (backup.keep), or None for none; simulation: Simulated mode as the app starts
+        it, an app.Simulation: its model in the title, another from the menu."""
         super().__init__()
         self.session = session
-        self.simulated = simulated
+        self.simulation = simulation
+        self.simulated = simulated or simulation is not None
         self.backups = backups
         self.taken = None                            # the state as connected, (state, model), until saved
         self.settings = settings if settings is not None else QSettings(untested.ORGANIZATION, untested.APPLICATION)
@@ -638,11 +641,11 @@ class MainWindow(QMainWindow):
         self.refresh()                                   # DSD bypasses the DSP: the switches, curves and cells follow
 
     def show_title(self):
-        """The title names the connected model. In simulated mode the title is set once, with the simulated model."""
-        if self.simulated:
-            return
+        """The title names the connected model; in Simulated mode the simulated model."""
         title = "ADI-2 Commander"
-        if self.session.ready() and self.session.model is not None:     # dropping, the model is gone first
+        if self.simulation is not None:
+            title += " – SIMULATED " + self.simulation.name()
+        elif self.session.ready() and self.session.model is not None:     # dropping, the model is gone first
             title += " – " + models.full_name(self.session.model, self.session.revision())
         self.setWindowTitle(title)
 
@@ -992,6 +995,8 @@ class MainWindow(QMainWindow):
 
     def more_menu(self):
         m = QMenu(self)
+        if self.simulation is not None:
+            m.addAction("Simulated device…").triggered.connect(self.simulate_another)
         folder = m.addAction("View backups")
         folder.setEnabled(self.backups is not None)
         folder.triggered.connect(self.open_backups)
@@ -1011,6 +1016,15 @@ class MainWindow(QMainWindow):
             self.note("Backups folder not opened: %s" % e, theme.WARN)
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(self.backups))
+
+    def simulate_another(self):
+        """The model choice of Simulated mode: the chosen model, started anew as at the start of the app."""
+        key = simulated_choice.choose(self.settings, self.simulation.choices, self.ask, from_menu=True)
+        if key is None:
+            return
+        self.simulation.switch(key)
+        self.show_title()
+        self.session.reconnect("another model simulated")
 
     def show_about(self):
         self.ask(AboutDialog(self, QApplication.windowIcon()))

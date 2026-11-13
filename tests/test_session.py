@@ -111,6 +111,17 @@ class Connect(Harness):
         self.assertEqual(self.session.state[(4, 4)], self.sim.state[(4, 4)])
         self.assertEqual(self.verified(), [])
 
+    def test_reconnect_to_another_device(self):
+        self.connect()
+        self.session.set((4, 4), 0)
+        self.sim = SimulatedAdi2.factory(PRO, presets=PRESETS, clock=self.clock)
+        self.session.reconnect("another device")
+        self.assertEqual((self.session.status, self.session.pending, self.session.state), ("searching", {}, {}))
+        self.run_for(0.04)
+        self.assertEqual(self.statuses(), ["searching", "loading"])              # at the next tick
+        self.run_for(1.0)
+        self.assertEqual((self.session.status, self.session.model), ("ready", PRO))
+
     def test_standby_is_noticed_within_half_a_second(self):
         self.connect()
         self.sim.power(False)

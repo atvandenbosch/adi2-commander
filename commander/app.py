@@ -1,8 +1,9 @@
 """Start ADI-2 Commander.
 
     pythonw Commander.pyw                 the real device
-    pythonw Commander.pyw --simulate      a simulated device, of the model chosen in a dialog: the ADI-2 DAC FS
-                                          started from the demo, another model as it leaves the factory
+    pythonw Commander.pyw --simulate      a simulated device, of the model chosen in a dialog, or the one chosen
+                                          last with Don't ask again: the ADI-2 DAC FS started from the demo,
+                                          another model as it leaves the factory
     pythonw Commander.pyw --simulate DUMP a simulated device, started from DUMP: an ADI-2 DAC FS unless --model
     --model dac|pro|24se|24ex             with --simulate: the ADI-2 DAC FS, ADI-2 Pro, ADI-2/4 Pro SE or EX,
                                           without the dialog
@@ -40,14 +41,34 @@ SIMULATED_NAMES = (("dac", models.DAC.name), ("pro", models.PRO.name), ("24se", 
                    ("24ex", "ADI-2/4 Pro EX"))
 
 
-def simulator(dump, model):
-    """The simulated device of --simulate [DUMP] --model MODEL."""
+def simulator(dump, model, **kw):
+    """The simulated device of --simulate [DUMP] --model MODEL; kw: for SimulatedAdi2, as its clock."""
     model, revision = SIMULATED_MODELS[model]
     if dump is None and model is models.DAC:
         dump = DEMO_DUMP
     if dump is None:
-        return SimulatedAdi2.factory(model, revision, presets=DEMO_PRESETS)
-    return SimulatedAdi2.from_dump(dump, presets=DEMO_PRESETS, model=model, revision=revision)
+        return SimulatedAdi2.factory(model, revision, presets=DEMO_PRESETS, **kw)
+    return SimulatedAdi2.from_dump(dump, presets=DEMO_PRESETS, model=model, revision=revision, **kw)
+
+
+class Simulation:
+    """The simulated device of --simulate [DUMP], of the model with key in SIMULATED_MODELS; switch replaces it with
+    another, started anew. kw: for SimulatedAdi2, as its clock."""
+
+    choices = SIMULATED_NAMES
+
+    def __init__(self, dump, key, **kw):
+        self.dump, self.kw = dump, kw
+        self.switch(key)
+
+    def switch(self, key):
+        self.key, self.device = key, simulator(self.dump, key, **self.kw)
+
+    def name(self):
+        return dict(SIMULATED_NAMES)[self.key]
+
+    def open_port(self):
+        return SimPort(self.device)
 
 
 def simulated_model(dump, model, choose):
@@ -76,21 +97,16 @@ def main(argv=None):
     app.setWindowIcon(QIcon(SIMULATED_ICON if simulate else ICON))
     theme.apply(app)
     collector.start(app)
+    simulation = None
     if simulate:
-        model = simulated_model(args.simulate, args.model, lambda: simulated.choose(
-            QSettings(untested.ORGANIZATION, untested.APPLICATION), SIMULATED_NAMES))
+        settings = QSettings(untested.ORGANIZATION, untested.APPLICATION)
+        model = simulated_model(args.simulate, args.model, lambda: simulated.remembered(settings, SIMULATED_NAMES)
+                                or simulated.choose(settings, SIMULATED_NAMES))
         if model is None:
             return 0                                           # cancelled
-        sim = simulator(args.simulate or None, model)
-        open_port = lambda: SimPort(sim)                       # noqa: E731
-    else:
-        sim = None
-        open_port = WinmmPort
-    session = Session(open_port)
-    win = MainWindow(session, simulated=sim is not None, backups=backup.folder())
-    if sim is not None:
-        win.setWindowTitle(win.windowTitle() + " – SIMULATED " + dict(SIMULATED_NAMES)[model])
-        win.simulator = sim
+        simulation = Simulation(args.simulate or None, model)
+    session = Session(WinmmPort if simulation is None else simulation.open_port)
+    win = MainWindow(session, simulation=simulation, backups=backup.folder())
     show_on_screen(win, win.sizeHint(), app.primaryScreen())
     code = app.exec()
     session.close()

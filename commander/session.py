@@ -452,6 +452,12 @@ class Session:
             self.port.close()
             self.port = None
 
+    def reconnect(self, why):
+        """Let the device go and connect at the next tick: to the device open_port gives then."""
+        if self.port is not None:
+            self._drop(why)
+        self._next_search = self.clock()
+
     # -- the loop -----------------------------------------------------------------------------
     def tick(self):
         now = self.clock()

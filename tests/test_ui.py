@@ -1109,6 +1109,9 @@ class SimulatedModel(unittest.TestCase):
         self.assertIn("Choose the ADI-2 to simulate", d.heading.text())
         self.assertEqual([b.text() for b in d.group.buttons()],
                          ["ADI-2 DAC FS", "ADI-2 Pro", "ADI-2/4 Pro SE", "ADI-2/4 Pro EX"])
+        self.assertEqual((d.check.text(), d.check.isChecked()), ("Don't ask again", False))
+        self.assertEqual(d.check.toolTip(),
+                         "Start with this device without asking\nTo change that later, go to Menu › Simulated device…")
         self.assertTrue(d.start.isDefault())
 
     def test_the_choice_made_last(self):
@@ -1128,6 +1131,68 @@ class SimulatedModel(unittest.TestCase):
             return d.result() == d.DialogCode.Accepted
         self.assertIsNone(self.choose(escape))
         self.assertEqual(self.settings.value(simulated.KEY), "pro")             # not remembered
+
+    def test_dont_ask_again_in_this_version(self):
+        names = commander_app.SIMULATED_NAMES
+        self.assertIsNone(simulated.remembered(self.settings, names))           # asked
+        self.choose(lambda d: d.group.button(1).click() or d.check.setChecked(True) or True)
+        self.assertEqual(self.settings.value(simulated.NOT_ASKED), __version__)
+        self.assertEqual(simulated.remembered(self.settings, names), "pro")
+        self.settings.setValue(simulated.NOT_ASKED, "0.0.1")                    # another version: asked again
+        self.assertIsNone(simulated.remembered(self.settings, names))
+        self.settings.setValue(simulated.NOT_ASKED, __version__)
+        self.settings.setValue(simulated.KEY, "other")                          # not a model: asked
+        self.assertIsNone(simulated.remembered(self.settings, names))
+        self.choose(lambda d: d.check.setChecked(False) or True)                # asked again
+        self.assertIsNone(self.settings.value(simulated.NOT_ASKED))
+
+    def test_ask_at_startup_from_the_menu(self):
+        def from_menu(answer):
+            return simulated.choose(self.settings, commander_app.SIMULATED_NAMES,
+                                    lambda dialog: self.shown.append(dialog) or answer(dialog), from_menu=True)
+        self.assertEqual(from_menu(lambda d: True), "dac")
+        self.assertEqual((self.shown[-1].check.text(), self.shown[-1].check.isChecked()), ("Ask at startup", True))
+        self.assertEqual(self.shown[-1].check.toolTip(), "")
+        self.assertIsNone(self.settings.value(simulated.NOT_ASKED))
+        from_menu(lambda d: d.check.setChecked(False) or True)                  # not asked
+        self.assertEqual(self.settings.value(simulated.NOT_ASKED), __version__)
+        from_menu(lambda d: True)
+        self.assertFalse(self.shown[-1].check.isChecked())
+        self.assertEqual(self.settings.value(simulated.NOT_ASKED), __version__)
+        from_menu(lambda d: d.check.setChecked(True) or True)                   # asked again
+        self.assertIsNone(self.settings.value(simulated.NOT_ASKED))
+
+    def test_another_model_from_the_menu(self):
+        clock = Clock()
+        simulation = commander_app.Simulation(None, "dac", clock=clock)
+        session = Session(simulation.open_port, clock=clock)
+        win = MainWindow(session, settings=self.settings, simulation=simulation)
+        win.timer.setInterval(24 * 3600 * 1000)
+        self.addCleanup(session.close)
+        self.addCleanup(win.close)
+
+        def run_for(seconds):
+            for _ in range(int(seconds / 0.05)):
+                clock.t += 0.05
+                win.tick()
+                QApplication.processEvents()
+        run_for(3)
+        self.assertEqual((session.ready(), session.model), (True, models.DAC))
+        self.assertEqual(win.windowTitle(), "ADI-2 Commander – SIMULATED ADI-2 DAC FS")
+        menu = win.more_menu()
+        self.assertEqual([a.text() for a in menu.actions()],
+                         ["Simulated device…", "View backups", "", "About ADI-2 Commander"])
+        win.ask = lambda d: d.group.button(3).click() or False                  # Cancel: as it was
+        menu.actions()[0].trigger()
+        run_for(1)
+        self.assertEqual((session.ready(), session.model, simulation.key), (True, models.DAC, "dac"))
+        win.ask = lambda d: d.group.button(3).click() or True
+        menu.actions()[0].trigger()
+        self.assertEqual(win.windowTitle(), "ADI-2 Commander – SIMULATED ADI-2/4 Pro EX")
+        run_for(3)
+        self.assertEqual((session.ready(), session.model, session.revision()), (True, PRO_24, 1))
+        self.assertEqual(self.settings.value(simulated.KEY), "24ex")
+        self.assertTrue(win.tabs.isTabVisible(P.CHANNELS.index(P.INPUT_CHANNEL)))   # laid out for it
 
 
 class Backup(unittest.TestCase):
