@@ -111,11 +111,11 @@ class Lines(unittest.TestCase):
         usable, why = I.items(eq, I.ADI2, FS)
         self.assertEqual(set(usable), rows)
         self.assertEqual(set(why), {e.line for e in eq.entries})
-        self.assertEqual(set(why.values()), {"With Origin ADI-2 the table above loads"})
+        self.assertEqual(set(why.values()), {"With Origin ADI-2 the table above is imported"})
         usable, why = I.items(eq, I.EXTERNAL, FS)
         self.assertEqual(set(usable), {e.line for e in eq.entries if e.on})
         self.assertTrue(rows <= set(why))
-        self.assertEqual({why[n] for n in rows}, {"With Origin External the Filter lines load"})
+        self.assertEqual({why[n] for n in rows}, {"With Origin External the Filter lines are imported"})
 
 
 class Category(unittest.TestCase):

@@ -148,7 +148,7 @@ class RoundTrip(unittest.TestCase):
         text = E.write(dump_state(), OUT, 48000.0, preset=(3, "Studio"))
         self.assertIn("\n# Preset: 3 (Studio)\n", text)
         self.assertNotIn("# Output:", text)
-        self.assertIsNone(E.read(text).output)                           # no "Saved from" in Load
+        self.assertIsNone(E.read(text).output)                           # no "Exported from" in Import
         self.assertIn("\n# Preset: 3\n", E.write(dump_state(), OUT, 48000.0, preset=(3, "")))
 
     def test_readable_table_first_one_row_per_band(self):

@@ -4,7 +4,7 @@ the room left; beside it, one under the other, what shapes the sound: the parame
 Dual EQ off both show the one EQ of both channels, in the shared colour), Bass/Treble, and Loudness with a graph of
 what it does; and a status bar with the connection.
 
-One title, EQ, over the column, with what the EQ was loaded from and, on the right, Save and Load of the EQ of
+One title, EQ, over the column, with what the EQ was loaded from and, on the right, Import and Export of the EQ of
 this output as a file. Close above the tables Dual EQ: Share L > R and Share R > L, or Split L <> R. Below that each
 part is a table headed by its own switch, in the corner above the row names, on the line of the column names:
 a state is shown once, where it is set. Room between the parts groups them: less between the two channels than
@@ -18,7 +18,7 @@ another such row, and closes when an action is clicked.
 Edit in a preset's preview opens the edit stand: the stage and the column show the preset (a Draft) instead of the
 output's EQ, and all else lies under a veil (Scrim), out of reach, with the row joined to them as their tab. The title
 is PRESET, with the number and the name, which can be typed; the switches are titles, as a preset has none; Loudness,
-no part of a preset, is gone. Save and Load work on the preset; nothing goes to the device. Nothing is chosen at the
+no part of a preset, is gone. Import and Export work on the preset; nothing goes to the device. Nothing is chosen at the
 start: no link with the work before, which is back afterwards. OK and Cancel, the only ways out, are in the preset's
 row; its name is amber when OK changes more than the preset, its tooltip says what. OK writes the preset as a whole
 and leaves once the device has it; it can be clicked only when the preset is changed. Cancel leaves without
@@ -50,7 +50,7 @@ from .device import DevicePanel
 from .graph import LEGEND_GAP, SAMPLE_RATES, TITLE_ROOM, ZONE_INK, ResponseGraph, side_color
 from .inputs import InputPanel
 from .legend import ITEM_PAD, Legend
-from .loaddialog import LoadDialog, read_file
+from .importdialog import ImportDialog, read_file
 from .loudness import LoudnessGraph
 from .output import OutputPanel, shared_tip
 from .presets import INPUT_TAG, ChosenRow, NameEditor, PresetPanel, SideTab
@@ -79,7 +79,7 @@ PHONES_1_2 = {None: "Active with Dual Phones on: " + PHONES_MENU,
                         + PHONES_MENU,
               "balanced": "Balanced Phones mode: Phones 3/4 and Phones 1/2 form one balanced output,\n"
                           "with the settings of Phones 3/4"}
-# the kinds of file Save writes
+# the kinds of file Export writes
 APO_FILES = "Equalizer APO (*.txt)"
 REMOTE_FILES = "ADI-2 Remote preset (*.adieqpr)"
 REMOTE_SUFFIX = ".adieqpr"
@@ -278,11 +278,11 @@ class MainWindow(QMainWindow):
         signal_lay.addWidget(self.input_text)
         signal_lay.addWidget(self.rate_text)
         bar.addWidget(self.signal_info)
-        self.file_note = QLabel()                        # what the last Save or Load did
+        self.file_note = QLabel()                        # what the last Import or Export did
         self.file_note.setContentsMargins(0, 0, 8, 0)    # as far from the edge as the lamp on the left
         bar.addPermanentWidget(self.file_note)
         self.folder = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation)
-        self.setAcceptDrops(True)                        # a filter file dropped on the window: Load
+        self.setAcceptDrops(True)                        # a filter file dropped on the window: Import
 
         # bands: a table per channel, one under the other; with Dual EQ off both show the one EQ of both channels
         self.band_models, self.band_delegates, self.band_views = [], [], []
@@ -297,14 +297,14 @@ class MainWindow(QMainWindow):
         self.eq_title = QLabel("EQ")
         self.eq_title.setStyleSheet(TITLE_STYLE)
         self.source = ChosenRow()                        # as the selected row in the presets panel
-        self.save_action, self.load_action = Action(), Action()
-        self.save_action.setText("Save…")
-        self.save_action.setToolTip("Save this EQ to a file")
-        self.save_action.clicked.connect(self.save_dialog)
-        self.load_action.setText("Load…")
-        self.load_action.setToolTip("Load filters (Equalizer APO, REW, other) or a curve into this EQ\n"
-                                    "Or drop a filter file or a curve on the window.")
-        self.load_action.clicked.connect(self.load_dialog)
+        self.import_action, self.export_action = Action(), Action()
+        self.import_action.setText("Import…")
+        self.import_action.setToolTip("Import filters (Equalizer APO, REW, other) or a curve into this EQ\n"
+                                      "Or drop a filter file or a curve on the window.")
+        self.import_action.clicked.connect(self.import_dialog)
+        self.export_action.setText("Export…")
+        self.export_action.setToolTip("Export this EQ to a file")
+        self.export_action.clicked.connect(self.export_dialog)
         self.eq_switches = [Switch(name) for name in EQ_OWN]     # colours as in the graph
         self.dual_actions = [Action(), Action()]
         for side in (0, 1):
@@ -375,20 +375,20 @@ class MainWindow(QMainWindow):
         sound = QVBoxLayout()
         sound.setContentsMargins(0, 0, 0, 0)
         sound.setSpacing(0)                              # only the gaps below
-        self.source.setFixedHeight(self.save_action.sizeHint().height())   # as high as Save and Load beside it
+        self.source.setFixedHeight(self.export_action.sizeHint().height())   # as high as Import and Export beside it
         # in the edit stand: the preset's number and its name, to be typed, in the place of the source
         self.preset_number = QLabel()
         self.preset_number.setStyleSheet("color: %s;" % theme.SECONDARY.name())
         self.preset_name = NameEditor()
-        self.preset_name.setFixedHeight(self.save_action.sizeHint().height())
+        self.preset_name.setFixedHeight(self.export_action.sizeHint().height())
         self.preset_name.setFixedWidth(self.preset_name.fontMetrics().horizontalAdvance("W" * 10) + 12)
         self.preset_name.textEdited.connect(self.rename_draft)
         self.preset_name.cancelled.connect(self.restore_name)
         for w in (self.preset_number, self.preset_name):
             w.hide()
-        title = head(self.eq_title, self.source, self.preset_number, self.preset_name)   # Save and Load on the title
-        title.layout().addWidget(self.save_action)       # line, as they act on the EQ
-        title.layout().addWidget(self.load_action)
+        title = head(self.eq_title, self.source, self.preset_number, self.preset_name)   # Import and Export on
+        title.layout().addWidget(self.import_action)     # the title line, as they act on the EQ
+        title.layout().addWidget(self.export_action)
         sound.addWidget(title)
         sound.addSpacing(INNER_GAP)
         sound.addWidget(head(*self.dual_actions))        # Share and Split; Split takes the place of Share L
@@ -530,8 +530,8 @@ class MainWindow(QMainWindow):
         self.display = display
         main.addLayout(right)
 
-        # as far from the right edge as from the left: the tables, Load… and the ring; the scroll bar of a low window
-        # goes in that margin, against the edge
+        # as far from the right edge as from the left: the tables, Export… and the ring; the scroll bar of a low
+        # window goes in that margin, against the edge
         body = QVBoxLayout()
         body.setContentsMargins(SIDE, 8, 0, 0)
         body.setSpacing(0)
@@ -887,18 +887,65 @@ class MainWindow(QMainWindow):
         """The name of the output at address out as the model has it, or of the analog input."""
         return models.channel_name(self.model, out)
 
-    def save_dialog(self):
+    def import_dialog(self):
+        what = "Preset %d" % self.draft.slot if self.draft is not None else self.output_name()
+        path, _ = QFileDialog.getOpenFileName(self, "Import filters - %s" % what, self.folder,
+                                              "Filter files and curves (*.txt *.csv);;All files (*)")
+        if path:
+            self.import_file(path)
+
+    def import_file(self, path):
+        """Read a filter file or a curve and write it to this output, or to the preset being edited, after the user
+        has chosen in ImportDialog, and only on OK."""
+        self.folder = os.path.dirname(path)
+        out, eq = self.output[1], self.eq()
+        if not eq.ready() or not self.editable():
+            self.note("Not imported: the device is not connected", theme.WARN)
+            return
+        name = os.path.basename(path)
+        try:
+            source = read_file(path, self.graph.fs)
+        except OSError as e:
+            self.note("Not imported: %s" % e, theme.WARN)
+            return
+        if source is None:
+            self.note("Not imported: %s is not a filter file or a curve" % name, theme.WARN)
+            return
+        preset = (self.draft.slot, self.draft.name) if self.draft is not None else None
+        dialog = ImportDialog(source, path, eq, out, self.live_rate(), self.graph.fs, self, preset, self.output_name())
+        try:
+            if not self.ask(dialog):
+                self.note("Import cancelled")
+                return
+            name = os.path.basename(dialog.path)          # another file may have been dropped on the dialog
+            if dialog.unchanged:
+                self.note("%s: %s" % ("Already in the preset" if preset else "Already on the device", name))
+                return
+            if not eq.ready():                           # the device may go while the question is open
+                self.note("Not imported: the device is not connected", theme.WARN)
+                return
+            try:
+                I.apply(eq, dialog.values)
+            except ValueError as e:                      # e.g. Dual EQ switched on the device meanwhile
+                self.note("Not fully imported: %s" % e, theme.WARN)
+                return
+            self.note("Imported %s" % name)
+        finally:
+            dialog.setParent(None)                       # no longer the window's: gone with its last reference
+
+
+    def export_dialog(self):
         what = "Preset %d" % self.draft.slot if self.draft is not None else self.output_name()
         name = "%s %s %s.txt" % (self.model.name.replace("/", "-"), what.replace("·", "-").replace("/", "-"),
                                  datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
-        path, kind = QFileDialog.getSaveFileName(self, "Save EQ - %s" % what, os.path.join(self.folder, name),
+        path, kind = QFileDialog.getSaveFileName(self, "Export EQ - %s" % what, os.path.join(self.folder, name),
                                                  ";;".join((APO_FILES, REMOTE_FILES)))
         if path and kind == REMOTE_FILES and not path.lower().endswith(REMOTE_SUFFIX):
             path = (path[:-4] if path.lower().endswith(".txt") else path) + REMOTE_SUFFIX
         if path:
-            self.save_file(path)
+            self.export_file(path)
 
-    def save_file(self, path):
+    def export_file(self, path):
         """The EQ of this output, or the preset being edited: as a preset file of ADI-2 Remote when path ends in its
         suffix, named as the preset being edited or else as the file; otherwise as an Equalizer APO file, at the
         sample rate of the graph."""
@@ -913,56 +960,9 @@ class MainWindow(QMainWindow):
                 E.save(path, E.write(self.eq().state, self.output[1], self.graph.fs, preset=preset,
                                      model=self.model))
         except (OSError, ValueError) as e:
-            self.note("Not saved: %s" % e, theme.WARN)
+            self.note("Not exported: %s" % e, theme.WARN)
             return
-        self.note("Saved %s" % os.path.basename(path))
-
-    def load_dialog(self):
-        what = "Preset %d" % self.draft.slot if self.draft is not None else self.output_name()
-        path, _ = QFileDialog.getOpenFileName(self, "Load filters - %s" % what, self.folder,
-                                              "Filter files and curves (*.txt *.csv);;All files (*)")
-        if path:
-            self.load_file(path)
-
-    def load_file(self, path):
-        """Read a filter file or a curve and write it to this output, or to the preset being edited, after the user
-        has chosen in LoadDialog, and only on OK."""
-        self.folder = os.path.dirname(path)
-        out, eq = self.output[1], self.eq()
-        if not eq.ready() or not self.editable():
-            self.note("Not loaded: the device is not connected", theme.WARN)
-            return
-        name = os.path.basename(path)
-        try:
-            source = read_file(path, self.graph.fs)
-        except OSError as e:
-            self.note("Not loaded: %s" % e, theme.WARN)
-            return
-        if source is None:
-            self.note("Not loaded: %s is not a filter file or a curve" % name, theme.WARN)
-            return
-        preset = (self.draft.slot, self.draft.name) if self.draft is not None else None
-        dialog = LoadDialog(source, path, eq, out, self.live_rate(), self.graph.fs, self, preset, self.output_name())
-        try:
-            if not self.ask(dialog):
-                self.note("Load cancelled")
-                return
-            name = os.path.basename(dialog.path)          # another file may have been dropped on the dialog
-            if dialog.unchanged:
-                self.note("%s: %s" % ("Already in the preset" if preset else "Already on the device", name))
-                return
-            if not eq.ready():                           # the device may go while the question is open
-                self.note("Not loaded: the device is not connected", theme.WARN)
-                return
-            try:
-                I.apply(eq, dialog.values)
-            except ValueError as e:                      # e.g. Dual EQ switched on the device meanwhile
-                self.note("Not fully loaded: %s" % e, theme.WARN)
-                return
-            self.note("Loaded %s" % name)
-        finally:
-            dialog.setParent(None)                       # no longer the window's: gone with its last reference
-
+        self.note("Exported %s" % os.path.basename(path))
 
     def dragEnterEvent(self, e):
         if self.eq().ready() and self.editable() and dropped_file(e.mimeData()):
@@ -973,8 +973,8 @@ class MainWindow(QMainWindow):
         if not path:
             return
         e.acceptProposedAction()
-        # after the drop has finished: LoadDialog is modal, and Explorer waits for the drop to return
-        QTimer.singleShot(0, lambda: self.load_file(path))
+        # after the drop has finished: ImportDialog is modal, and Explorer waits for the drop to return
+        QTimer.singleShot(0, lambda: self.import_file(path))
 
     def ask(self, dialog):
         return dialog.exec() == QDialog.Accepted
@@ -1142,7 +1142,7 @@ class MainWindow(QMainWindow):
 
     # -- the edit stand ---------------------------------------------------------------------------
     def eq(self):
-        """What the tables, the graph, Save and Load work on: the preset being edited, or else the output's EQ."""
+        """What the tables, the graph, Import and Export work on: the preset being edited, or else the output's EQ."""
         return self.draft if self.draft is not None else self.session
 
     def editable(self):
@@ -1451,8 +1451,8 @@ class MainWindow(QMainWindow):
                            "This replaces the %s channel's EQ." % (name, ("right", "left")[side]) if dual else
                            "Make each channel's EQ independent (Dual EQ on).\nBoth start from this EQ.")
         has_bt = P.has_bt(out)
-        self.save_action.setEnabled(ready)
-        self.load_action.setEnabled(ready and self.editable())
+        self.export_action.setEnabled(ready)
+        self.import_action.setEnabled(ready and self.editable())
         live = self.session.ready()
         load_bt = live and self.session.state.get(self.session.at((left, P.LOAD_BT))) == 1
         if editing:

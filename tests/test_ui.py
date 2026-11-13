@@ -1,4 +1,4 @@
-"""The window apart from the graph, Load/Save and the side panels: the layout (the graph beside the sound column),
+"""The window apart from the graph, Import/Export and the side panels: the layout (the graph beside the sound column),
 layout by Dual EQ, the EQ and Loudness switches, Share, Loudness and its graph in the graph's place, the active output,
 the status bar, the keyboard in and across the tables, spinners at the band limits."""
 
@@ -70,7 +70,7 @@ class Window(WindowTest):
             self.spin(100)
             self.assertEqual(self.win.sound.verticalScrollBar().isVisible(), height == 500)
             self.assertEqual(edges(self.win.input_tab)[0], SIDE)
-            self.assertEqual([edges(w)[1] for w in (self.win.band_views[0], self.win.load_action, self.win.more)],
+            self.assertEqual([edges(w)[1] for w in (self.win.band_views[0], self.win.export_action, self.win.more)],
                              [SIDE] * 3)
             self.assertEqual(edges(self.win.sound)[1], 0)              # its scroll bar against the edge
 
@@ -161,14 +161,14 @@ class Window(WindowTest):
         self.assertEqual({i: self.sim.state[(5, i)] for i in range(3, 20)}, right)   # both start from it
         self.assertEqual(shown(), [("Share L > R", True), ("Share R > L", True)])
 
-    def test_save_and_load_on_the_title_line_share_above_the_tables(self):
+    def test_import_and_export_on_the_title_line_share_above_the_tables(self):
         top = lambda w: w.mapTo(self.win, w.rect().topLeft()).y()          # noqa: E731
         line = self.win.eq_title.parentWidget()
-        self.assertIs(self.win.save_action.parentWidget(), line)
-        self.assertIs(self.win.load_action.parentWidget(), line)
+        self.assertIs(self.win.export_action.parentWidget(), line)
+        self.assertIs(self.win.import_action.parentWidget(), line)
         share = {top(w) for w in self.win.dual_actions}
         self.assertEqual(len(share), 1)
-        self.assertLess(top(self.win.save_action), share.pop())
+        self.assertLess(top(self.win.export_action), share.pop())
         self.assertLess(top(self.win.dual_actions[0]), top(self.win.band_views[0]))
 
     def test_each_switch_heads_its_table_in_the_corner(self):
@@ -927,11 +927,11 @@ class ProWindow(WindowTest):
         self.spin(1500)
         self.assertEqual(self.win.presets.rows[3].tags.text(), "P34")
 
-    def test_save_names_the_device_and_the_output(self):
+    def test_export_names_the_device_and_the_output(self):
         self.win.tabs.setCurrentIndex(tab(9))
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "eq.txt")
-            self.win.save_file(path)
+            self.win.export_file(path)
             with open(path, encoding="utf-8") as f:
                 head = f.read(300)
         self.assertIn("# Device: RME ADI-2 Pro\n# Output: Phones 3/4\n", head)
@@ -1046,11 +1046,11 @@ class AnalogIn(WindowTest):
         self.win.tabs.setCurrentIndex(tab(3))
         self.assertTrue(clear.toolTip().endswith("Store takes this output's Bass/Treble into the preset too."))
 
-    def test_save_names_the_input(self):
-        self.assertTrue(self.win.save_action.isEnabled())
+    def test_export_names_the_input(self):
+        self.assertTrue(self.win.export_action.isEnabled())
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "eq.txt")
-            self.win.save_file(path)
+            self.win.export_file(path)
             with open(path, encoding="utf-8") as f:
                 head = f.read(300)
         self.assertIn("# Device: RME ADI-2/4 Pro\n# Input: Analog In\n# Settings: EQ\n", head)

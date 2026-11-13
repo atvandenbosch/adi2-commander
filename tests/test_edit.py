@@ -1,5 +1,5 @@
 """The edit stand against the simulator: a preset opened from its row, changed without the device hearing it, and
-left by OK or Cancel only; what lies under the veil, the name, the switches as titles, Save and Load on the preset,
+left by OK or Cancel only; what lies under the veil, the name, the switches as titles, Import and Export on the preset,
 what OK changes beyond it, the device going away, and closing the window."""
 
 import os
@@ -60,7 +60,7 @@ class EditStand(WindowTest):
         self.assertFalse(win.presets.rows[4].isEnabled())
         QTest.keyClick(win, Qt.Key_Tab, Qt.ControlModifier)                   # no other output meanwhile
         self.assertEqual(win.tabs.currentIndex(), tab(3))
-        for w in (win.band_views[0], win.bt_view, self.cancel(), win.preset_name, win.save_action):
+        for w in (win.band_views[0], win.bt_view, self.cancel(), win.preset_name, win.export_action):
             self.assertTrue(w.isEnabled() and w.isVisible())
         self.assertTrue(self.ok().isVisible())                                # disabled until something changes
         self.assertFalse(win.loudness_view.isVisible())                       # no part of a preset
@@ -200,12 +200,12 @@ class EditStand(WindowTest):
         self.win.write((5, 7), 4, False)                                      # the right channel of the preset
         self.assertEqual(d.content()["vals"][(14, 7)], 4)
 
-    def test_save_and_load_work_on_the_preset(self):
+    def test_export_and_import_work_on_the_preset(self):
         d = self.edit()
         self.win.write((4, 7), 6, False)
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "preset.txt")
-            self.win.save_file(path)
+            self.win.export_file(path)
             with open(path, encoding="utf-8") as f:
                 text = f.read()
             self.assertIn("\n# Preset: %d" % d.slot, text)
@@ -213,18 +213,20 @@ class EditStand(WindowTest):
             band2 = next(r for r in E.table(E.read(text)) if r.target == 2)
             self.assertEqual((band2.freq, band2.gain), (1000, 3.0))
             self.win.write((4, 7), 0, False)
-            self.win.ask = lambda dialog: dialog.accept() or True
-            self.win.load_file(path)
+            tips = []
+            self.win.ask = lambda dialog: tips.append(dialog.ok.toolTip()) or dialog.accept() or True
+            self.win.import_file(path)
+        self.assertEqual(tips, ["Write the checked tables to the preset"])
         self.assertEqual(d.state[(4, 7)], 6)
         self.assertEqual(self.sim.state[(4, 7)], self.session.state[(4, 7)])  # the device heard nothing
         self.assertEqual(self.session.pending, {})
 
-    def test_saved_for_adi2_remote_under_the_presets_name(self):
+    def test_exported_for_adi2_remote_under_the_presets_name(self):
         d = self.edit()
         self.win.write((4, 7), 6, False)
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "file.adieqpr")
-            self.win.save_file(path)
+            self.win.export_file(path)
             with open(path, encoding="ascii") as f:
                 text = f.read()
         self.assertEqual(text, R.write(d.state, 3, d.name, self.win.model, self.session.revision()))

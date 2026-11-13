@@ -1,7 +1,7 @@
 """EQ settings as a file, in the format of Equalizer APO.
 
 Commander writes a file for people and for APO: first, as comments, a table of the settings as the device
-holds them, from which Commander loads back exactly; then the same as APO filters (PK, LSC, HSC, HPQ, LPQ)
+holds them, from which Commander imports back exactly; then the same as APO filters (PK, LSC, HSC, HPQ, LPQ)
 with the Cookbook Q of the same response (the device computes alpha differently; filters.cookbook_q). The
 table is needed: where w0/2Q > pi/2 two device Qs give the same Cookbook Q.
 
@@ -46,7 +46,7 @@ class EqFile:
     def __init__(self):
         self.source = "apo"               # 'commander', 'rew' or 'apo'
         self.equaliser = None             # REW: the equaliser the filters were made for
-        self.output = None                # Commander: the output it was saved from, as in its header
+        self.output = None                # Commander: the output it was exported from, as in its header
         self.fs = None                    # Commander: the sample rate the Cookbook Q was computed for
         self.entries = []
         self.preamp = []                  # (channel, dB, line)
@@ -82,7 +82,7 @@ OUTPUT_NOTE = re.compile(r"^#\s*(?:Output|Input):\s*(.+?)\s*$")
 
 def write(state, out, fs=F.FS, now=None, preset=None, model=models.DAC):
     """The EQ of one output, or of the input, as a file: a header (tool, date, device, where the settings come from,
-    which settings), the settings as a table for people (and for Commander to load back exactly), then the same
+    which settings), the settings as a table for people (and for Commander to import back exactly), then the same
     converted to RBJ Cookbook biquads in the format of Equalizer APO. A channel with EQ Enable off, and Bass/Treble
     with B/T Enable off, are '(off)' on their group in the table and OFF for APO, which skips them. The column of
     types is as wide as the longest type in it. preset: (slot, name) when state holds a preset being edited rather

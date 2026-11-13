@@ -58,7 +58,7 @@ DOT_PEN = QPen(Qt.NoPen)
 DOT_PEN.setWidthF(2)
 # the lines, in pixels at 100 % scaling: the sum the strongest, none so thick that one looks for its middle to read
 SUM_W, CHOSEN_W, BAND_W, COMPARE_W = 2.0, 1.5, 1.0, 1.5     # bands: Qt draws exactly 1 px three times as fast
-INPUT_W, INPUT_ALPHA = 3 * SUM_W, 0.5           # a curve fitted to (Load): wide and see-through, under the sum
+INPUT_W, INPUT_ALPHA = 3 * SUM_W, 0.5           # a curve fitted to (Import): wide and see-through, under the sum
 BAND_ALPHA = 0.6                                 # a band beside the sum
 BAND_FLOOR, BAND_FULL = 0.02, 0.5               # dB: in its tails a band fades in from this much to this much:
                                                  # on 0 dB the tails of all bands would add up to a line of their own

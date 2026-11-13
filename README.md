@@ -1,10 +1,10 @@
 # ADI-2 Commander
 
-A Windows app to control the RME ADI-2 DAC FS[^rme] and the outputs of the ADI-2 Pro and ADI-2/4 Pro, and to load
+A Windows app to control the RME ADI-2 DAC FS[^rme] and the outputs of the ADI-2 Pro and ADI-2/4 Pro, and to import
 and convert externally generated filter sets.
 A personal project, shared as is.
 
-![ADI-2 Commander: the main window, the panels, Load, presets and Loudness](docs/feature-tour.gif)
+![ADI-2 Commander: the main window, the panels, Import, presets and Loudness](docs/feature-tour.gif)
 
 ## Features
 
@@ -23,8 +23,8 @@ A personal project, shared as is.
 
 ## Also
 
-- Save the EQ to a .txt file that is both portable and ADI-2 compatible, or as a preset file for ADI-2 Remote.
-- Drag and drop filter files and curves to load them.
+- Export the EQ to a .txt file that is both portable and ADI-2 compatible, or as a preset file for ADI-2 Remote.
+- Drag and drop filter files and curves to import them.
 - Map filters one to one, or fit them for the closest possible match.
 - Monitor the device's inputs and clock.
 - View the curves at any sample rate, or compare them with the rate the device runs at.

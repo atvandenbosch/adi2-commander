@@ -607,7 +607,7 @@ def pulse(beat):
 
 
 def dropped_file(mime):
-    """The one local file being dragged, or None: one file at a time, as with Load."""
+    """The one local file being dragged, or None: one file at a time, as with Import."""
     urls = mime.urls() if mime.hasUrls() else []
     if len(urls) == 1 and urls[0].isLocalFile() and os.path.isfile(urls[0].toLocalFile()):
         return urls[0].toLocalFile()

@@ -1,4 +1,4 @@
-"""Load: a filter file or a curve to the device, by Map or by Fit, with the user having the last word. OK writes,
+"""Import: a filter file or a curve to the device, by Map or by Fit, with the user having the last word. OK writes,
 Cancel writes nothing. The conversion itself is eqimport's; this is what the user sees and chooses.
 
     Input       the file as written. A check box in the margin before every line that can be used; what cannot be
@@ -12,8 +12,8 @@ Cancel writes nothing. The conversion itself is eqimport's; this is what the use
                 them ("Input (adj.)"). Only the result counts here, not the device. Its legend works as the main
                 window's.
     Output      the result in the tables of the main window, read only; what the input does not set is '—', and
-                goes to the device at its factory default. A check box per block says whether it goes to the
-                device; a block the input does not set at all starts unchecked. OK and Cancel.
+                goes to the device at its factory default. A check box per block says whether OK writes it; a
+                block the input does not set at all starts unchecked. OK and Cancel.
     Status bar  the fit's progress; how far the result is off the input; and what stands in the way of OK.
 
 What the file is decides how the dialog starts (once, on opening): a Commander file maps its table; a file that
@@ -76,7 +76,7 @@ BOX, LINE_H = 22, 22                             # px: the check box's part of t
 
 
 def read_file(path, fs):
-    """A file for Load: a filter file (eqfile.EqFile), else a curve (curvefile.CurveFile), else None. Raises
+    """A file for Import: a filter file (eqfile.EqFile), else a curve (curvefile.CurveFile), else None. Raises
     OSError."""
     eq = E.load(path, fs)
     return eq if eq.recognised else C.load(path)
@@ -186,7 +186,7 @@ class Summary(QFrame):
         grid.setVerticalSpacing(10)
         self.values = {}
         for r, name in enumerate(self.ROWS):
-            grid.addWidget(LoadDialog.label(name), r, 0, Qt.AlignLeft | Qt.AlignTop)
+            grid.addWidget(ImportDialog.label(name), r, 0, Qt.AlignLeft | Qt.AlignTop)
             value = QLabel()
             value.setWordWrap(True)
             grid.addWidget(value, r, 1, Qt.AlignTop)
@@ -619,7 +619,7 @@ class Corner(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
         self.box = QCheckBox()
-        self.box.setToolTip("Load into the device")
+        self.box.setToolTip("Checked: OK writes this table")
         self.name = QLabel()
         self.name.setFixedHeight(22)
         lay.addWidget(self.box)
@@ -662,7 +662,7 @@ class FitThread(QThread):
 
 # -- the dialog ----------------------------------------------------------------------------------------
 
-class LoadDialog(QDialog):
+class ImportDialog(QDialog):
     SIZE = QSize(1500, 780)
     maximized = False                                     # as the last one was closed: the next one opens so too
 
@@ -672,7 +672,7 @@ class LoadDialog(QDialog):
         super().__init__(parent)
         self.session, self.out, self.live, self.fs_default = session, out, live, fs
         self.preset = preset
-        self.setWindowTitle("Load filters")
+        self.setWindowTitle("Import filters")
         self.setModal(True)
         self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)    # a large dialog: it may take the whole screen
         self.setAcceptDrops(True)                           # another file dropped on it: that file instead
@@ -715,9 +715,9 @@ class LoadDialog(QDialog):
         self.mode = MAP if kind in ("commander", "fits") else FIT
         self.origin = I.ADI2 if kind == "commander" else I.EXTERNAL
         self.tone = False                                   # Bass/Treble in a fit: off until asked for
-        saved = None if curve else source.fs
-        self.fs_given = saved or self.live or self.fs_default    # the file's rate, else the one the device runs at
-        self.fs_why = ("The file was saved at %g kHz" % (saved / 1000) if saved else
+        exported = None if curve else source.fs
+        self.fs_given = exported or self.live or self.fs_default    # the file's rate, else the one the device runs at
+        self.fs_why = ("The file was exported at %g kHz" % (exported / 1000) if exported else
                        "The device runs at %g kHz" % (self.live / 1000) if self.live else "")
         self.fs = self.fs_given
         self.selections = {}                                # {(mode, origin): {line}} the proposals
@@ -860,6 +860,7 @@ class LoadDialog(QDialog):
         self.bt_view.set_corner(self.bt_corner)
         self.ok, cancel = Action(), Action()
         self.ok.setText("OK")
+        self.ok.setToolTip("Write the checked tables to %s" % self.target())
         cancel.setText("Cancel")
         self.ok.clicked.connect(self.accept)
         cancel.clicked.connect(self.reject)
@@ -936,7 +937,7 @@ class LoadDialog(QDialog):
         outer.addWidget(bar)
         self.resize(self.SIZE)
         room = (self.parentWidget() or self).screen().availableGeometry()
-        if LoadDialog.maximized or placement(self.SIZE, room) is None:
+        if ImportDialog.maximized or placement(self.SIZE, room) is None:
             self.setWindowState(Qt.WindowMaximized)
         self.show_dual()
 
@@ -954,12 +955,12 @@ class LoadDialog(QDialog):
         try:
             source = read_file(path, self.fs_default)
         except OSError as err:
-            self.drop_note = "Not loaded: %s" % err
+            self.drop_note = "Not imported: %s" % err
         else:
             if source is not None:
                 self.start(source, path)
                 return
-            self.drop_note = "Not loaded: %s is not a filter file or a curve" % name
+            self.drop_note = "Not imported: %s is not a filter file or a curve" % name
         self.show_result()
 
     @staticmethod
@@ -1079,7 +1080,7 @@ class LoadDialog(QDialog):
         if self.cf is not None:                          # a curve: no lines, only its column
             groups, chosen = {}, []
             if self.column is None:
-                self.problem = "Nothing to load"
+                self.problem = "Nothing to import"
         else:
             usable, why = self.usable()
             chosen = [usable[n] for n in sorted(self.selection()) if n in usable]
@@ -1089,7 +1090,7 @@ class LoadDialog(QDialog):
                 groups, self.problem = {}, str(e)
                 self.unmapped = {i.line for i in chosen if i.channel in ("L", "R")}
             if not usable:
-                self.problem = "Nothing to load"
+                self.problem = "Nothing to import"
             elif not chosen:
                 self.problem = self.problem or "Nothing selected"
         self.groups, self.chosen = groups, chosen
@@ -1250,7 +1251,8 @@ class LoadDialog(QDialog):
     def show_controls(self):
         self.origin_group.setVisible(self.cf is None)
         commander = self.eq is not None and E.table(self.eq) is not None
-        self.origin_box.setToolTip("ADI-2: the table loads\nExternal: the Filter lines load, as Cookbook filters"
+        self.origin_box.setToolTip("ADI-2: the table is imported\n"
+                                   "External: the Filter lines are imported, as Cookbook filters"
                                    if commander else "ADI-2: the numbers as the device has them\n"
                                    "External: Cookbook filters, as filter files usually mean them")
         self.tone_box.setVisible(self.mode == FIT and self.has_bt)
@@ -1368,7 +1370,7 @@ class LoadDialog(QDialog):
         if self.problem:
             parts.append((self.problem, True))
         elif self.outcome and not on:
-            parts.append(("Nothing to load into the device", True))
+            parts.append(("Nothing to write to %s" % self.target(), True))
         if self.outcome and not self.problem and not self.fitting:
             worst = max((float(np.max(np.abs(t - g))) for t, g in self.deviation), default=0.0)
             if self.mode == FIT:
@@ -1404,11 +1406,11 @@ class LoadDialog(QDialog):
         w = (list(eq.warnings) if eq else []) + ([self.drop_note] if self.drop_note else [])
         name = self.name.replace("·", "-")
         if eq and eq.output and eq.output != name:
-            w.append("Saved from %s" % eq.output)
+            w.append("Exported from %s" % eq.output)
         if eq and eq.source == "commander" and eq.table and E.table(eq) is None:
-            w.append("The table is incomplete or unreadable; the Filter lines load")
+            w.append("The table is incomplete or unreadable; the Filter lines are imported")
         if eq and self.origin == I.ADI2 and E.disagreeing(eq):
-            w.append("The Filter lines differ from the table; the table loads")
+            w.append("The Filter lines differ from the table; the table is imported")
         s = self.session.state
         tone_on = s.get((self.left, P.BT_ENABLE)) == 1
         bt = self.outcome.get("BT", {})
@@ -1424,6 +1426,10 @@ class LoadDialog(QDialog):
                          "EQ %s is off on the device" % ("Left" if block == "L" else "Right"))
         return w
 
+    def target(self):
+        """Where OK writes: the preset being edited, or else the device."""
+        return "the preset" if self.preset else "the device"
+
     # -- closing --------------------------------------------------------------------------------------
     def accept(self):
         if not self.ok.isEnabled():
@@ -1431,7 +1437,7 @@ class LoadDialog(QDialog):
         super().accept()
 
     def close_down(self, *_):
-        LoadDialog.maximized = self.isMaximized()
+        ImportDialog.maximized = self.isMaximized()
         self.stop_fit()
         self.repaint_soon.stop()
         for t in self.threads:

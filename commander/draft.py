@@ -1,7 +1,7 @@
 """A preset slot being edited: its content in memory, shown and changed as the EQ of an output is, while nothing of
 it goes to the device until it is written as a whole (Session.write_slot).
 
-It answers what the tables, the graphs and Load ask of a Session: state, ready(), bypassed(), dual(), writable(),
+It answers what the tables, the graphs and Import ask of a Session: state, ready(), bypassed(), dual(), writable(),
 set(), set_dual(), hold(), and the listeners on_changed and on_connection. Its state is the session's at the start,
 with the output's EQ replaced by the slot: the bands on the output's left and right EQ address, Bass/Treble on the
 left, Dual EQ on the output address. EQ Enable and B/T Enable are on: they are no part of a slot, and its content is
