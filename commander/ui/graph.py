@@ -8,6 +8,7 @@ drawn once.
     click a point       selects its row in the table
     its label           in the lane below, at f0: as the point, but a drag changes the frequency only
     wheel elsewhere     zoom; drag elsewhere: pan; double-click: back to the full view
+    on an axis          the wheel and a drag zoom and pan that axis only
 
 What is shown (commander.ui.legend): the channels EQ Left, EQ Right and Bass/Treble, and the layers Sum, Compare (the
 sums at the rate the device runs at, dashed, when it is known and not the chosen one; off at first), Bands and Handles
@@ -87,6 +88,8 @@ ZONE_INK = 16                                    # pixels from the graph's zone 
                                                  # right and below; the head stays on the line of the columns
 TITLE_ROOM = 3, 1                                # pixels pyqtgraph leaves left of the dB axis title, below the other
 LEGEND_GAP = 8                                   # a graph's legend line over it: part of the graph
+AXIS_TIPS = {"bottom": "Frequency: wheel to zoom, drag to pan",
+             "left": "Gain: wheel to zoom, drag to pan"}
 
 
 def title_axes(plot_item, y_title):
@@ -275,6 +278,8 @@ class ResponseGraph(pg.PlotWidget):
         pi.getAxis("left").setTickSpacing(levels=[(6, 0), (3, 0), (1, 0)])   # a faint line per dB, without a value
         pi.getAxis("left").setStyle(maxTextLevel=1)
         title_axes(pi, "Gain (dB)")
+        pi.getAxis("bottom").setToolTip(AXIS_TIPS["bottom"])
+        pi.getAxis("left").setToolTip(AXIS_TIPS["left"])
         self.view.setLimits(xMin=X_LO - X_PAD, xMax=X_HI + X_PAD, yMin=-60, yMax=40, minXRange=0.3, minYRange=3)
         self.reset_view()
         self.addItem(pg.InfiniteLine(pos=0, angle=0, pen=_pen(theme.SECONDARY, alpha=0.6)))

@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
-from PySide6.QtGui import QHelpEvent, QMouseEvent
+from PySide6.QtGui import QHelpEvent, QMouseEvent, QWheelEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QToolTip
 from pyqtgraph.graphicsItems.ScatterPlotItem import renderSymbol
@@ -497,6 +497,26 @@ class Graph(WindowTest):
         right = pi.getAxis("right")
         self.assertTrue(right.isVisible())                                      # a line on the right, as the left
         self.assertEqual((right.style["showValues"], right.grid), (False, False))   # no values, no grid of its own
+
+    def test_on_an_axis_the_wheel_zooms_that_axis_only(self):
+        pi, view, vp = self.graph.getPlotItem(), self.graph.view, self.graph.viewport()
+        for name, zoomed in (("bottom", 0), ("left", 1)):
+            self.graph.reset_view()
+            before = view.viewRange()
+            axis = pi.getAxis(name)
+            p = self.graph.mapFromScene(axis.mapToScene(axis.shape()).boundingRect().center())   # without the grid
+            app.sendEvent(vp, QHelpEvent(QEvent.ToolTip, p, vp.mapToGlobal(p)))
+            self.assertEqual(QToolTip.text() if QToolTip.isVisible() else "", G.AXIS_TIPS[name])
+            app.sendEvent(vp, QWheelEvent(QPointF(p), QPointF(vp.mapToGlobal(p)), QPoint(0, 0), QPoint(0, 120),
+                                          Qt.NoButton, Qt.NoModifier, Qt.NoScrollPhase, False))
+            after = view.viewRange()
+            self.assertLess(after[zoomed][1] - after[zoomed][0], before[zoomed][1] - before[zoomed][0])
+            self.assertEqual(after[1 - zoomed], before[1 - zoomed])
+        QToolTip.hideText()
+        inside = self.graph.mapFromScene(view.sceneBoundingRect().center())
+        app.sendEvent(vp, QHelpEvent(QEvent.ToolTip, inside, vp.mapToGlobal(inside)))
+        self.assertFalse(QToolTip.isVisible() and QToolTip.text() in G.AXIS_TIPS.values())  # the grid takes none
+        self.graph.reset_view()
 
     def test_a_faint_line_per_db(self):
         left = self.graph.getPlotItem().getAxis("left")
