@@ -14,7 +14,8 @@ from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QBoxLayout, QHBoxLayout, QLabel, QWidget
 
 from . import theme
-from .graph import BAND_ALPHA, BAND_W, COMPARE_W, INPUT_ALPHA, INPUT_W, SUM_W, side_color
+from .graph import (BAND_ALPHA, BAND_W, COMPARE_W, DEVIATION_FILL, DEVIATION_W, INPUT_ALPHA, INPUT_W, SUM_W,
+                    side_color)
 
 GROUPS = [["L", "R", "BT"], ["sum", "bands", "handles", "compare"]]
 GROUP_GAP = 28                                   # pixels between the two groups side by side
@@ -28,7 +29,8 @@ MARKS = {"L": "line", "R": "line", "BT": "line", "sum": "thick", "bands": "thin"
 def mark_pixmap(kind, color):
     """The mark of an item, drawn: a line in a channel's colour, or a layer as it looks in the graph: a thick line
     for Sum, a thin one for Bands, a ring for the handles, dashed for the compared sums. Also the Loudness graph's:
-    a small curve for Loudness, high at both ends as its boost, and dotted for the current volume."""
+    a small curve for Loudness, high at both ends as its boost, and dotted for the current volume. And Import's
+    deviation: a wave about 0 with the area between filled."""
     scale = 4                                    # drawn large, shown small: sharp at any display scaling
     pm = QPixmap(MARK_W * scale, MARK_H * scale)
     pm.setDevicePixelRatio(scale)
@@ -39,6 +41,19 @@ def mark_pixmap(kind, color):
     if kind == "ring":
         p.setPen(QPen(color, 1))
         p.drawEllipse(QPointF(MARK_W / 2, cy), 3.5, 3.5)
+    elif kind == "area":                         # as the deviation (Import): a wave about 0, the area between filled
+        amp, mid = 3.0, MARK_W / 2
+        path = QPainterPath(QPointF(0, cy))      # up, then down, each half a sine's shape
+        path.cubicTo(QPointF(1.2, cy - amp * 1.33), QPointF(mid - 1.2, cy - amp * 1.33), QPointF(mid, cy))
+        path.cubicTo(QPointF(mid + 1.2, cy + amp * 1.33), QPointF(MARK_W - 1.2, cy + amp * 1.33),
+                     QPointF(MARK_W, cy))
+        area = QColor(color)
+        area.setAlphaF(color.alphaF() * DEVIATION_FILL)
+        p.fillPath(path, area)
+        pen = QPen(color, DEVIATION_W)
+        pen.setCapStyle(Qt.FlatCap)
+        p.setPen(pen)
+        p.drawPath(path)
     elif kind == "curve":
         pen = QPen(color, 1.5)                   # thinner than a channel's line, or the shape closes up
         pen.setCapStyle(Qt.FlatCap)

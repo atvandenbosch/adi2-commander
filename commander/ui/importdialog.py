@@ -35,7 +35,7 @@ import os
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPalette, QPen, QPixmap, QPolygonF
+from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QIcon, QPainter, QPalette, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import (QApplication, QCheckBox, QDialog, QFrame, QGraphicsTextItem, QGridLayout, QHBoxLayout,
                                QLabel, QListWidget, QListWidgetItem, QProgressBar, QScrollArea, QSplitter,
                                QStackedWidget, QStyle, QStyledItemDelegate, QStyleOptionButton, QVBoxLayout, QWidget)
@@ -47,9 +47,9 @@ from ..conversion import eqimport as I
 from ..device import filters as F
 from ..device import params as P
 from . import theme
-from .graph import (BAND_ALPHA, BAND_W, COMPARE_W, DIMMED, INPUT_ALPHA, INPUT_W, LEGEND_GAP, MIN_POINTS,
-                    POINTS_PER_PIXEL, SUM_W, TITLE_ROOM, X_HI, X_LO, X_PAD, Y_HI, Y_LO, ZONE_INK, _fading_pen, _ticks,
-                    side_color, title_axes)
+from .graph import (BAND_ALPHA, BAND_W, COMPARE_W, DEVIATION_FILL, DEVIATION_W, DIMMED, INPUT_ALPHA, INPUT_W,
+                    LEGEND_GAP, MIN_POINTS, POINTS_PER_PIXEL, SUM_W, TITLE_ROOM, X_HI, X_LO, X_PAD, Y_HI, Y_LO, ZONE_INK,
+                    _fading_pen, _ticks, side_color, title_axes)
 from .legend import GROUP_GAP, _Item as LegendItem
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, CellDelegate, Marks, ParamModel, ParamView,
                      band_rows, bt_rows)
@@ -364,7 +364,7 @@ class CurveGraph(pg.PlotWidget):
             self.items.append({"input": self.plot(connect="finite"),
                                "bands": [self.plot(connect="finite") for _ in range(7)],
                                "candidate": self.plot(connect="finite"), "sum": self.plot(connect="finite"),
-                               "deviation": self.plot(connect="finite")})
+                               "deviation": self.plot(connect="finite", fillLevel=DIFF_MID)})
         self.items.reverse()
 
     def fit_x(self):
@@ -412,16 +412,20 @@ class CurveGraph(pg.PlotWidget):
                     alpha = BAND_ALPHA * self._dim((band[2], "bands"))
                     self._put(item, band[0], ("band", QColor(band[1]).rgba(), alpha),
                               lambda band=band, alpha=alpha: _fading_pen(band[1], BAND_W, alpha, self.x, band[0]))
+            first = self.channels[0]
+            as_left = k and self.visible[first[0]] and np.array_equal(given, first[2])
             if total is None:
                 self._clear(items["sum"])
                 self._clear(items["deviation"])
             else:
                 self._show(items["sum"], "sum", total, color, SUM_W, 1.0, (key, "sum"))
-                diff = np.clip(total - given, -DIFF_ROOM / 2, DIFF_ROOM / 2)
-                self._show(items["deviation"], "deviation", DIFF_MID + diff, color, COMPARE_W, 1.0,
-                           (key, "deviation"), clip=False)
-            first = self.channels[0]
-            if k and self.visible[first[0]] and np.array_equal(given, first[2]):
+                if as_left and first[3] is not None and np.array_equal(total, first[3]):
+                    self._clear(items["deviation"])      # once: two areas on top of each other mix their colours
+                else:
+                    diff = np.clip(total - given, -DIFF_ROOM / 2, DIFF_ROOM / 2)
+                    self._show(items["deviation"], "deviation", DIFF_MID + diff, color, DEVIATION_W, 1.0,
+                               (key, "deviation"), clip=False, fill=DEVIATION_FILL)
+            if as_left:
                 self._clear(items["input"])              # the same input as the left: once, or it would look darker
             else:
                 self._show(items["input"], "input", given, color, INPUT_W, INPUT_ALPHA, (key, "input"))
@@ -429,7 +433,8 @@ class CurveGraph(pg.PlotWidget):
     def _dim(self, keys):
         return DIMMED if self.emphasis is not None and self.emphasis not in keys else 1.0
 
-    def _show(self, item, layer, y, color, width, alpha, keys, clip=True, style=Qt.SolidLine):
+    def _show(self, item, layer, y, color, width, alpha, keys, clip=True, style=Qt.SolidLine, fill=None):
+        """fill: the alpha of the area between the curve and its fillLevel, relative to the line's."""
         if not self.visible[layer]:
             self._clear(item)
             return
@@ -442,14 +447,22 @@ class CurveGraph(pg.PlotWidget):
             p.setStyle(style)
             return p
 
-        self._put(item, y, (c.rgba(), width, style), pen, clip)
+        brush = None
+        if fill is not None:
+            area = QColor(c)
+            area.setAlphaF(c.alphaF() * fill)
+            brush = lambda: QBrush(area)
+        self._put(item, y, (c.rgba(), width, style, fill), pen, clip, brush)
 
-    def _put(self, item, y, look, pen, clip=True):
-        """y with the pen pen() makes, unless the item shows that already (look: what decides the pen)."""
+    def _put(self, item, y, look, pen, clip=True, brush=None):
+        """y with the pen pen() makes and the area brush() fills, unless the item shows that already (look: what
+        decides the pen and the brush)."""
         before = self.drawn.get(item)
         if before is not None and before[1] == look and (before[0] is y or np.array_equal(before[0], y)):
             return
         item.setPen(pen())
+        if brush is not None:
+            item.setBrush(brush())
         item.setData(self.x, np.where(y < Y_LO, np.nan, y) if clip else y)   # clipped: not into the deviation below
         self.drawn[item] = (y, look)
 
@@ -464,7 +477,7 @@ class CurveLegend(QWidget):
     shows only this item of its group (again: the whole group), pointing at it lights its curves."""
 
     LAYERS = [("input", "wide", "Input"), ("sum", "thick", "Sum"), ("bands", "thin", "Bands"),
-              ("deviation", "line", "Deviation"), ("candidate", "dotted", "Candidate")]
+              ("deviation", "area", "Deviation"), ("candidate", "dotted", "Candidate")]
     TIPS = {"bands": "Includes Bass and Treble\n", "deviation": "How far the sum is off the input, below\n",
             "candidate": "What the fit is trying now, better or not; while it fits\n"}
 

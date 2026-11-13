@@ -60,6 +60,7 @@ DOT_PEN.setWidthF(2)
 SUM_W, CHOSEN_W, BAND_W, COMPARE_W = 2.0, 1.5, 1.0, 1.5     # bands: Qt draws exactly 1 px three times as fast
 INPUT_W, INPUT_ALPHA = 3 * SUM_W, 0.5           # a curve fitted to (Import): wide and see-through, under the sum
 BAND_ALPHA = 0.6                                 # a band beside the sum
+DEVIATION_W, DEVIATION_FILL = 1.0, 0.2           # how far the sum is off the input (Import): a thin edge to an area
 BAND_FLOOR, BAND_FULL = 0.02, 0.5               # dB: in its tails a band fades in from this much to this much:
                                                  # on 0 dB the tails of all bands would add up to a line of their own
 FADE_STOPS = 60                                  # colour stops along a band's line: about one per 20 px

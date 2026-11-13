@@ -304,6 +304,17 @@ class ImportExport(ImportTest):
         self.assertEqual((visible["L"], visible["R"]), (True, True))
         self.assertFalse(dialog.legend.items["BT"].isVisibleTo(dialog))   # no Bass/Treble in the outcome
 
+    def test_the_deviation_an_area_once_for_both_channels(self):
+        dialog = self.open(self.file("three.txt", THREE))       # the same EQ left and right
+        left, right = (items["deviation"] for items in dialog.graph.items)
+        drawn = lambda item: item.yData is not None and len(item.yData) > 0
+        self.assertEqual(left.opts["fillLevel"], D.DIFF_MID)
+        self.assertIsNotNone(left.opts["fillBrush"])
+        self.assertTrue(drawn(left))
+        self.assertFalse(drawn(right))                           # once: two areas would mix their colours
+        dialog.legend.items["R"].double_clicked.emit()           # only the right: its own
+        self.assertTrue(drawn(right))
+
     def test_the_sample_rate_of_the_file_amber_when_changed(self):
         path = os.path.join(self.dir.name, "line out.txt")
         self.win.export_file(path)

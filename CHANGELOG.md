@@ -25,6 +25,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 
 - Load and Save are now Import and Export.
 - Tooltips appear only once the mouse rests.
+- Import: a refined deviation graph.
 
 ### Fixed
 
