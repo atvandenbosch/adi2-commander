@@ -500,7 +500,7 @@ class Session:
             self.model, self._let_go = model, self.port
             self.close()
             self._dump = None
-            self._set_status("unsupported", "This version of Commander works with the %s" % models.DAC.name)
+            self._set_status("unsupported", "This version of Commander works with the %s." % models.DAC.name)
             return False
         if model != self.model:                          # a late answer to an earlier request
             self.model = model

@@ -258,7 +258,7 @@ def _channel(eq, params, no, text):
         return "all"
     found = {names[t] for t in tokens if t in names}
     if len(found) < len(tokens):
-        eq.skipped.append(Skipped(no, text, "only L and R are used"))
+        eq.skipped.append(Skipped(no, text, "only L and R are used."))
     if not found:
         return None
     return "all" if len(found) == 2 else found.pop()
@@ -453,12 +453,12 @@ def table_faults(eq):
             faults[r.line] = "Under no group"
         elif None in (r.freq, r.gain, r.q):
             what = "Frequency" if r.freq is None else "Gain" if r.gain is None else "Q"
-            faults[r.line] = "%s is not a number" % what
+            faults[r.line] = "%s is not a number." % what
         elif band and r.type not in DEVICE_KIND:
             faults[r.line] = "No type"
         elif band and DEVICE_KIND[r.type] not in (P.TYPE_ABBR[r.target] if P.BANDS[r.target][0] is not None
                                                   else ["PK"]):
-            faults[r.line] = "%s has no %s" % (name, r.type)
+            faults[r.line] = "%s has no %s." % (name, r.type)
         elif (r.channel, r.target) in seen:
             faults[r.line] = "%s twice in its group" % name
         seen.add((r.channel, r.target))

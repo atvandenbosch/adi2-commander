@@ -167,7 +167,7 @@ class PresetPanel(WindowTest):
         self.wait(lambda: not self.session.operating(), 15000)
         gain = self.sim.state[(4, 4)]
         self.assertEqual(row.mark.text(), "not as sent")
-        self.assertEqual(row.mark.toolTip(), "13/4: sent %d, the device has %d" % (gain, gain + 2))
+        self.assertEqual(row.mark.toolTip(), "13/4: sent %d, the device has %d." % (gain, gain + 2))
         self.assertEqual(tooltip_color(row.mark), theme.TEXT.name())                  # red only the mark
         self.assertIn("reads back otherwise", self.win.file_note.text())
         self.sim._commit = commit

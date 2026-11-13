@@ -160,8 +160,8 @@ class Preview(WindowTest):
     def test_select_says_what_it_does_and_greys_bass_treble_that_stays(self):
         preview = self.open(3)
         select, graph = preview.select, preview.graph
-        self.assertEqual(select.toolTip(), "Select it on Line Out: its EQ is loaded there\n"
-                                           "Bass/Treble stays as it is: Load Bass/Treble with preset is off")
+        self.assertEqual(select.toolTip(), "Select it on Line Out: its EQ is loaded there.\n"
+                                           "Bass/Treble stays as it is: Load Bass/Treble with preset is off.")
         self.assertFalse(self.amber(select))
         QApplication.sendEvent(select, QEvent(QEvent.Enter))
         self.assertTrue(graph.bt_off)                                         # it does not come along
@@ -176,13 +176,13 @@ class Preview(WindowTest):
 
     def test_store_says_what_it_does(self):
         self.assertEqual(self.open(3).store.toolTip(),
-                         "Store the current EQ of Line Out in Preset 2, Bass/Treble included\n"
-                         "It replaces what the graph shows; the name stays\n"
-                         "Afterwards Preset 2 is selected on Line Out")
+                         "Store the current EQ of Line Out in Preset 2, Bass/Treble included.\n"
+                         "It replaces what the graph shows; the name stays.\n"
+                         "Afterwards Preset 2 is selected on Line Out.")
         self.session.set((7, 28), 3)                                          # Phones: Preset 2
         self.settle()
         self.assertTrue(self.open(3).store.toolTip().endswith(
-            "Afterwards Preset 2 is selected on Line Out and loaded again on Phones 1/2"))
+            "Afterwards Preset 2 is selected on Line Out and loaded again on Phones 1/2."))
         self.assertIn("Preset 5 is unused: it becomes used, with the name it shows", self.open(6).store.toolTip())
 
     def test_select_again(self):
@@ -201,7 +201,7 @@ class Preview(WindowTest):
         QApplication.sendEvent(select, QEvent(QEvent.Leave))
         self.assertEqual((graph.eq, graph.bt), ([], None))
         self.assertTrue(select.toolTip().startswith(
-            "This preset is unused\nSelect loads the factory state on Line Out: all bands 0 dB, Dual EQ off\n"))
+            "This preset is unused.\nSelect loads the factory state on Line Out: all bands 0 dB, Dual EQ off.\n"))
         self.assertEqual(preview.edit.toolTip(), EDIT_TIP + "\n" + EDIT_FREE_TIP)
         self.assertFalse(self.amber(select))                                  # the graph shows all it does
         self.session.set((4, P.LOAD_BT), 1)

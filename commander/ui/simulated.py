@@ -10,7 +10,7 @@ from .taskdialog import TaskDialog
 KEY = "simulated/model"                          # the setting that holds the choice made last
 NOT_ASKED = "simulated/not-asked"                # the version of Commander in which the user chose not to be asked
 HEADING = "Choose the ADI-2 to simulate"
-MENU_TIP = "Start with this device without asking\nTo change that later, go to Menu › Simulated device…"
+MENU_TIP = "Start with this device without asking.\nTo change that later, go to Menu › Simulated device."
 # the options as in a Windows task dialog: indented under the heading, one every 22 px
 OPTIONS_GAP = 29                                 # from the heading
 OPTION_INDENT = 10

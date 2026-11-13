@@ -186,8 +186,8 @@ class ImportExport(ImportTest):
         dialog.toggle_block(1)
         self.assertIn("Nothing to write to the device", dialog.status.text())
         self.assertFalse(dialog.ok.isEnabled())
-        self.assertEqual(dialog.ok.toolTip(), "Write the checked tables to the device")
-        self.assertEqual(dialog.bt_corner.box.toolTip(), "Checked: OK writes this table")
+        self.assertEqual(dialog.ok.toolTip(), "Write the checked tables to the device.")
+        self.assertEqual(dialog.bt_corner.box.toolTip(), "Checked: OK writes this table.")
 
     def test_export_for_adi2_remote(self):
         path = os.path.join(self.dir.name, "HD 800 S (Harman).adieqpr")
@@ -280,10 +280,10 @@ class ImportExport(ImportTest):
         self.assertIn("The table is incomplete or unreadable; the Filter lines are imported", dialog.status.text())
         row = dialog.input.item(i)                               # the row that does it: amber, and why
         self.assertTrue(row.data(D.MARK_ROLE))
-        self.assertEqual(row.toolTip(), "Gain is not a number")
+        self.assertEqual(row.toolTip(), "Gain is not a number.")
         other = dialog.input.item(i + 1)
         self.assertFalse(other.data(D.MARK_ROLE))
-        self.assertEqual(other.toolTip(), "The table does not count; the Filter lines are imported")
+        self.assertEqual(other.toolTip(), "The table does not count; the Filter lines are imported.")
 
     def test_the_output_does_not_change_the_graph(self):
         dialog = self.open(self.file("three.txt", THREE))
@@ -450,7 +450,7 @@ class InputImport(ImportTest):
         def check(dialog):
             usable, why = dialog.usable()
             self.assertEqual((dialog.name, dialog.has_bt, dialog.mode), ("Analog In", False, D.MAP))
-            self.assertEqual(list(why.values()).count("Analog In has no Bass/Treble"), 2)
+            self.assertEqual(list(why.values()).count("Analog In has no Bass/Treble."), 2)
             self.assertFalse(any(i.target in ("Bass", "Treble") for i in usable.values()))
             self.assertFalse(dialog.bt_view.isVisible())
             self.assertNotIn("BT", dialog.blocks())

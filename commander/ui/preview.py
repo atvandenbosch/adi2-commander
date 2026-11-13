@@ -41,11 +41,11 @@ LINE_W = 1.5                                     # px: the EQ and Bass/Treble al
 PAD = 10                                         # px from the outline to the graph and the actions
 ACTIONS_HEIGHT = 20                              # px: as high as an action
 
-EDIT_TIP = "Edit this preset and its name; nothing goes to the device until OK"
-EDIT_FREE_TIP = "This preset is unused: it starts as the factory state"
+EDIT_TIP = "Edit this preset and its name; nothing goes to the device until OK."
+EDIT_FREE_TIP = "This preset is unused: it starts as the factory state."
 NOT_READ = "Not read from the device yet"
-FACTORY = "Select loads the factory state on %s: all bands 0 dB, Dual EQ off"
-RUMBLE_LOAD = "Select loads Rumble on %s: a high pass at 35 Hz, -12 dB at 20 Hz, Dual EQ off"
+FACTORY = "Select loads the factory state on %s: all bands 0 dB, Dual EQ off."
+RUMBLE_LOAD = "Select loads Rumble on %s: a high pass at 35 Hz, -12 dB at 20 Hz, Dual EQ off."
 
 
 def lines(content, fs, freqs):
@@ -61,13 +61,13 @@ def lines(content, fs, freqs):
 def store_tip(slot, stored, output, others, bt=True):
     """What Store does, a line each. slot: its number; stored: the slot as read, or None; others: the other outputs
     that have the preset selected; bt: this output has Bass/Treble (the input has none)."""
-    lines = ["Store the current EQ of %s in Preset %d, %s" % (output, slot, "Bass/Treble included" if bt else
+    lines = ["Store the current EQ of %s in Preset %d, %s." % (output, slot, "Bass/Treble included" if bt else
                                                                "with Bass/Treble at 0 dB"),
-             "It replaces what the preset holds; the name stays" if stored is None else
-             "It replaces what the graph shows; the name stays" if stored["used"] else
-             "Preset %d is unused: it becomes used, with the name it shows" % slot]
+             "It replaces what the preset holds; the name stays." if stored is None else
+             "It replaces what the graph shows; the name stays." if stored["used"] else
+             "Preset %d is unused: it becomes used, with the name it shows." % slot]
     selected = "Afterwards Preset %d is selected on %s" % (slot, output)
-    lines.append(selected + (" and loaded again on %s" % " and ".join(others) if others else ""))
+    lines.append(selected + (" and loaded again on %s" % " and ".join(others) if others else "") + ".")
     return "\n".join(lines)
 
 
@@ -78,19 +78,19 @@ def select_tip(value, used, current, output, load_bt, bt=True):
     if clear:
         first = (RUMBLE_LOAD if value == RUMBLE else FACTORY) % output
     elif not used:
-        first = "This preset is unused\n" + FACTORY % output
+        first = "This preset is unused.\n" + FACTORY % output
     elif current:
-        first = "Select it again: %s loads it as it is now" % output
+        first = "Select it again: %s loads it as it is now." % output
     else:
-        first = "Select it on %s: its EQ is loaded there" % output
+        first = "Select it on %s: its EQ is loaded there." % output
     if not bt:
         return first
     if not load_bt:
-        second = "Bass/Treble stays as it is: Load Bass/Treble with preset is off"
+        second = "Bass/Treble stays as it is: Load Bass/Treble with preset is off."
     elif clear or not used:
-        second = "Bass/Treble 0 dB and switched on: Load Bass/Treble with preset is on"
+        second = "Bass/Treble 0 dB and switched on: Load Bass/Treble with preset is on."
     else:
-        second = "Its Bass/Treble comes along: Load Bass/Treble with preset is on"
+        second = "Its Bass/Treble comes along: Load Bass/Treble with preset is on."
     return first + "\n" + second
 
 

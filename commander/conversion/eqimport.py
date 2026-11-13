@@ -81,15 +81,15 @@ def items(eq, origin, fs):
         for r in rows:
             usable[r.line] = Item(r.line, r.channel, _row_kind(r), r.freq, r.gain, r.q, r.target)
         for e in eq.entries:
-            why[e.line] = "With Origin ADI-2 the table above is imported"
+            why[e.line] = "With Origin ADI-2 the table above is imported."
         return usable, why
     if rows is not None:
         for r in rows:
-            why[r.line] = "With Origin External the Filter lines are imported"
+            why[r.line] = "With Origin External the Filter lines are imported."
     elif eq.table and eq.source == "commander":
         faults = E.table_faults(eq)
         for r in eq.table:
-            why[r.line] = faults.get(r.line, "The table does not count; the Filter lines are imported")
+            why[r.line] = faults.get(r.line, "The table does not count; the Filter lines are imported.")
     for e in eq.entries:
         if not e.on:
             why[e.line] = "Off in the file"

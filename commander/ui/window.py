@@ -69,17 +69,17 @@ ACTIVE_TIP = "Active on the device: its display and volume knob are on this outp
 ACTIVE = "Active on the device"                 # the ADI-2 Pro and ADI-2/4 Pro
 ALWAYS_ACTIVE = "Always active on the device"
 NOT_YET = "Not yet available for the %s"          # with the model's name
-OUTPUT_TAB_TIP = "Show or hide the output"         # as SideTab says it
-INPUT_SETTINGS = "The settings of Analog In are in the input panel"
+OUTPUT_TAB_TIP = "Show or hide the output."         # as SideTab says it
+INPUT_SETTINGS = "The settings of Analog In are in the input panel."
 # Phones 1/2 of an ADI-2 Pro and ADI-2/4 Pro, as the device uses it (Session.phones_1_2); None: not known yet. Grey,
 # its own tab says why; using the settings of another output, it shares that output's tab, which says how
 PHONES_MENU = "DEVICE › PHONES"
 PHONES_1_2 = {None: "Active with Dual Phones on: " + PHONES_MENU,
-              "off": "Dual Phones is off: " + PHONES_MENU,
+              "off": "Dual Phones is off: " + PHONES_MENU + ".",
               "shared": "Phones 1/2 uses the settings of Line Out.\nSettings of its own with Mute v. TRS 1/2 on: "
                         + PHONES_MENU,
               "balanced": "Balanced Phones mode: Phones 3/4 and Phones 1/2 form one balanced output,\n"
-                          "with the settings of Phones 3/4"}
+                          "with the settings of Phones 3/4."}
 # the kinds of file Export writes
 APO_FILES = "Equalizer APO (*.txt)"
 REMOTE_FILES = "ADI-2 Remote preset (*.adieqpr)"
@@ -93,7 +93,7 @@ EQ_SHARED = ("EQ L = R", "EQ R = L")
 SHARE = ("Share L > R", "Share R > L")
 SPLIT = "Split L <> R"
 
-BT_IN_PRESET = "Bass/Treble of this preset: it comes along only where Load Bass/Treble with preset is on"
+BT_IN_PRESET = "Bass/Treble of this preset: it comes along only where Load Bass/Treble with preset is on."
 PREVIEW_GAP = 16                                 # px from the end of the longest name to a preset's preview
 PREVIEW_INSET = 8                                # px in from the graph's zone: the preview no further right, nor higher
 
@@ -302,11 +302,11 @@ class MainWindow(QMainWindow):
         self.source = ChosenRow()                        # as the selected row in the presets panel
         self.import_action, self.export_action = Action(), Action()
         self.import_action.setText("Import…")
-        self.import_action.setToolTip("Import filters (Equalizer APO, REW, other) or a curve into this EQ\n"
+        self.import_action.setToolTip("Import filters (Equalizer APO, REW, other) or a curve into this EQ.\n"
                                       "Or drop a filter file or a curve on the window.")
         self.import_action.clicked.connect(self.import_dialog)
         self.export_action.setText("Export…")
-        self.export_action.setToolTip("Export this EQ to a file")
+        self.export_action.setToolTip("Export this EQ to a file.")
         self.export_action.clicked.connect(self.export_dialog)
         self.eq_switches = [Switch(name) for name in EQ_OWN]     # colours as in the graph
         self.dual_actions = [Action(), Action()]
@@ -1277,9 +1277,9 @@ class MainWindow(QMainWindow):
         chosen = [self.channel_name(out) for _, out, left, _ in P.CHANNELS
                   if session.controls(out) and live.get((left, P.EQ_PRESET_SELECT)) == d.slot + 1]
         if chosen:
-            lines.append("Selected on %s: OK loads it there" % " and ".join(chosen))
+            lines.append("Selected on %s: OK loads it there." % " and ".join(chosen))
         if session.slots.get(d.slot) not in (None, d.stored):
-            lines.append("Preset %d was changed on the device meanwhile: OK writes this over it" % d.slot)
+            lines.append("Preset %d was changed on the device meanwhile: OK writes this over it." % d.slot)
         return "\n".join(lines)
 
     def toggle_loudness(self):
@@ -1412,8 +1412,8 @@ class MainWindow(QMainWindow):
         s, (_, out, left, _), ready = self.session.state, self.output, self.session.ready()
         d = self.draft
         editing = None if d is None else (d.slot, d.name, ready and not d.locked and d.changed(), self.edit_warning(),
-                                          "Nothing to write: the preset is unchanged" if not d.changed() else
-                                          "" if ready else "OK waits for the device: it is not connected")
+                                          "Nothing to write: the preset is unchanged." if not d.changed() else
+                                          "" if ready else "OK waits for the device: it is not connected.")
         tags = {o: tag for tag, (_, o, _, _) in zip(self.model.tags, P.OUTPUTS)
                 if o in self.model.controlled or self.session.controls(o)}
         if self.model.input is not None:

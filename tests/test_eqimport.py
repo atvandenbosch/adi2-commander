@@ -103,7 +103,7 @@ class Lines(unittest.TestCase):
         self.assertEqual(list(usable), [8])
         self.assertEqual(why, {1: "Preamp: not needed on the device", 2: "Off in the file",
                                3: "No filter at this frequency", 4: "BP: not on the device",
-                               5: "Only L and R are used", 6: "Not for L or R"})
+                               5: "Only L and R are used.", 6: "Not for L or R"})
 
     def test_a_commander_file_its_table_or_its_filter_lines(self):
         eq = E.read(E.write(dump_state(), OUT, FS))
@@ -111,11 +111,11 @@ class Lines(unittest.TestCase):
         usable, why = I.items(eq, I.ADI2, FS)
         self.assertEqual(set(usable), rows)
         self.assertEqual(set(why), {e.line for e in eq.entries})
-        self.assertEqual(set(why.values()), {"With Origin ADI-2 the table above is imported"})
+        self.assertEqual(set(why.values()), {"With Origin ADI-2 the table above is imported."})
         usable, why = I.items(eq, I.EXTERNAL, FS)
         self.assertEqual(set(usable), {e.line for e in eq.entries if e.on})
         self.assertTrue(rows <= set(why))
-        self.assertEqual({why[n] for n in rows}, {"With Origin External the Filter lines are imported"})
+        self.assertEqual({why[n] for n in rows}, {"With Origin External the Filter lines are imported."})
 
 
 class Category(unittest.TestCase):

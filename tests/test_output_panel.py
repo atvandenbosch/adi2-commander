@@ -400,7 +400,7 @@ class OutputSettings(WindowTest):
         s = self.panel.volume
         QTest.mouseClick(self.panel.options[P.LOCK_VOLUME], Qt.LeftButton)
         self.settle()
-        self.assertTrue(s.toolTip().startswith("Lock Volume is on: set it in the device's menu\n"))
+        self.assertTrue(s.toolTip().startswith("Lock Volume is on: set it in the device's menu.\n"))
         self.assertTrue(s.held and not s.isEnabled())                           # the arrows grey, the value not
         self.assertEqual(s.text(s.value), "%.1f" % (self.sim.state[(3, P.VOLUME)] / 10))   # still readable
         v = self.sim.state[(3, P.VOLUME)]
@@ -410,7 +410,7 @@ class OutputSettings(WindowTest):
         self.assertEqual(self.sim.state[(3, P.VOLUME)], v)                      # the wheel and the arrows: nothing
         QTest.mouseClick(self.panel.options[P.LOCK_VOLUME], Qt.LeftButton)
         self.settle()
-        self.assertTrue(s.toolTip().startswith("Adjust with the arrows or the mouse wheel\n"))
+        self.assertTrue(s.toolTip().startswith("Adjust with the arrows or the mouse wheel.\n"))
         self.assertIn("-114.5 … +6.0, step 0.5 dB", s.toolTip())
 
     def test_mute_and_dim_are_options(self):
@@ -423,12 +423,12 @@ class OutputSettings(WindowTest):
     def test_mute_and_dim_turn_the_volume_amber(self):
         s = self.panel.volume
         self.assertFalse(s.warned)
-        steps = "A step turns Dim off and goes on from this level"
-        how = "Adjust with the arrows or the mouse wheel"
+        steps = "A step turns Dim off and goes on from this level."
+        how = "Adjust with the arrows or the mouse wheel."
         for i, first, second in (
-                (P.DIM, "Dim is on", steps),
-                (P.MUTE, "Mute and Dim are on: this output is silent", steps),
-                (P.DIM, "Mute is on: this output is silent", how)):
+                (P.DIM, "Dim is on.", steps),
+                (P.MUTE, "Mute and Dim are on: this output is silent.", steps),
+                (P.DIM, "Mute is on: this output is silent.", how)):
             QTest.mouseClick(self.panel.options[i], Qt.LeftButton)
             self.settle()
             self.assertTrue(s.warned)

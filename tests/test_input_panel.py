@@ -74,7 +74,7 @@ class InputSettings(WindowTest):
         self.spin(1100)
         self.assertEqual((self.row("usb"), self.color("usb")), (("48 kHz", True), theme.TEXT))   # USB plays
         self.assertEqual((self.row("coax"), self.color("coax")), (("no signal", False), theme.WARN))
-        self.assertEqual(self.panel.values["coax"].toolTip(), "Recorded over USB; the device follows its clock")
+        self.assertEqual(self.panel.values["coax"].toolTip(), "Recorded over USB; the device follows its clock.")
         self.sim.signal(coax=44100, usb=48000)                                  # the clock: coax, at 44.1 kHz
         self.spin(1100)
         self.assertEqual((self.row("coax"), self.color("coax")), (("44.1 kHz", False), theme.TEXT))
@@ -152,7 +152,7 @@ class ProSource(WindowTest):
         self.assertEqual(c.text(c.value), "INT")
         self.mode(5)
         self.assertFalse(c.isEnabled())
-        self.assertTrue(c.toolTip().endswith("In Basic Mode DAC Source sets it"))
+        self.assertTrue(c.toolTip().endswith("In Basic Mode DAC Source sets it."))
 
 
 class AnalogInput(WindowTest):

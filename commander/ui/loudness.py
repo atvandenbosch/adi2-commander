@@ -277,7 +277,7 @@ class LoudnessGraph(pg.PlotWidget):
         self.points.append(((out, P.LD_LOW_VOL_REF), (self.x[low[0]] + self.x[low[-1]]) / 2, ref + full.min(), None))
         self._draw_handles()
         self.setToolTip("Loudness: the full boost at Low Vol Ref (%.1f dB) and below, none from %.1f dB (No boost);\n"
-                        "dotted: per 0.5 dB of volume, lit at the current volume, %.1f dB.\n"
+                        "dotted: per 0.5 dB of volume, lit at the current volume, %.1f dB\n"
                         "Shelves %g Hz and %g kHz, Q %g, fixed in the device"
                         % (ref, ref + F.LOUDNESS_RANGE, volume, shelves[0].freq, shelves[1].freq / 1000,
                            shelves[0].q))
@@ -385,7 +385,7 @@ class LoudnessGraph(pg.PlotWidget):
                      "%.1f dB: the volume with the full boost; none %g dB above it" % (self.ref, F.LOUDNESS_RANGE),
                      "%.1f … %.1f dB" % (lo / 2, hi / 2),
                      "Drag up or down and hold: Low Vol Ref moves, the faster the further; the curves stay, "
-                     "the scale moves"]
+                     "the scale moves."]
             return "\n".join(lines)
         f = next(f for f in self.full if self._key(f) == key)
         lines = ["Loudness %s" % {"B": "Bass", "T": "Treble"}[f.name[-1]],

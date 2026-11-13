@@ -30,10 +30,10 @@ OPTION_TIPS = {P.LOCK_VOLUME: "On: disables the device's VOLUME knob for this ou
                P.DIM: "On: turns this output down by 20 dB; off brings them back.\n"
                       "Volume shows the lowered level."}
 DIM_ACTIVE_ONLY = "Dim works on the active output only."
-LOWERED = {(P.MUTE,): "Mute is on: this output is silent",                # Volume, its value in amber
-           (P.DIM,): "Dim is on",
-           (P.MUTE, P.DIM): "Mute and Dim are on: this output is silent"}
-OUT_OF_DIM = "A step turns Dim off and goes on from this level"
+LOWERED = {(P.MUTE,): "Mute is on: this output is silent.",                # Volume, its value in amber
+           (P.DIM,): "Dim is on.",
+           (P.MUTE, P.DIM): "Mute and Dim are on: this output is silent."}
+OUT_OF_DIM = "A step turns Dim off and goes on from this level."
 TIPS = {P.REF_LEVEL: "The output level at full scale",
         P.MONO: "On: both channels summed\nto Left: the sum on the left output only",
         P.MS_PROC: "Mid/side: mono content to the left channel, stereo content to the right",
@@ -48,9 +48,9 @@ TIPS = {P.REF_LEVEL: "The output level at full scale",
         P.LOOPBACK: "This output's signal back to the computer over USB:\n"
                     "before the processing (FX), after it, or after it 6 dB lower",
         P.BALANCE: "L 100 left only, C centre, R 100 right only\nSteps of 5; with Ctrl of 1\n"
-                   "Click the value for a slider by 1",
+                   "Click the value for a slider by 1.",
         P.WIDTH: "Stereo 1.00, Mono 0.00, Swapped -1.00: left and right exchanged\n"
-                 "Steps of 0.05; with Ctrl of 0.01\nClick the value for a slider by 0.01"}
+                 "Steps of 0.05; with Ctrl of 0.01\nClick the value for a slider by 0.01."}
 NOT_KNOWN = "Not known for this device"           # DA Filter: the device's filters (params.da_filters)
 PLUG_WARNING = ("Plugging in headphones will bring up a warning on the device:\n"
                 "it will hold the output low until Volume is -15 dB or lower, or the warning is confirmed there.")
@@ -378,7 +378,7 @@ class VolumeStepper(RangeStepper):
         popup.closed.connect(self.stop)              # it rises only in view
         popup.stop = stop = Action(compact=True)     # between Min and 0.0, while rising
         stop.setText("Stop")
-        stop.setToolTip("Stop rising: Volume stays where it has got to")
+        stop.setToolTip("Stop rising: Volume stays where it has got to.")
         stop.setFocusPolicy(Qt.NoFocus)
         stop.clicked.connect(self.stop)
         stop.setVisible(self._rise is not None)
@@ -667,7 +667,7 @@ class OutputPanel(QWidget):
         if warned:
             tip += "\n" + PLUG_WARNING
         if key in self.marks.mismatch:
-            tip += "\nSent %s, device has %s" % tuple(self.phones_ref.text(v) for v in self.marks.mismatch[key])
+            tip += "\nSent %s, device has %s." % tuple(self.phones_ref.text(v) for v in self.marks.mismatch[key])
         self.phones_ref.show_state(s.get(key), self.session.writable(key), tip, bad=key in self.marks.mismatch,
                                    held=held, warned=warned)
 
@@ -691,11 +691,11 @@ class OutputPanel(QWidget):
             self.volume.set_floor(P.volume_floor(s, out, self.session.model))
         lo, hi = self.volume.floor, P.OUTPUT_RANGES[P.VOLUME][1]
         tip = [LOWERED.get(lowering), OUT_OF_DIM if P.DIM in lowering and not on(P.LOCK_VOLUME) else None,
-               "Lock Volume is on: set it in the device's menu" if on(P.LOCK_VOLUME) else
-               "Adjust with the arrows or the mouse wheel\nClick the value for a slider: up rises step by step",
+               "Lock Volume is on: set it in the device's menu." if on(P.LOCK_VOLUME) else
+               "Adjust with the arrows or the mouse wheel.\nClick the value for a slider: up rises step by step.",
                "%s … +%s, step 0.5 dB" % (self.volume.text(lo), self.volume.text(hi))]
         if key in self.marks.mismatch:
-            tip.append("Sent %s, device has %s" % tuple(self.volume.text(v) for v in self.marks.mismatch[key]))
+            tip.append("Sent %s, device has %s." % tuple(self.volume.text(v) for v in self.marks.mismatch[key]))
         self.volume.show_state(s.get(key) if ready else None, self.session.writable(key), "\n".join(filter(None, tip)),
                                bad=key in self.marks.mismatch, held=on(P.LOCK_VOLUME), warned=bool(lowering))
 
@@ -734,7 +734,7 @@ class OutputPanel(QWidget):
             tip = "\n".join(filter(None, (tip, shared_tip(self.session, key))))
             if key in self.marks.mismatch:
                 sent, actual = self.marks.mismatch[key]
-                tip += "\nSent %s, device has %s" % (stepper.text(sent), stepper.text(actual))
+                tip += "\nSent %s, device has %s." % (stepper.text(sent), stepper.text(actual))
             stepper.show_state(v, self.session.writable(key), tip, faded, key in self.marks.mismatch, held, warned)
         self.refresh_phones_ref(ready)
         self.refresh_volume()

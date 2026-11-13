@@ -27,11 +27,11 @@ from .presets import restyle
 from .widgets import ATTACHED_GAP, DOT_GAP, GROUP_STYLE, INNER_GAP, TITLE_STYLE, Dot, Option, Stepper, head
 
 INPUTS = [("coax", "SPDIF coax"), ("optical", "Optical"), ("usb", "USB")]
-SOURCE_TIP = ("The input of the whole device: Line Out, Phones and IEM alike.\n"
+SOURCE_TIP = ("The input of the whole device: Line Out, Phones and IEM alike\n"
               "Auto prefers SPDIF to USB; the USB (Rec …) choices select USB and record the SPDIF input over USB.")
 MODE_TIP = "The Basic Mode in use\nSet in DEVICE › DEVICE MODE"
 CLOCK_SOURCE_TIP = "The clock the device runs on\nAuto: the digital input with a signal; INT: its own"
-NOT_IN_DAC_MODE = "In Basic Mode DAC Source sets it"
+NOT_IN_DAC_MODE = "In Basic Mode DAC Source sets it."
 OUTPUTS_TIP = "The input of %s"                      # with the names of the outputs
 SHORT = {"Phones 1/2": "Ph 1/2"}                     # in the name of a row of two outputs, as the device writes it
 ALL_TIP = "The input of all outputs, and the clock of the device"
@@ -39,7 +39,7 @@ SET_BY_MODE_TIP = "Set by Basic Mode %s"
 # what Line Out takes in a Basic Mode that sets it: USB, Preamp, Dig Thru
 MODE_TAKES = {2: "USB 1/2", 3: "Analog", 4: "Digital input"}
 PLAYS_TIP = "The input the device has selected"
-RECORDED_TIP = "Recorded over USB; the device follows its clock"
+RECORDED_TIP = "Recorded over USB; the device follows its clock."
 NOT_IN_SYNC_TIP = "Not at the rate of the device's clock"
 # the analog input of an ADI-2 Pro and ADI-2/4 Pro: (group, [(index, row name)]); Auto Ref Level is an option
 ANALOG = [("LEVEL", [(P.IN_AUTO_REF_LEVEL, "Auto Ref Level"), (P.IN_REF_LEVEL, "Ref Level"),
@@ -59,9 +59,9 @@ ANALOG_TIPS = {P.IN_AUTO_REF_LEVEL: "On: the device raises Ref Level a step when
                P.DC_FILTER: "Removes DC from the input",
                P.RIAA_MODE: "Equalization and gain for a turntable with a moving magnet cartridge",
                P.RIAA_MONO_BASS: "Mono below 150 Hz",
-               P.BAL_IMPEDANCE: "The impedance of the balanced input; 47 kΩ suits a moving magnet cartridge"}
-RAISED_BY_AUTO = "Auto Ref Level raises it when the input overloads"
-SET_BY_RIAA = {P.IN_REF_LEVEL: "RIAA Mode sets it to +1 dBu", P.IN_AUTO_REF_LEVEL: "Off while RIAA Mode is on"}
+               P.BAL_IMPEDANCE: "The impedance of the balanced input; 47 kΩ suits a moving magnet cartridge."}
+RAISED_BY_AUTO = "Auto Ref Level raises it when the input overloads."
+SET_BY_RIAA = {P.IN_REF_LEVEL: "RIAA Mode sets it to +1 dBu.", P.IN_AUTO_REF_LEVEL: "Off while RIAA Mode is on"}
 RIAA_UP_TO = 192000                              # RIAA Mode works up to this rate, and with PCM only
 OFF_AT_FIRST = {P.TRIM_LEFT, P.TRIM_RIGHT, P.IN_POLARITY, P.IN_MS_PROC, P.RIAA_MODE, P.RIAA_MONO_BASS}  # grey: off
 
@@ -248,7 +248,7 @@ class InputPanel(QWidget):
         tip = SOURCE_TIP
         if bad:
             sent, actual = self.marks.mismatch[bad[0]]
-            tip += "\nSent %s, device has %s" % (self.source.text(sent), self.source.text(actual))
+            tip += "\nSent %s, device has %s." % (self.source.text(sent), self.source.text(actual))
         self.source.show_state(source, ready and all(self.session.writable(k) for k in keys), tip, bad=bool(bad))
         known = ready and st is not None and source is not None
         plays = played(source, st) if known else None
@@ -281,8 +281,8 @@ class InputPanel(QWidget):
             rate = clock = ""
         self.values["rate"].setText(rate)
         self.values["clock"].setText(clock)
-        self.values["clock"].setToolTip("The device follows this SPDIF input's clock" if known and st.clock else
-                                        "The device runs on its own clock" if known else "")
+        self.values["clock"].setToolTip("The device follows this SPDIF input's clock." if known and st.clock else
+                                        "The device runs on its own clock." if known else "")
 
     def refresh_rows(self, model):
         """ADI-2 Pro and ADI-2/4 Pro: the Basic Mode in use, and a row per Source setting."""
@@ -316,7 +316,7 @@ class InputPanel(QWidget):
             bad = r.key in self.marks.mismatch
             if bad:
                 sent, actual = self.marks.mismatch[r.key]
-                tip += "\nSent %s, device has %s" % (stepper.text(sent), stepper.text(actual))
+                tip += "\nSent %s, device has %s." % (stepper.text(sent), stepper.text(actual))
             stepper.show_state(value, self.session.writable(r.key), tip, bad=bad, held=takes is not None)
 
     def refresh_clock(self):
@@ -331,7 +331,7 @@ class InputPanel(QWidget):
         tip = [CLOCK_SOURCE_TIP, NOT_IN_DAC_MODE if ready and session.basic_mode() == P.MODE_DAC else None]
         bad = key in self.marks.mismatch
         if bad:
-            tip.append("Sent %s, device has %s" % tuple(self.clock_source.text(v) for v in self.marks.mismatch[key]))
+            tip.append("Sent %s, device has %s." % tuple(self.clock_source.text(v) for v in self.marks.mismatch[key]))
         self.clock_source.show_state(s.get(key) if ready else None, session.writable(key),
                                      "\n".join(filter(None, tip)), bad=bad)
 
@@ -368,9 +368,9 @@ class InputPanel(QWidget):
             if i == P.IN_REF_LEVEL:
                 tip.append(SET_BY_RIAA[i] if riaa else RAISED_BY_AUTO if on else None)
             elif i == P.AD_FILTER and rate is not None and rate >= model.ad_filter_fixed_from:
-                why = "Not in use: from %g kHz the device uses Slow only" % (model.ad_filter_fixed_from / 1000)
+                why = "Not in use: from %g kHz the device uses Slow only." % (model.ad_filter_fixed_from / 1000)
             elif i == P.RIAA_MODE and (rate is not None and rate > RIAA_UP_TO or value(P.AD_CONVERSION) == 1):
-                why = "Not in use: RIAA Mode works up to %g kHz, with PCM only" % (RIAA_UP_TO / 1000)
+                why = "Not in use: RIAA Mode works up to %g kHz, with PCM only." % (RIAA_UP_TO / 1000)
             elif i == P.AD_CONVERSION and v == 1 and not session.bypassed():
                 why = "PCM now: DSD from %g kHz on" % (P.DSD_RECORD_FROM / 1000)
             faded = why is not None and v is not None and v - c.first != stepper.off
@@ -378,6 +378,6 @@ class InputPanel(QWidget):
             bad = key in self.marks.mismatch
             if bad:
                 sent, actual = (stepper.text(n - c.first) for n in self.marks.mismatch[key])
-                tip.append("Sent %s, device has %s" % (sent, actual))
+                tip.append("Sent %s, device has %s." % (sent, actual))
             stepper.show_state(None if v is None else v - c.first, session.writable(key), "\n".join(filter(None, tip)),
                                faded, bad, held=i == P.IN_REF_LEVEL and riaa)

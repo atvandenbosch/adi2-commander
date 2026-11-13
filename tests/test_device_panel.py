@@ -82,7 +82,7 @@ class DevicePanel(WindowTest):
         self.session.set((12, P.REMAP_KEYS), 0)
         self.settle()
         self.assertTrue(key.faded)
-        self.assertTrue(key.toolTip().endswith("Not in use: Remap Keys is off"))
+        self.assertTrue(key.toolTip().endswith("Not in use: Remap Keys is off."))
 
     def test_a_change_on_the_device_is_shown(self):
         self.sim.front_panel([(12, P.LOCK_UI, 3)])
@@ -99,7 +99,7 @@ class DevicePanelPro(DevicePanel):
         self.assertEqual(self.rows()[2][1], ["DSD Direct 1/2", "DSD Filter", "DSD Detection"])
         filter_ = self.panel.steppers[P.DSD_FILTER][1]
         self.assertTrue(filter_.faded)                                          # DSD Direct is off
-        self.assertTrue(filter_.toolTip().endswith("Not in use: DSD Direct is off"))
+        self.assertTrue(filter_.toolTip().endswith("Not in use: DSD Direct is off."))
         self.assertIn("Phones 1/2 is off", self.option(P.DSD_DIRECT).toolTip())
 
     def test_written_as_chosen(self):
@@ -130,7 +130,7 @@ class DevicePanelPro(DevicePanel):
         self.spin(1100)
         self.assertEqual(self.session.basic_mode(), P.MODE_DAC)
         self.assertFalse(spdif_in.isEnabled())
-        self.assertTrue(spdif_in.toolTip().endswith("In Basic Mode DAC Source sets it"))
+        self.assertTrue(spdif_in.toolTip().endswith("In Basic Mode DAC Source sets it."))
 
 
 class DevicePanel24(DevicePanel):

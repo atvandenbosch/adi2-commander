@@ -119,7 +119,7 @@ class Columns(unittest.TestCase):
         lines = text.splitlines()
         lines[5] = lines[5].rsplit(",", 1)[0] + ","
         cf = C.read("\n".join(lines))
-        self.assertEqual([C.unusable(cf, i) for i in range(3)], ["Beyond ±15 dB", None, "A cell is not a number"])
+        self.assertEqual([C.unusable(cf, i) for i in range(3)], ["Beyond ±15 dB", None, "A cell is not a number."])
 
     def test_no_column_can_serve(self):
         cf = C.read(table({"spl": lambda f: 75.0 + bump(f)}, header=True))

@@ -41,16 +41,16 @@ MANUAL, TEMP, CLEAR, RUMBLE = 0, 1, 22, P.RUMBLE  # EQ Preset Select; Preset n i
 BUILT_IN = (CLEAR, RUMBLE)                       # presets that are no slot: Select only
 TAGS = {3: "L", 6: "P", 9: "I"}                  # output address -> its letter
 INPUT_TAG = "In"                                 # the analog input's mark, on a model that has one
-CLEAR_TIP = ("The factory state, all bands 0 dB.\n"
+CLEAR_TIP = ("The factory state, all bands 0 dB\n"
              "To reset a preset: select Clear, then Store in the preview of that preset.\n")
-TIPS = {MANUAL: "This output's own EQ, apart from the presets.\n"
+TIPS = {MANUAL: "This output's own EQ, apart from the presets\n"
                 "After standby it holds what was selected then: a preset, Temp, or itself.",
-        TEMP: "A selected preset, changed.\nStandby moves it into Manual.",
+        TEMP: "A selected preset, changed\nStandby moves it into Manual.",
         CLEAR: CLEAR_TIP + "Store takes this output's Bass/Treble into the preset too.",
-        RUMBLE: "A rumble filter for a turntable: a high pass at 35 Hz, and -12 dB at 20 Hz."}
+        RUMBLE: "A rumble filter for a turntable: a high pass at 35 Hz, and -12 dB at 20 Hz"}
 CLEAR_INPUT_TIP = CLEAR_TIP + "Store sets the Bass/Treble of the preset to 0 dB."   # the input has no Bass/Treble
 NAME_RULE = "Up to %d signs: letters, digits, space and %s" % (P.NAME_LENGTH, " ".join(P.NAME_MARKS))
-OK_TIP = "Write this preset to the device as it is now"
+OK_TIP = "Write this preset to the device as it is now."
 STALE_TIP = "This output has an earlier copy of this preset.\nSelect it again to load it as it is now."
 BUSY = {"store": "storing…", "write": "storing…"}
 NOT_AS_SENT = "not as sent"
@@ -61,7 +61,7 @@ def describe(result):
     """The differences after a Store or Write, one per line: {key: (sent, actual)}."""
     def name(k):
         return k if isinstance(k, str) else "%d/%d" % k
-    return "\n".join("%s: sent %s, the device has %s" % (name(k), sent, actual)
+    return "\n".join("%s: sent %s, the device has %s." % (name(k), sent, actual)
                      for k, (sent, actual) in result.items())
 
 
@@ -144,7 +144,7 @@ class _Row(QWidget):
         self.ok.setText("OK")
         self.ok.setToolTip(OK_TIP)
         self.cancel.setText("Cancel")
-        self.cancel.setToolTip("Leave the preset on the device as it is")
+        self.cancel.setToolTip("Leave the preset on the device as it is.")
         self.ok.clicked.connect(lambda: panel.finished.emit(True))
         self.cancel.clicked.connect(lambda: panel.finished.emit(False))
         # name and mark give way: the tags, or OK and Cancel, cover their end, whatever the font
@@ -353,7 +353,7 @@ class SideTab(QWidget):
         super().__init__()
         self.text, self.open = text, False
         self.setCursor(Qt.PointingHandCursor)
-        self.setToolTip("Show or hide the %s" % text.lower())
+        self.setToolTip("Show or hide the %s." % text.lower())
 
     def sizeHint(self):
         fm = self.fontMetrics()

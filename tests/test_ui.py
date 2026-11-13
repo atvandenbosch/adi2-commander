@@ -1027,7 +1027,7 @@ class AnalogIn(WindowTest):
         self.assertFalse(win.bt_view.isVisible() or win.loudness_view.isVisible() or win.load_bt.isVisible())
         self.assertFalse(win.legend.items["BT"].isVisible())
         self.assertFalse(win.output_tab.isEnabled() or win.output_area.isVisible())
-        self.assertEqual(win.output_tab.toolTip(), "The settings of Analog In are in the input panel")
+        self.assertEqual(win.output_tab.toolTip(), "The settings of Analog In are in the input panel.")
         win.tabs.setCurrentIndex(tab(3))
         self.assertTrue(win.bt_view.isVisible() and win.output_area.isVisible() and win.load_bt.isVisible())
 
@@ -1048,9 +1048,9 @@ class AnalogIn(WindowTest):
         hover(self.win, self.win.presets.rows[3])
         self.spin(20)
         preview = self.win.preview
-        self.assertEqual(preview.select.toolTip(), "Select it on Analog In: its EQ is loaded there")
+        self.assertEqual(preview.select.toolTip(), "Select it on Analog In: its EQ is loaded there.")
         self.assertTrue(preview.store.toolTip().startswith(
-            "Store the current EQ of Analog In in Preset 2, with Bass/Treble at 0 dB\n"))
+            "Store the current EQ of Analog In in Preset 2, with Bass/Treble at 0 dB.\n"))
         clear = self.win.presets.rows[22]
         self.assertTrue(clear.toolTip().endswith("Store sets the Bass/Treble of the preset to 0 dB."))
         self.win.tabs.setCurrentIndex(tab(3))
@@ -1111,7 +1111,8 @@ class SimulatedModel(unittest.TestCase):
                          ["ADI-2 DAC FS", "ADI-2 Pro", "ADI-2/4 Pro SE", "ADI-2/4 Pro EX"])
         self.assertEqual((d.check.text(), d.check.isChecked()), ("Don't ask again", False))
         self.assertEqual(d.check.toolTip(),
-                         "Start with this device without asking\nTo change that later, go to Menu › Simulated device…")
+                         "Start with this device without asking.\n"
+                         "To change that later, go to Menu › Simulated device.")
         self.assertTrue(d.start.isDefault())
 
     def test_the_choice_made_last(self):

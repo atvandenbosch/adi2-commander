@@ -69,7 +69,7 @@ BODY_MARGIN = 12                                 # px above and below the column
 ZONE_TOP = INNER_GAP                             # px above the legend in the graph's zone, as the main window's
 UNDEFINED = "—"
 UNDEFINED_TIP = "Not set: factory default"
-NO_BT = "%s has no Bass/Treble"                   # why a Bass or Treble row cannot be used, with the name
+NO_BT = "%s has no Bass/Treble."                   # why a Bass or Treble row cannot be used, with the name
 STATE_ROLE, WARN_ROLE, MARK_ROLE = Qt.UserRole + 1, Qt.UserRole + 2, Qt.UserRole + 3
 AGAIN_ICON = 14                                  # px, the round arrow
 BOX, LINE_H = 22, 22                             # px: the check box's part of the margin; a line of the file
@@ -204,7 +204,7 @@ class Summary(QFrame):
         short = lo > F.FREQS[0] * 1.001 or hi < F.FREQS[-1] / 1.001
         self._set("Points", "%d" % len(cf.freqs))
         self._set("Frequency", "%s – %s" % (_hz(lo), _hz(hi)), short,
-                  "Not all of 20 Hz – 20 kHz: beyond it, its first and last value hold" if short else "")
+                  "Not all of 20 Hz – 20 kHz: beyond it, its first and last value hold." if short else "")
         y = None if column is None else cf.columns[column]
         self._set("Gain", UNDEFINED if y is None else "%+.1f … %+.1f dB" % (_db(np.min(y)), _db(np.max(y))))
         # all columns; one that cannot serve is grey, and says why
@@ -218,7 +218,7 @@ class Summary(QFrame):
                 self.choice.setItemData(i, why, Qt.ToolTipRole)
         self.choice.setCurrentIndex(-1 if column is None else column)
         self.choice.blockSignals(False)
-        none = "No column lies within ±%g dB throughout" % C.RANGE_DB
+        none = "No column lies within ±%g dB throughout." % C.RANGE_DB
         self.choice.set_value_color(theme.WARN if column is None else None)
         self.choice.setToolTip(none if column is None else "The column that is the curve")
         many = len(cf.names) > 1
@@ -619,7 +619,7 @@ class Corner(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
         self.box = QCheckBox()
-        self.box.setToolTip("Checked: OK writes this table")
+        self.box.setToolTip("Checked: OK writes this table.")
         self.name = QLabel()
         self.name.setFixedHeight(22)
         lay.addWidget(self.box)
@@ -717,8 +717,8 @@ class ImportDialog(QDialog):
         self.tone = False                                   # Bass/Treble in a fit: off until asked for
         exported = None if curve else source.fs
         self.fs_given = exported or self.live or self.fs_default    # the file's rate, else the one the device runs at
-        self.fs_why = ("The file was exported at %g kHz" % (exported / 1000) if exported else
-                       "The device runs at %g kHz" % (self.live / 1000) if self.live else "")
+        self.fs_why = ("The file was exported at %g kHz." % (exported / 1000) if exported else
+                       "The device runs at %g kHz." % (self.live / 1000) if self.live else "")
         self.fs = self.fs_given
         self.selections = {}                                # {(mode, origin): {line}} the proposals
         self.own = None                                     # {line} once the user changes one: for Map and Fit both
@@ -732,7 +732,7 @@ class ImportDialog(QDialog):
             self.input_stack.setCurrentWidget(self.input)
         self.file_label.setText(os.path.basename(path))
         self.way.set_current(self.mode)
-        self.way.set_enabled_at(MAP, not curve, "A curve has no filters to map" if curve else "")
+        self.way.set_enabled_at(MAP, not curve, "A curve has no filters to map." if curve else "")
         for box, index in ((self.origin_box, 0 if self.origin == I.ADI2 else 1), (self.fs_box, None)):
             box.blockSignals(True)
             if index is None:
@@ -777,7 +777,7 @@ class ImportDialog(QDialog):
         self.enough.setIcon(enough_icon(theme.BUTTON_TEXT, theme.DISABLED))
         self.enough.setIconSize(QSize(AGAIN_ICON, AGAIN_ICON))
         self.enough.setFixedSize(self.way.sizeHint().height(), self.way.sizeHint().height())
-        self.enough.setToolTip("Close enough: stop the fit and take what it has found so far")
+        self.enough.setToolTip("Close enough: stop the fit and take what it has found so far.")
         self.enough.clicked.connect(self.good_enough)
         self.origin_label = self.label("Origin")
         self.origin_box = Choice()
@@ -860,7 +860,7 @@ class ImportDialog(QDialog):
         self.bt_view.set_corner(self.bt_corner)
         self.ok, cancel = Action(), Action()
         self.ok.setText("OK")
-        self.ok.setToolTip("Write the checked tables to %s" % self.target())
+        self.ok.setToolTip("Write the checked tables to %s." % self.target())
         cancel.setText("Cancel")
         self.ok.clicked.connect(self.accept)
         cancel.clicked.connect(self.reject)
@@ -1251,16 +1251,16 @@ class ImportDialog(QDialog):
     def show_controls(self):
         self.origin_group.setVisible(self.cf is None)
         commander = self.eq is not None and E.table(self.eq) is not None
-        self.origin_box.setToolTip("ADI-2: the table is imported\n"
-                                   "External: the Filter lines are imported, as Cookbook filters"
+        self.origin_box.setToolTip("ADI-2: the table is imported.\n"
+                                   "External: the Filter lines are imported, as Cookbook filters."
                                    if commander else "ADI-2: the numbers as the device has them\n"
                                    "External: Cookbook filters, as filter files usually mean them")
         self.tone_box.setVisible(self.mode == FIT and self.has_bt)
         allowed = self.tone_allowed()
         self.tone_box.setChecked(self.tone and allowed)
         self.tone_box.setEnabled(allowed)
-        self.tone_box.setToolTip("The fit may use Bass and Treble too" if allowed else
-                                 "Not with a set of its own per channel: Bass/Treble is shared")
+        self.tone_box.setToolTip("The fit may use Bass and Treble too." if allowed else
+                                 "Not with a set of its own per channel: Bass/Treble is shared.")
         other = int(self.fs) != int(self.fs_given)
         self.fs_box.set_value_color(theme.WARN if other else None)
         tip = "Sample rate the curves and the Q are computed at"
@@ -1462,7 +1462,7 @@ def _adjusted(shifts):
         how = values.pop()
     else:
         how = ", ".join("%s %+.1f dB" % ({"L": "left", "R": "right"}[k], _db(v)) for k, v in shifts.items())
-    return "Input (adj.)", "Moved %s onto the sum: the fit leaves the level free\n" % how
+    return "Input (adj.)", "Moved %s onto the sum: the fit leaves the level free.\n" % how
 
 
 def _html(text):

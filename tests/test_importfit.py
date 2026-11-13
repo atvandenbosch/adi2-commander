@@ -182,9 +182,9 @@ class ImportFit(ImportTest):
     def test_the_input_named_when_a_fit_moved_it(self):
         self.assertEqual(D._adjusted({"L": 0.04, "R": -0.04}), ("Input", ""))
         self.assertEqual(D._adjusted({"L": -1.02}),
-                         ("Input (adj.)", "Moved -1.0 dB onto the sum: the fit leaves the level free\n"))
+                         ("Input (adj.)", "Moved -1.0 dB onto the sum: the fit leaves the level free.\n"))
         self.assertEqual(D._adjusted({"L": -1.02, "R": 0.43})[1],
-                         "Moved left -1.0 dB, right +0.4 dB onto the sum: the fit leaves the level free\n")
+                         "Moved left -1.0 dB, right +0.4 dB onto the sum: the fit leaves the level free.\n")
 
 
 if __name__ == "__main__":

@@ -555,7 +555,7 @@ class ResponseGraph(pg.PlotWidget):
                  "%s  %d Hz%s  Q %.1f" % (kind, f.freq, "" if no_gain else "  %+.1f dB" % f.gain, f.q),
                  "%d … %d Hz%s · Q %.1f … %.1f" % (flo, fhi, "" if no_gain else " · ±12 dB", qlo / 10, qhi / 10)]
         if no_gain:
-            lines.append("No gain; Q sets the resonance")
+            lines.append("No gain; Q sets the resonance.")
         if f.band is None and self.fs >= self.no_bt_from:
             lines.append("Not available at %g kHz" % (self.fs / 1000))
         elif self.session.bypassed():

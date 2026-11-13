@@ -151,7 +151,7 @@ class Graph(WindowTest):
         self.spin(300)
         self.assertEqual(self.hover_text(self.point("5", 0)).split("\n"),
                          ["Band 5 · LEFT", "High Cut  3000 Hz  Q 5.0", "200 … 20000 Hz · Q 0.5 … 5.0",
-                          "No gain; Q sets the resonance", "EQ off: not in the signal path", "Wheel: Q"])
+                          "No gain; Q sets the resonance.", "EQ off: not in the signal path", "Wheel: Q"])
         self.graph.step_q(self.point("5", 0), -1, "small")   # an open tooltip shows the new value
         self.spin(100)
         self.assertIn("Q 4.9", QToolTip.text())

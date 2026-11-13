@@ -70,7 +70,7 @@ def unusable(cf, column):
     """Why a column cannot serve as EQ, or None when it can."""
     v = cf.columns[column]
     if not np.all(np.isfinite(v)):
-        return "A cell is not a number"
+        return "A cell is not a number."
     if np.any(np.abs(v) > RANGE_DB):
         return "Beyond ±%g dB" % RANGE_DB
     return None

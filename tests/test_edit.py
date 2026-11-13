@@ -150,10 +150,10 @@ class EditStand(WindowTest):
         d = self.edit()
         ok = self.ok()
         self.assertFalse(ok.isEnabled())
-        self.assertEqual(ok.toolTip(), "Nothing to write: the preset is unchanged")
+        self.assertEqual(ok.toolTip(), "Nothing to write: the preset is unchanged.")
         self.win.write((4, 7), 6, False)
         self.assertTrue(ok.isEnabled())
-        self.assertEqual(ok.toolTip(), "Write this preset to the device as it is now")
+        self.assertEqual(ok.toolTip(), "Write this preset to the device as it is now.")
         self.win.write((4, 7), d.base["vals"][(13, 7)], False)                # and back
         self.assertFalse(ok.isEnabled())
         self.win.finish_edit(True)                                            # as if it were clicked
@@ -216,7 +216,7 @@ class EditStand(WindowTest):
             tips = []
             self.win.ask = lambda dialog: tips.append(dialog.ok.toolTip()) or dialog.accept() or True
             self.win.import_file(path)
-        self.assertEqual(tips, ["Write the checked tables to the preset"])
+        self.assertEqual(tips, ["Write the checked tables to the preset."])
         self.assertEqual(d.state[(4, 7)], 6)
         self.assertEqual(self.sim.state[(4, 7)], self.session.state[(4, 7)])  # the device heard nothing
         self.assertEqual(self.session.pending, {})
@@ -243,7 +243,7 @@ class EditStand(WindowTest):
         self.assertNotIn(theme.WARN.name(), row.name.styleSheet())
         self.win.write((4, 7), 6, False)
         self.assertIn(theme.WARN.name(), row.name.styleSheet())
-        self.assertEqual(row.label.toolTip(), "Selected on Line Out and Phones 3/4 · IEM: OK loads it there")
+        self.assertEqual(row.label.toolTip(), "Selected on Line Out and Phones 3/4 · IEM: OK loads it there.")
         self.assertEqual(tooltip_color(row.label), theme.TEXT.name())         # amber only the name, as everywhere
         QTest.mouseClick(self.ok(), Qt.LeftButton)
         self.wait(lambda: self.win.draft is None)
@@ -270,11 +270,11 @@ class EditStand(WindowTest):
         self.assertIs(self.win.draft, d)
         self.assertEqual(d.state[(4, 7)], 6)
         self.assertFalse(self.ok().isEnabled())
-        self.assertEqual(self.ok().toolTip(), "OK waits for the device: it is not connected")
+        self.assertEqual(self.ok().toolTip(), "OK waits for the device: it is not connected.")
         self.sim.power(True)
         self.wait(lambda: self.session.ready() and len(self.session.slots) == 20)
         self.assertTrue(self.ok().isEnabled())
-        self.assertEqual(self.ok().toolTip(), "Write this preset to the device as it is now")
+        self.assertEqual(self.ok().toolTip(), "Write this preset to the device as it is now.")
         QTest.mouseClick(self.ok(), Qt.LeftButton)
         self.wait(lambda: self.win.draft is None)
         self.assertEqual(self.sim.slots[2]["vals"][(13, 7)], 6)

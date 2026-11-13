@@ -201,8 +201,8 @@ class RoundTrip(unittest.TestCase):
         lines = E.write(dump_state(), OUT, 48000.0).splitlines()
         rows = [n for n, l in enumerate(lines) if E.ROW.match(l)]
         self.assertEqual(E.table_faults(E.read("\n".join(lines))), {})
-        cases = [(rows[1], " dB", "x dB", "Gain is not a number"),
-                 (rows[0], "Low Shelf", "High Shelf", "Band 1 has no High Shelf"),
+        cases = [(rows[1], " dB", "x dB", "Gain is not a number."),
+                 (rows[0], "Low Shelf", "High Shelf", "Band 1 has no High Shelf."),
                  (rows[2], "Peak", "    ", "No type"),
                  (rows[2], "Band 3", "Band 2", "Band 2 twice in its group")]
         for n, old, new, why in cases:

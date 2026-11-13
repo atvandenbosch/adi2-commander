@@ -212,7 +212,8 @@ class Legend(QWidget):
             group = ("channel", "channels") if k in GROUPS[0] else ("layer", "layers")
             note = {"compare": "The sums at the rate the device runs at\n",
                     "bands": "Includes Bass and Treble\n" if self.graph.has_bt else "",
-                    "handles": "The points: drag, wheel and click\nOff: the band labels stay, but only inform\n"}.get(k, "")
+                    "handles": "The points: drag, wheel and click\n"
+                               "Off: the band labels stay, but only inform.\n"}.get(k, "")
             item.setToolTip(note +
                             "Click: show or hide · Double-click: only this %s; again: all %s" % group)
         self.items["R"].setVisible(dual)
