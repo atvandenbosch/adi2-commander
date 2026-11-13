@@ -123,12 +123,12 @@ class ProSource(WindowTest):
     def test_the_rows_in_each_basic_mode(self):
         self.assertEqual(self.panel.values["mode"].text(), "Auto: USB")
         self.assertEqual(self.panel.mode_row.toolTip(), "The Basic Mode in use\nSet in DEVICE › DEVICE MODE")
-        self.assertEqual(self.shown(), [("Ln. Out · Ph. 1/2", "USB 1/2", False), ("Phones 3/4", "Auto", True)])
+        self.assertEqual(self.shown(), [("Line Out · Ph 1/2", "USB 1/2", False), ("Phones 3/4", "Auto", True)])
         self.assertEqual(self.panel.rows[0][2].toolTip(), "The input of Line Out and Phones 1/2\nSet by Basic Mode USB")
         self.assertFalse(self.panel.dac_fs[0].isVisible())                     # what the DAC FS inputs receive
         self.mode(1)
         self.assertEqual(self.panel.values["mode"].text(), "AD/DA")
-        self.assertEqual(self.shown()[0], ("Ln. Out · Ph. 1/2", "Auto", True))
+        self.assertEqual(self.shown()[0], ("Line Out · Ph 1/2", "Auto", True))
         self.mode(5)
         self.assertEqual(self.shown(), [("Source", "Auto", True)])
         self.assertEqual(self.panel.rows[0][2].toolTip(), "The input of all outputs, and the clock of the device")

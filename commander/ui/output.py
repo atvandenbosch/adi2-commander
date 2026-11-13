@@ -555,7 +555,7 @@ class OutputPanel(QWidget):
         self.phones_ref.chosen.connect(lambda value: self.edited.emit(self.session.kept_ref_level(), value, False))
         self.labels = {}
         groups = [("LEVEL", [(P.LOCK_VOLUME, None), (P.VOLUME, "Volume"), (P.AUTO_REF_LEVEL, None),
-                             (P.REF_LEVEL, "Ref Level"), (PHONES_REF, "Ref Level Ph. 1/2"), (P.MUTE, None),
+                             (P.REF_LEVEL, "Ref Level"), (PHONES_REF, "Ref Level Ph 1/2"), (P.MUTE, None),
                              (P.DIM, None), (P.BALANCE, "Balance")]),
                   ("PROCESSING", [(P.MONO, "Mono"), (P.WIDTH, "Width"), (P.MS_PROC, "M/S-Proc"),
                                   (P.POLARITY, "Polarity"), (P.CROSSFEED, "Crossfeed")]),
@@ -651,7 +651,7 @@ class OutputPanel(QWidget):
         phones = self.shared_phones() if ready else None
         shown = phones is not None and not P.absent(P.REF_LEVEL, s.get(line))
         self.rows[PHONES_REF].setVisible(shown)
-        self.labels[P.REF_LEVEL].setText("Ref Level Ln. Out" if shown else "Ref Level")
+        self.labels[P.REF_LEVEL].setText("Ref Level Line Out" if shown else "Ref Level")
         if not shown:
             return
         key = self.session.kept_ref_level()

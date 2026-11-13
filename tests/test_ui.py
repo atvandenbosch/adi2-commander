@@ -788,7 +788,7 @@ class ProWindow(WindowTest):
         phones = panel.phones_ref
         self.assertTrue(panel.rows[PHONES_REF].isVisible())
         self.assertEqual([panel.labels[P.REF_LEVEL].text(), panel.labels[PHONES_REF].text()],
-                         ["Ref Level Ln. Out", "Ref Level Ph. 1/2"])
+                         ["Ref Level Line Out", "Ref Level Ph 1/2"])
         self.assertEqual((phones.text(phones.value), phones.isEnabled(), phones.held), ("+16 dBu", False, True))
         self.assertEqual(phones.toolTip(), "Set by the Ref Level of Line Out: 3 dB higher, +22 dBu at most")
         self.sim.state[(12, 11)] = 1

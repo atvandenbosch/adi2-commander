@@ -33,7 +33,7 @@ MODE_TIP = "The Basic Mode in use\nSet in DEVICE › DEVICE MODE"
 CLOCK_SOURCE_TIP = "The clock the device runs on\nAuto: the digital input with a signal; INT: its own"
 NOT_IN_DAC_MODE = "In Basic Mode DAC Source sets it"
 OUTPUTS_TIP = "The input of %s"                      # with the names of the outputs
-SHORT = {"Line Out": "Ln. Out", "Phones 1/2": "Ph. 1/2"}   # in the name of a row of two outputs
+SHORT = {"Phones 1/2": "Ph 1/2"}                     # in the name of a row of two outputs, as the device writes it
 ALL_TIP = "The input of all outputs, and the clock of the device"
 SET_BY_MODE_TIP = "Set by Basic Mode %s"
 # what Line Out takes in a Basic Mode that sets it: USB, Preamp, Dig Thru
