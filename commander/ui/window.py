@@ -500,7 +500,7 @@ class MainWindow(QMainWindow):
         # the graph's zone, darker than the columns beside it, from the tabs down to the status bar; beside it
         # everything stays as far from the tabs and the status bar, and inside it the head too; the plot with its axes
         # is as far from the zone's edge on the other three sides
-        below_tabs, above_status = 6, 8
+        below_tabs, above_status = INNER_GAP, 8
         display = QWidget()
         display.setLayout(graph_side)
         graph_side.setContentsMargins(ZONE_INK - TITLE_ROOM[0], below_tabs, ZONE_INK, ZONE_INK - TITLE_ROOM[1])
