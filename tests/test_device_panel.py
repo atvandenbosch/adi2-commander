@@ -41,8 +41,8 @@ class DevicePanel(WindowTest):
     def test_its_rows(self):
         self.assertEqual(self.rows(), [
             ("PHONES", ["Mute Line"]), ("DSD", ["DSD Filter", "DSD Detection"]), ("POWER", ["Auto Standby"]),
-            ("KEYS", ["Remap Keys", "VOL (1)", "I/O (2)", "EQ (3)", "SETUP (4)"]),
-            ("DISPLAY", ["Display Mode", "Meter Color", "Hor. Meter", "AutoDark Mode", "Show Vol. Screen", "Lock UI"])])
+            ("DISPLAY", ["Display Mode", "Meter Color", "Hor. Meter", "AutoDark Mode", "Show Vol. Screen", "Lock UI"]),
+            ("KEYS", ["Remap Keys", "VOL (1)", "I/O (2)", "EQ (3)", "SETUP (4)"])])
         self.assertEqual((self.text(P.METER_COLOR), self.text(P.DSD_FILTER)), ("Monochrome", "50 kHz"))
         self.assertFalse(self.panel.steppers[P.DSD_FILTER][1].faded)          # it has no DSD Direct to wait for
         self.assertIn("70 kHz DSD128", self.panel.steppers[P.DSD_FILTER][1].toolTip())
@@ -60,7 +60,7 @@ class DevicePanel(WindowTest):
         self.assertEqual((meter.isVisibleTo(self.panel), remap.isVisibleTo(self.panel)), (False, False))
         QTest.mouseClick(self.panel.choice.buttons[1], Qt.LeftButton)          # Controls
         self.assertEqual((meter.isVisibleTo(self.panel), remap.isVisibleTo(self.panel)), (True, True))
-        self.assertFalse(self.panel.steppers[P.AUTO_STANDBY][1].isVisibleTo(self.panel))
+        self.assertTrue(self.panel.steppers[P.AUTO_STANDBY][1].isVisibleTo(self.panel))
         QTest.mouseClick(self.win.device_tab, Qt.LeftButton)                     # closed and opened again
         QTest.mouseClick(self.win.device_tab, Qt.LeftButton)
         self.spin(50)
@@ -94,7 +94,8 @@ class DevicePanelPro(DevicePanel):
     model = PRO
 
     def test_its_rows(self):
-        self.assertEqual([g for g, _ in self.rows()], ["DEVICE MODE", "PHONES", "DSD", "SPDIF", "KEYS", "DISPLAY"])
+        self.assertEqual([g for g, _ in self.rows()],
+                         ["DEVICE MODE", "PHONES", "DSD", "SPDIF", "POWER", "DISPLAY", "KEYS"])
         self.assertEqual(self.rows()[2][1], ["DSD Direct 1/2", "DSD Filter", "DSD Detection"])
         filter_ = self.panel.steppers[P.DSD_FILTER][1]
         self.assertTrue(filter_.faded)                                          # DSD Direct is off
@@ -136,11 +137,11 @@ class DevicePanel24(DevicePanel):
     model = PRO_24
 
     def test_its_rows(self):
-        self.assertEqual(self.rows()[0][1], ["Basic Mode", "Dig. Out Source", "Auto Standby"])
+        self.assertEqual(self.rows()[0][1], ["Basic Mode", "Dig. Out Source"])
         self.assertEqual(self.rows()[1][1], ["Dual Phones", "Bal TRS Mode", "Toggle Ph/Line", "Mute v. Ph 1/2",
                                              "Mute v. Ph 3/4"])
         self.assertIn("Pentaconn", self.panel.steppers[P.BAL_PHONES][1].toolTip())
-        self.assertEqual(self.rows()[4][1][-3:], ["IR 5", "IR 6", "IR 7"])
+        self.assertEqual(self.rows()[-1][1][-3:], ["IR 5", "IR 6", "IR 7"])
         self.assertEqual((self.text(22), self.text(24)), ("Source SPDIF coax", "Source USB 1/2"))     # IR 5, IR 7
 
     def test_a_source_on_a_key_in_basic_mode_dac(self):

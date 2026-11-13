@@ -60,7 +60,7 @@ class Model(namedtuple("Model", "id name port supported tested outputs tags cont
 
 
 _S = P.Setting
-_STANDBY = _S(P.AUTO_STANDBY, "Auto Standby", ["Off", "30 min", "1 h", "2 h", "4 h"])
+_POWER = ("POWER", (_S(P.AUTO_STANDBY, "Auto Standby", ["Off", "30 min", "1 h", "2 h", "4 h"]),))
 _DETECTION = _S(P.DSD_DETECTION, "DSD Detection", None)
 _DISPLAY = ("DISPLAY", (_S(P.DISPLAY_MODE, "Display Mode", ["Default", "Dark"]),
                         _S(P.METER_COLOR, "Meter Color", ["Green", "Cyan", "Amber", "Monochrome", "Red", "Orange"]),
@@ -107,9 +107,7 @@ DAC =Model(0x71, MODEL, "ADI-2 DAC", True, True, ("Line Out", "Phones 1/2", "Pho
                                                               "Toggle Plugged"]),)),
                     ("DSD", (_S(P.DSD_DIRECT, "DSD Direct (Line)", None),
                              _S(P.DSD_FILTER, "DSD Filter", ["50 kHz", "70 kHz"]), _DETECTION)),
-                    ("POWER", (_STANDBY,)),
-                    _keys_group(_DAC_KEYS, _DAC_KEY_SETTINGS),
-                    _DISPLAY),
+                    _POWER, _DISPLAY, _keys_group(_DAC_KEYS, _DAC_KEY_SETTINGS)),
             clock=None, keys=_DAC_KEYS)
 
 _FILTERS = ["SD Sharp", "SD Slow", "Sharp", "Slow"]
@@ -121,7 +119,7 @@ _LOOPBACK = ["Off"] + [name % ch for ch in ("1/2", "3/4", "5/6")
 _RIAA = ["+14 dB", "+20 dB", "+26 dB", "+32 dB", "+38 dB"]      # RIAA Mode: the gains
 _AUTO = ["Off", "On", "Auto"]
 _PRO_MODE = ("DEVICE MODE", (_S(P.BASIC_MODE[1], "Basic Mode", P.BASIC_MODES),
-                             _S(P.DIG_OUT_SOURCE, "Dig. Out Source", ["Default", "Main Out"]), _STANDBY))
+                             _S(P.DIG_OUT_SOURCE, "Dig. Out Source", ["Default", "Main Out"])))
 _TOGGLE = _S(P.TOGGLE_PH_LINE, "Toggle Ph/Line", ["Off", "1/2", "3/4", "1/2+3/4", "All Plugged", "Line/Digital"])
 _SPDIF = ("SPDIF", (_S(P.SPDIF_IN, "SPDIF In", ["Auto", "Coax", "Optical"]),
                       _S(P.SRC, "SRC", ["Off", "AES In", "SPDIF In"]),
@@ -179,7 +177,7 @@ PRO = Model(0x72, "ADI-2 Pro", "ADI-2 Pro", True, False, ("Line Out", "Phones 1/
                                 _S(P.MUTE_V_PH_3_4, "Mute v. TRS 3/4", None))),
                     ("DSD", (_S(P.DSD_DIRECT, "DSD Direct 1/2", None),
                              _S(P.DSD_FILTER, "DSD Filter", ["50 kHz", "150 kHz"]), _DETECTION)),
-                    _SPDIF, _keys_group(_PRO_KEYS, _PRO_KEY_SETTINGS), _DISPLAY),
+                    _SPDIF, _POWER, _DISPLAY, _keys_group(_PRO_KEYS, _PRO_KEY_SETTINGS)),
             clock=_S(P.CLOCK_SOURCE, "Clock Source", ["Auto", "INT", "AES", "SPDIF"]), keys=_PRO_KEYS)
 PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", borrowed={}, one_eq_from=705600,
                       sources={**PRO.sources, "phones_ex": _INPUTS + _USB + ["ADAT 3/4"]},
@@ -201,8 +199,8 @@ PRO_24 = PRO._replace(id=0x73, name="ADI-2/4 Pro", port="ADI-24", borrowed={}, o
                                           _S(P.BAL_PHONES, "Bal TRS Mode", _AUTO), _TOGGLE,
                                           _S(P.MUTE_V_PH_1_2, "Mute v. Ph 1/2", None),
                                           _S(P.MUTE_V_PH_3_4, "Mute v. Ph 3/4", None))),
-                              ("DSD", (_DETECTION,)), _SPDIF, _keys_group(_PRO_24_KEYS, _PRO_KEY_SETTINGS),
-                              _DISPLAY),
+                              ("DSD", (_DETECTION,)), _SPDIF, _POWER, _DISPLAY,
+                              _keys_group(_PRO_24_KEYS, _PRO_KEY_SETTINGS)),
                       keys=_PRO_24_KEYS)
 MODELS = (DAC, PRO, PRO_24)
 BY_ID = {m.id: m for m in MODELS}

@@ -1048,18 +1048,19 @@ class DeviceSettings(Harness):
         self.connect()                                                  # an ADI-2 DAC FS with an ESS D/A converter
         self.assertEqual(self.shown(), [
             ("PHONES", ["Mute Line"]), ("DSD", ["DSD Filter", "DSD Detection"]), ("POWER", ["Auto Standby"]),
-            ("KEYS", ["Remap Keys", "VOL (1)", "I/O (2)", "EQ (3)", "SETUP (4)"]),
-            ("DISPLAY", ["Display Mode", "Meter Color", "Hor. Meter", "AutoDark Mode", "Show Vol. Screen", "Lock UI"])])
+            ("DISPLAY", ["Display Mode", "Meter Color", "Hor. Meter", "AutoDark Mode", "Show Vol. Screen", "Lock UI"]),
+            ("KEYS", ["Remap Keys", "VOL (1)", "I/O (2)", "EQ (3)", "SETUP (4)"])])
         self.assertEqual(self.session.device_setting(P.DSD_FILTER).names, ["50 kHz", "70 kHz"])
         self.use(PRO)
-        self.assertEqual([g for g, _ in self.shown()], ["DEVICE MODE", "PHONES", "DSD", "SPDIF", "KEYS", "DISPLAY"])
-        self.assertEqual(self.shown()[4][1], ["Remap Keys", "VOL (1)", "I/O (2)", "EQ (3)", "SETUP (4)", "IR 5",
-                                              "IR 6", "IR 7"])
+        self.assertEqual([g for g, _ in self.shown()],
+                         ["DEVICE MODE", "PHONES", "DSD", "SPDIF", "POWER", "DISPLAY", "KEYS"])
+        self.assertEqual(self.shown()[-1][1], ["Remap Keys", "VOL (1)", "I/O (2)", "EQ (3)", "SETUP (4)", "IR 5",
+                                               "IR 6", "IR 7"])
         self.assertEqual(self.shown()[1][1], ["Dual Phones", "Bal Phones Mode", "Toggle Ph/Line", "Mute v. TRS 1/2",
                                               "Mute v. TRS 3/4"])
         self.assertEqual(self.session.device_setting(P.DSD_FILTER).names, ["50 kHz", "150 kHz"])
         self.use(PRO_24)
-        self.assertEqual(self.shown()[0][1], ["Basic Mode", "Dig. Out Source", "Auto Standby"])
+        self.assertEqual(self.shown()[0][1], ["Basic Mode", "Dig. Out Source"])
         self.assertEqual(self.shown()[1][1][1], "Bal TRS Mode")
         self.assertEqual(self.shown()[2], ("DSD", ["DSD Detection"]))
 

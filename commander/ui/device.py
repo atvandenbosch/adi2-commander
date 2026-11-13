@@ -1,6 +1,6 @@
-"""The settings of the device itself, grouped and named as on its front panel: those of the model (Model.device), as
-far as the device reports them (Session.device_settings). On two pages: Audio, what the signal goes through, and
-Controls, the keys and the display of the device. The page chosen stays while Commander runs.
+"""The settings of the device itself, named as on its front panel: those of the model (Model.device), as far as the
+device reports them (Session.device_settings). On two pages: Audio, what the signal goes through, and Controls, the
+power, the display and the keys of the device. The page chosen stays while Commander runs.
 
     one of a few values     a stepper (‹ value ›)
     on or off               an option
@@ -64,7 +64,7 @@ EXTRA = {(models.PRO.id, P.BAL_PHONES): "Line Out is then muted",
          (models.PRO_24.id, P.BAL_PHONES): "The Pentaconn jack is always balanced"}
 NEEDS_DUAL_PHONES = "Can be set with Dual Phones on"
 PAGES = ("Audio", "Controls")
-CONTROLS = {"KEYS", "DISPLAY"}                   # the groups on the second page
+CONTROLS = {"POWER", "DISPLAY", "KEYS"}          # the groups on the second page
 NOT_IN_USE = "Not in use: DSD Direct is off"
 KEYS_OFF = "Not in use: Remap Keys is off"
 DAC_MODE_ONLY = "Takes effect in Basic Mode DAC"
