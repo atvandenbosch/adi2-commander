@@ -15,7 +15,7 @@ from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QBoxLayout, QHBoxLayout, QLabel, QWidget
 
 from . import theme
-from .graph import (BAND_ALPHA, BAND_W, COMPARE_W, DEVIATION_FILL, DEVIATION_W, INPUT_ALPHA, INPUT_W, SUM_W,
+from .graph import (BAND_W, COMPARE_W, DEVIATION_FILL, DEVIATION_W, INPUT_ALPHA, INPUT_W, SUM_W,
                     side_color)
 
 GROUPS = [["L", "R", "BT"], ["sum", "bands", "handles", "compare"]]
@@ -78,9 +78,9 @@ def mark_pixmap(kind, color):
     else:
         width = {"line": 2.0, "thick": SUM_W, "thin": BAND_W, "dashed": COMPARE_W, "dotted": 1.0,
                  "wide": INPUT_W}[kind]
-        if kind in ("thin", "wide"):             # as faint as a band beside the sum; as see-through as an input
-            color = QColor(color)
-            color.setAlphaF(color.alphaF() * (BAND_ALPHA if kind == "thin" else INPUT_ALPHA))
+        if kind == "wide":                       # as see-through as an input. A band's mark is as bright as the
+            color = QColor(color)                # others: faint, it would read as hidden
+            color.setAlphaF(color.alphaF() * INPUT_ALPHA)
         pen = QPen(color, width)
         pen.setCapStyle(Qt.FlatCap)
         if kind == "dashed":
@@ -88,7 +88,8 @@ def mark_pixmap(kind, color):
         elif kind == "dotted":
             pen.setDashPattern([1, 3])                                     # as the Loudness graph's family
         p.setPen(pen)
-        p.drawLine(QPointF(1, cy), QPointF(MARK_W - 1, cy))
+        y = cy + 0.5 if width == 1 else cy       # 1 px on one row of pixels: thinner than Sum at any scaling
+        p.drawLine(QPointF(1, y), QPointF(MARK_W - 1, y))
     p.end()
     return pm
 
