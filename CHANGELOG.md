@@ -6,6 +6,12 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 
 ## [Unreleased]
 
+### Added
+
+- Import: Level for Fit. Free adjusts the level for the closest fit, as before; Fixed matches filters as they are,
+  and a curve centred on 0 dB.
+- Import: a Preamp line can be checked; it is used with Fit at a fixed level.
+
 ## [0.2.0] - 2026-11-14
 
 ### Added
