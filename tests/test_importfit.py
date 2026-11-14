@@ -1,5 +1,6 @@
-"""Import by Fit: OK waits for the fit, Cancel and Close enough while it runs, converting again, the sum as the device
-makes it with the input moved onto it, garbage collection while it runs, a curve, and a fixed level."""
+"""Import by Fit: OK waits for the fit, Cancel and Close enough while it runs, converting again (one button with Close
+enough), the sum as the device makes it with the input moved onto it, garbage collection while it runs, a curve, and a
+fixed level."""
 
 import gc
 import time
@@ -21,6 +22,12 @@ from tests.test_importexport import OUT, THREE, ImportTest, wait_for_fit
 
 FREQS = F.FREQS
 PEAK = X.response([X.Setting("3", "PK", 1000, 4.0, 0.7)], 48000.0)    # one the device makes: a quick fit
+
+
+def past_guard():
+    """Real time past the convert button's last change: a click is taken again."""
+    time.sleep(D.GUARD_MS / 1000 + 0.05)
+    QApplication.processEvents()
 
 
 def table(columns, freqs=FREQS):
@@ -71,32 +78,34 @@ class ImportFit(ImportTest):
         path = self.file("ten.txt", TEN_FILTERS)
         dialog = D.ImportDialog(E.load(path), path, self.session, OUT, None, 48000.0, self.win)
         self.addCleanup(dialog.done, 0)
+        self.assertEqual(dialog.convert.toolTip(), D.CONVERT_TIPS["enough"])     # while it fits
         t0 = time.monotonic()
-        while not dialog.enough.isEnabled() and time.monotonic() - t0 < 60:
+        while not dialog.convert.isEnabled() and time.monotonic() - t0 < 60:
             time.sleep(0.02)
             QApplication.processEvents()
         self.assertTrue(dialog.fitting)
         self.assertTrue(dialog.legend.items["candidate"].isVisibleTo(dialog))   # what it tries: while it fits
         bar = dialog.progress.parentWidget()
         self.assertEqual(bar.minimumHeight(), bar.maximumHeight())             # as high while fitting as not
-        self.assertIs(dialog.enough.parentWidget(), dialog.again.parentWidget())    # beside convert again
-        dialog.enough.click()
+        past_guard()
+        dialog.convert.click()
         self.assertFalse(dialog.fitting)
         self.assertTrue(dialog.ok.isEnabled())
-        self.assertTrue(dialog.enough.isVisibleTo(dialog))                      # stays, so the row stays put
-        self.assertFalse(dialog.enough.isEnabled())
+        self.assertEqual((dialog.convert.isEnabled(), dialog.convert.toolTip()), (True, D.CONVERT_TIPS["again"]))
         self.assertFalse(dialog.legend.items["candidate"].isVisibleTo(dialog))
         freqs = {k: v for k, v in dialog.values.items() if k[1] in (5, 8, 11, 14, 18)}
         self.assertEqual({k: P.snap_freq(v, k[1]) for k, v in freqs.items()}, freqs)
 
     def test_convert_again(self):
         dialog = self.open(self.file("three.txt", THREE))
-        before = dict(dialog.values)
-        dialog.again.click()                                     # Map: the same plan again
-        self.assertEqual(dialog.values, before)
+        self.assertFalse(dialog.convert.isVisibleTo(dialog))     # Map: the same plan every time
         dialog.way.buttons[D.FIT].click()
+        self.assertTrue(dialog.convert.isVisibleTo(dialog))
         wait_for_fit(dialog)
-        dialog.again.click()                                     # Fit: it fits again, to the same end
+        dialog.convert.click()                                   # just changed: meant for Close enough, not taken
+        self.assertFalse(dialog.fitting)
+        past_guard()
+        dialog.convert.click()                                   # Fit: it fits again, to the same end
         self.assertTrue(dialog.fitting)
         wait_for_fit(dialog)
         self.assertTrue(dialog.ok.isEnabled())
@@ -119,7 +128,8 @@ class ImportFit(ImportTest):
         s = dialog.summary
         self.assertIs(dialog.input_stack.currentWidget(), s)
         self.assertFalse(dialog.way.buttons[D.MAP].isEnabled())  # no filters to map
-        self.assertTrue(dialog.origin_group.isHidden())
+        self.assertEqual((dialog.origin_box.isEnabled(), dialog.origin_box.currentIndex()), (False, -1))   # '—'
+        self.assertEqual(dialog.origin_box.placeholderText(), D.UNDEFINED)
         self.assertEqual([s.values[r].text() for r in ("Points", "Frequency", "Gain", "Comments")],
                          ["241", "20 Hz – 20 kHz", "-4.0 … +0.0 dB", "None"])
         self.assertEqual((s.choice.currentText(), dialog.column), ("eq", 2))     # the name starting with "eq"
@@ -153,11 +163,11 @@ class ImportFit(ImportTest):
         self.drop_on(dialog, curve)
         self.assertEqual((dialog.mode, dialog.file_label.text()), (D.FIT, "curve.csv"))
         self.assertIs(dialog.input_stack.currentWidget(), dialog.summary)
-        self.assertTrue(dialog.origin_group.isHidden())
+        self.assertEqual((dialog.origin_box.isEnabled(), dialog.origin_box.currentIndex()), (False, -1))
         self.drop_on(dialog, three)                              # during the fit
         self.assertEqual((dialog.mode, dialog.fitting), (D.MAP, False))
         self.assertIs(dialog.input_stack.currentWidget(), dialog.input)
-        self.assertFalse(dialog.origin_group.isHidden())
+        self.assertEqual((dialog.origin_box.isEnabled(), dialog.origin_box.currentText()), (True, I.EXTERNAL))
         self.assertTrue(dialog.way.buttons[D.MAP].isEnabled())
         self.assertIn("Mapped", dialog.status.text())
 
@@ -183,7 +193,7 @@ class ImportFit(ImportTest):
     def test_a_fixed_level_centres_a_curve_and_stays_for_the_next(self):
         self.addCleanup(setattr, D.ImportDialog, "fixed_level", False)
         dialog = self.open(self.file("curve.csv", table({"eq": 2.0 + PEAK})))
-        self.assertFalse(dialog.level_group.isHidden())
+        self.assertFalse(dialog.fit_group.isHidden())
         dialog.level_box.setCurrentIndex(1)
         self.assertTrue(dialog.fitting)
         wait_for_fit(dialog)
@@ -200,7 +210,7 @@ class ImportFit(ImportTest):
         dialog.done(0)
         nxt = self.open(self.file("three.txt", THREE))
         self.assertEqual((nxt.fixed, nxt.level_box.currentIndex()), (True, 1))
-        self.assertTrue(nxt.level_group.isHidden())               # Map: no level
+        self.assertTrue(nxt.fit_group.isHidden())                 # Map: no level
 
     def test_a_preamp_checked_sets_fit_at_a_fixed_level_and_counts_there_only(self):
         self.addCleanup(setattr, D.ImportDialog, "fixed_level", False)

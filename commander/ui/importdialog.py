@@ -5,14 +5,14 @@ Cancel writes nothing. The conversion itself is eqimport's; this is what the use
                 used is grey, its tooltip says why. In a Commander file the rows of its table are the lines to use
                 (Origin ADI-2), or its Filter lines (Origin External). A Preamp line starts unchecked and is used
                 with Fit at a fixed level; checking it sets both. Checked where it is not used, it is amber and
-                ignored. A curve: a summary instead, with the choice
-                of the column that is the curve.
-    Conversion  Map or Fit, convert again, Close enough (stop the fit and take its best so far), Origin, fs, and with
-                Fit its Level and Bass/Treble. The graph: per channel the input (wide and see-through), the sum of
-                the result and its bands, on the main window's scale; below it, on the same scale, how far the sum
-                is off the input. The sum and its bands as the device makes them; a fit's free level moves the input
-                onto them, a fixed level centres a curve on 0 dB ("Input (adj.)"). Only the result counts here, not
-                the device. Its legend works as the main window's.
+                ignored. A curve: a summary instead, with the choice of the column that is the curve.
+    Conversion  Origin ('—' for a curve) and fs; Map or Fit, and with Fit its Level, Bass/Treble and one button:
+                Close enough while the fit runs (stop it and take its best so far), else convert again. The graph:
+                per channel the input (wide and see-through), the sum of the result and its bands, on the main
+                window's scale; below it, on the same scale, how far the sum is off the input. The sum and its
+                bands as the device makes them; a fit's free level moves the input onto them, a fixed level centres
+                a curve on 0 dB ("Input (adj.)"). Only the result counts here, not the device. Its legend works as
+                the main window's.
     Output      the result in the tables of the main window, read only; what the input does not set is '—', and
                 goes to the device at its factory default. A check box per block says whether OK writes it; a
                 block the input does not set at all starts unchecked. OK and Cancel.
@@ -33,6 +33,7 @@ include Bass/Treble, and Output has no Bass/Treble table. A preset being edited 
 import itertools
 import math
 import os
+import time
 
 import numpy as np
 import pyqtgraph as pg
@@ -65,6 +66,10 @@ REFIT_MS = 500                                   # after the last click on a lin
 CANDIDATE_ALPHA = 0.85                           # what the fit tries now: a little faint
 CURVES_KEPT = 4000                               # curves kept for drawing again, before they are let go
 PROGRESS_MS = 100                                # a fit's best so far is shown at most this often
+GUARD_MS = 400                                   # a click this soon after the convert button changed is not taken:
+                                                 # it was meant for what the button was
+CONVERT_TIPS = {"again": "Convert again",
+                "enough": "Close enough: stop the fit and take what it has found so far."}
 LEVEL_SHOWN = 0.05                               # dB: a fit's level from here on is said
 LABEL_ROOM = 12                                  # px beside 20 Hz and 20 kHz for their labels
 BODY_MARGIN = 12                                 # px above and below the columns
@@ -80,6 +85,7 @@ PREAMP_ALONE = "Preamp: used with filters only"
 STATE_ROLE, WARN_ROLE, MARK_ROLE = Qt.UserRole + 1, Qt.UserRole + 2, Qt.UserRole + 3
 AGAIN_ICON = 14                                  # px, the round arrow
 BOX, LINE_H = 22, 22                             # px: the check box's part of the margin; a line of the file
+ROW_SPACING = 6                                  # px between the widgets of a row, as widgets.head
 
 
 def read_file(path, fs):
@@ -757,7 +763,8 @@ class ImportDialog(QDialog):
         self.file_label.setText(os.path.basename(path))
         self.way.set_current(self.mode)
         self.way.set_enabled_at(MAP, not curve, "A curve has no filters to map." if curve else "")
-        for box, index in ((self.origin_box, 0 if self.origin == I.ADI2 else 1), (self.fs_box, None)):
+        origin = -1 if curve else 0 if self.origin == I.ADI2 else 1      # a curve: none
+        for box, index in ((self.origin_box, origin), (self.fs_box, None)):
             box.blockSignals(True)
             if index is None:
                 if box.findData(int(self.fs_given)) < 0:
@@ -791,28 +798,18 @@ class ImportDialog(QDialog):
 
         self.way = Segmented(["Map", "Fit"])
         self.way.changed.connect(self.set_mode)
-        self.again = Action(compact=True)
-        self.again.setIcon(again_icon(theme.BUTTON_TEXT))
-        self.again.setIconSize(QSize(AGAIN_ICON, AGAIN_ICON))
-        self.again.setFixedSize(self.way.sizeHint().height(), self.way.sizeHint().height())
-        self.again.setToolTip("Convert again")
-        self.again.clicked.connect(lambda: self.recompute(fit_now=True))
-        self.enough = Action(compact=True)
-        self.enough.setIcon(enough_icon(theme.BUTTON_TEXT, theme.DISABLED))
-        self.enough.setIconSize(QSize(AGAIN_ICON, AGAIN_ICON))
-        self.enough.setFixedSize(self.way.sizeHint().height(), self.way.sizeHint().height())
-        self.enough.setToolTip("Close enough: stop the fit and take what it has found so far.")
-        self.enough.clicked.connect(self.good_enough)
-        self.origin_label = self.label("Origin")
+        # one button, as a browser's reload and stop: Close enough while a fit runs, else Convert again
+        self.convert = Action(compact=True)
+        self.convert.setIconSize(QSize(AGAIN_ICON, AGAIN_ICON))
+        self.convert.setFixedSize(self.way.sizeHint().height(), self.way.sizeHint().height())
+        self.convert.clicked.connect(self.convert_clicked)
+        self.convert_icons = {"again": again_icon(theme.BUTTON_TEXT),
+                              "enough": enough_icon(theme.BUTTON_TEXT, theme.DISABLED)}
+        self.convert_as, self.convert_since = None, 0.0      # what it does now, and since when (time.monotonic)
         self.origin_box = Choice()
         self.origin_box.addItems([I.ADI2, I.EXTERNAL])
+        self.origin_box.setPlaceholderText(UNDEFINED)        # a curve
         self.origin_box.currentIndexChanged.connect(self.set_origin)
-        self.origin_group = QWidget()                     # with its gap after it: gone as a whole for a curve
-        origin_lay = QHBoxLayout(self.origin_group)
-        origin_lay.setContentsMargins(0, 0, 24 + 6, 0)
-        origin_lay.setSpacing(6)
-        origin_lay.addWidget(self.origin_label)
-        origin_lay.addWidget(self.origin_box)
         self.fs_box = Choice()
         for rate in P.SAMPLE_RATES:
             self.fs_box.addItem("%g" % (rate / 1000), rate)
@@ -824,17 +821,17 @@ class ImportDialog(QDialog):
         self.level_box.setToolTip("Free: the level is adjusted for the closest fit.\n"
                                   "Fixed: filters are matched as they are, a curve centred on 0 dB.")
         self.level_box.currentIndexChanged.connect(self.set_level)
-        self.level_group = QWidget()                      # with its gap after it: Fit only
-        level_lay = QHBoxLayout(self.level_group)
-        level_lay.setContentsMargins(0, 0, 24 + 6, 0)
-        level_lay.setSpacing(6)
-        level_lay.addWidget(self.label("Level"))
-        level_lay.addWidget(self.level_box)
         self.tone_box = QCheckBox("Include Bass/Treble")     # a check box, as everything that takes part
         self.tone_box.setStyleSheet("color: %s;" % theme.LABEL.name())
         self.tone_box.clicked.connect(self.toggle_tone)
-        controls = head(self.way, self.again, self.enough, 24, self.origin_group, fs_label, self.fs_box, self.label("kHz"), 24,
-                        self.level_group, self.tone_box)
+        # how the input is read; the way and, with Fit, what it may do and its button. Switching the way changes only
+        # what follows it. The gaps show the groups; a part that is not there takes its gap with it.
+        self.tone_group = _row(self.tone_box, gap=INNER_GAP)
+        self.fit_group = _row(_row(self.label("Level"), self.level_box, gap=INNER_GAP), self.tone_group,
+                              _row(self.convert, gap=INNER_GAP))
+        controls = head(self.label("Origin"), self.origin_box,
+                        _row(fs_label, self.fs_box, self.label("kHz"), gap=INNER_GAP),
+                        _row(self.way, gap=SECTION_GAP), self.fit_group)
         self.graph = CurveGraph()
         self.graph.resolution_changed.connect(self.show_graph)
         self.legend = CurveLegend(self.graph)
@@ -1270,6 +1267,14 @@ class ImportDialog(QDialog):
         self.repaint_soon.stop()
         self.show_result()
 
+    def convert_clicked(self):
+        if time.monotonic() - self.convert_since < GUARD_MS / 1000:
+            return
+        if self.convert_as == "enough":
+            self.good_enough()
+        else:
+            self.recompute(fit_now=True)
+
     def good_enough(self):
         """Stop the fit and take its best so far, onto the device's grid as a fit ends."""
         if self.thread is None or set(self.results) != set(self.job_curves):
@@ -1333,17 +1338,18 @@ class ImportDialog(QDialog):
         return ""
 
     def show_controls(self):
-        self.origin_group.setVisible(self.cf is None)
+        self.origin_box.setEnabled(self.cf is None)
         commander = self.eq is not None and E.table(self.eq) is not None
-        self.origin_box.setToolTip("ADI-2: the table is imported.\n"
+        self.origin_box.setToolTip("A curve has no filters." if self.cf is not None else
+                                   "ADI-2: the table is imported.\n"
                                    "External: the Filter lines are imported, as Cookbook filters."
                                    if commander else "ADI-2: the numbers as the device has them\n"
                                    "External: Cookbook filters, as filter files usually mean them")
-        self.level_group.setVisible(self.mode == FIT)
+        self.fit_group.setVisible(self.mode == FIT)
         self.level_box.blockSignals(True)
         self.level_box.setCurrentIndex(1 if self.fixed else 0)
         self.level_box.blockSignals(False)
-        self.tone_box.setVisible(self.mode == FIT and self.has_bt)
+        self.tone_group.setVisible(self.has_bt)
         allowed = self.tone_allowed()
         self.tone_box.setChecked(self.tone and allowed)
         self.tone_box.setEnabled(allowed)
@@ -1492,8 +1498,13 @@ class ImportDialog(QDialog):
             for t, amber in parts))
         self.progress.setVisible(self.fitting)
         self.fitting_label.setVisible(self.fitting)
-        self.enough.setEnabled(self.fitting and self.thread is not None and
-                               set(self.results) == set(self.job_curves))
+        does = "enough" if self.fitting else "again"
+        if does != self.convert_as:
+            self.convert_as, self.convert_since = does, time.monotonic()
+            self.convert.setIcon(self.convert_icons[does])
+            self.convert.setToolTip(CONVERT_TIPS[does])
+        self.convert.setEnabled(not self.fitting or self.thread is not None and
+                                set(self.results) == set(self.job_curves))
         self.progress.setValue(int(self.fraction * 1000))
         self.ok.setEnabled(self.connected and not self.fitting and not self.problem and bool(on) and
                            bool(self.values))
@@ -1545,6 +1556,17 @@ class ImportDialog(QDialog):
         for callbacks, f in ((self.session.on_connection, self.connection), (self.session.on_changed, self.changed)):
             if f in callbacks:
                 callbacks.remove(f)
+
+
+def _row(*widgets, gap=0):
+    """Widgets side by side as one, gap px before them: hidden, the gap goes too."""
+    w = QWidget()
+    lay = QHBoxLayout(w)
+    lay.setContentsMargins(max(gap - ROW_SPACING, 0), 0, 0, 0)
+    lay.setSpacing(ROW_SPACING)
+    for x in widgets:
+        lay.addWidget(x)
+    return w
 
 
 def _db(x):
