@@ -12,6 +12,10 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
   and a curve centred on 0 dB.
 - Import: a Preamp line can be checked; it is used with Fit at a fixed level.
 
+### Changed
+
+- Import: Origin and fs come first in the conversion row; Convert again and Close enough are one button.
+
 ## [0.2.0] - 2026-11-14
 
 ### Added
