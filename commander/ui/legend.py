@@ -1,6 +1,7 @@
 """The graph's legend, which is also how one chooses what it shows: two groups, the channels (EQ Left, EQ Right,
 Bass/Treble), each a line in its colour, and the layers (Sum, Bands, Handles, and the sums at the rate the device runs
-at when that is another than the chosen one), each as it looks in the graph.
+at when that is another than the chosen one), each as it looks in the graph. Each group is one control, its items
+side by side as the segments of a Segmented: a shown item's segment has a face and a lighter outline.
 
     click           shows or hides the item
     double-click    shows only this item of its group; again: the whole group
@@ -9,7 +10,7 @@ at when that is another than the chosen one), each as it looks in the graph.
 With too little room beside the sample rates, the groups go one under the other (set_stacked).
 """
 
-from PySide6.QtCore import QPointF, QSize, Qt, Signal
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QBoxLayout, QHBoxLayout, QLabel, QWidget
 
@@ -20,7 +21,14 @@ from .graph import (BAND_ALPHA, BAND_W, COMPARE_W, DEVIATION_FILL, DEVIATION_W, 
 GROUPS = [["L", "R", "BT"], ["sum", "bands", "handles", "compare"]]
 GROUP_GAP = 28                                   # pixels between the two groups side by side
 ROW_GAP = 4                                      # ... and one under the other
-ITEM_PAD = 6                                     # px: room around an item's mark and name, to point at
+ITEM_PAD = 10                                    # px: room in a segment beside its mark and name
+ITEM_VPAD = 3                                    # ... above and below the name
+NAME_ON = theme.LABEL                            # the name of an item that is shown
+NAME_OFF = theme.SECONDARY                       # ... that is hidden
+OUTLINE_ON = theme.SECONDARY                     # the outline of a segment whose item is shown
+OUTLINE_OFF = theme.GRID                         # ... that is hidden
+FACE = theme.BACKGROUND                          # the face of a segment whose item is shown, or pointed at; a hidden
+                                                 # one has none: the graph's zone shows through
 MARK_W, MARK_H = 12, 10                          # px: every mark as wide, shown or hidden, so nothing moves
 MARKS = {"L": "line", "R": "line", "BT": "line", "sum": "thick", "bands": "thin", "handles": "ring",
          "compare": "dashed"}
@@ -86,7 +94,7 @@ def mark_pixmap(kind, color):
 
 
 class _Item(QWidget):
-    """Its mark, then the name. Hidden: both grey, nothing else changes."""
+    """Its mark, then the name; hidden: both grey. Its group draws its segment."""
 
     clicked = Signal()
     double_clicked = Signal()
@@ -98,8 +106,9 @@ class _Item(QWidget):
         self.mark, self.name = QLabel(), QLabel()
         self.mark.setFixedSize(MARK_W, MARK_H)
         self.color, self._drawn = None, None
+        self.on, self._under_mouse = False, False
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(ITEM_PAD, 0, ITEM_PAD, 0)
+        lay.setContentsMargins(ITEM_PAD, ITEM_VPAD, ITEM_PAD, ITEM_VPAD)
         lay.setSpacing(5)
         for w in (self.mark, self.name):
             lay.addWidget(w)
@@ -110,6 +119,15 @@ class _Item(QWidget):
         if (kind, color.rgb()) != self._drawn:
             self._drawn = (kind, color.rgb())
             self.mark.setPixmap(mark_pixmap(kind, color))
+
+    def set_on(self, on):
+        if on != self.on:
+            self.on = on
+            self._repaint()
+
+    def _repaint(self):
+        if self.parentWidget():
+            self.parentWidget().update()
 
     def mouseReleaseEvent(self, e):
         if self._after_double:
@@ -124,10 +142,63 @@ class _Item(QWidget):
             self.double_clicked.emit()
 
     def enterEvent(self, e):
+        self._under_mouse = True
+        self._repaint()
         self.pointed.emit(True)
 
     def leaveEvent(self, e):
+        self._under_mouse = False
+        self._repaint()
         self.pointed.emit(False)
+
+
+def _segment_path(rect, radius, left, right):
+    """A rectangle with its left corners rounded or not, and its right ones."""
+    path = QPainterPath()
+    x0, y0, x1, y1 = rect.left(), rect.top(), rect.right(), rect.bottom()
+    rl, rr = (radius if left else 0), (radius if right else 0)
+    path.moveTo(x0 + rl, y0)
+    path.lineTo(x1 - rr, y0)
+    path.quadTo(x1, y0, x1, y0 + rr)
+    path.lineTo(x1, y1 - rr)
+    path.quadTo(x1, y1, x1 - rr, y1)
+    path.lineTo(x0 + rl, y1)
+    path.quadTo(x0, y1, x0, y1 - rl)
+    path.lineTo(x0, y0 + rl)
+    path.quadTo(x0, y0, x0 + rl, y0)
+    return path
+
+
+class Group(QWidget):
+    """Items side by side as the segments of one control: a shown item's segment with a face and a lighter outline,
+    a hidden one's only outlined; pointed at, with the face."""
+
+    def __init__(self, items):
+        super().__init__()
+        self.items = items
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        for item in items:
+            lay.addWidget(item)
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        shown = [item for item in self.items if item.isVisibleTo(self)]
+        # neighbours share their outline; a shown item's is drawn last, over the others'
+        for chosen in (False, True):
+            for i, item in enumerate(shown):
+                if item.on != chosen:
+                    continue
+                last = i == len(shown) - 1
+                r = QRectF(item.geometry()).adjusted(0.5, 0.5, 0.5 if not last else -0.5, -0.5)
+                path = _segment_path(r, 3, i == 0, last)
+                if item.on or item._under_mouse:
+                    p.fillPath(path, FACE)
+                p.setPen(QPen(OUTLINE_ON if item.on else OUTLINE_OFF, 1))
+                p.drawPath(path)
+        p.end()
 
 
 class Legend(QWidget):
@@ -142,16 +213,12 @@ class Legend(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(GROUP_GAP)
         for keys in GROUPS:
-            group = QWidget()
-            group_lay = QHBoxLayout(group)
-            group_lay.setContentsMargins(0, 0, 0, 0)
-            group_lay.setSpacing(4)
             for k in keys:
                 item = self.items[k]
                 item.clicked.connect(lambda k=k: self.toggle(k))
                 item.double_clicked.connect(lambda k=k: self.isolate(k))
                 item.pointed.connect(lambda on, k=k: self.point(k, on))
-                group_lay.addWidget(item)
+            group = Group([self.items[k] for k in keys])
             lay.addWidget(group, 0, Qt.AlignHCenter)
             self.groups.append(group)
         self._before = None                      # the group's state before the first click of a double-click
@@ -220,10 +287,11 @@ class Legend(QWidget):
         for k, item in self.items.items():
             on = self.graph.visible[k]
             item.show_mark(MARKS[k], colors.get(k, theme.TEXT) if on else theme.OFF)
+            item.set_on(on)
             if item.name.text() != names[k]:
                 item.name.setText(names[k])
                 item.updateGeometry()                # its new width counts now, not after the next event loop pass
-            item.name.setStyleSheet("color: %s;" % (theme.TEXT if on else theme.OFF).name())
+            item.name.setStyleSheet("color: %s;" % (NAME_ON if on else NAME_OFF).name())
             group = ("channel", "channels") if k in GROUPS[0] else ("layer", "layers")
             note = {"compare": "The sums at the rate the device runs at\n",
                     "bands": "Includes Bass and Treble\n" if self.graph.has_bt else "",

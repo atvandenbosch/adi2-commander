@@ -15,7 +15,6 @@ from commander.device import filters as F
 from commander.device import params as P
 from commander.ui import graph as G
 from commander.ui import theme
-from commander.ui.legend import ITEM_PAD
 from tests.gui import WindowTest, app, tab
 
 
@@ -383,7 +382,7 @@ class Graph(WindowTest):
             right = controls.geometry().right() == width - 1
             if how == "above":
                 self.assertTrue(right and y(controls) == 0 and y(legend) > y(controls))   # the rates on top
-                self.assertEqual(legend.geometry().right() - ITEM_PAD, width - 1)       # the names end where kHz ends
+                self.assertEqual(legend.geometry().right(), width - 1)                  # it ends where kHz ends
             else:
                 self.assertTrue(right and y(controls) < y(legend) + legend.first_row_height())   # beside the first
 

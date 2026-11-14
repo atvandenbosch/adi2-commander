@@ -53,7 +53,7 @@ from . import theme
 from .graph import (BAND_ALPHA, BAND_W, COMPARE_W, DEVIATION_FILL, DEVIATION_W, DIMMED, INPUT_ALPHA, INPUT_W,
                     LEGEND_GAP, MIN_POINTS, POINTS_PER_PIXEL, SUM_W, TITLE_ROOM, X_HI, X_LO, X_PAD, Y_HI, Y_LO, ZONE_INK,
                     _fading_pen, _ticks, side_color, title_axes)
-from .legend import GROUP_GAP, _Item as LegendItem
+from .legend import GROUP_GAP, NAME_OFF, NAME_ON, Group as LegendGroup, _Item as LegendItem
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, CellDelegate, Marks, ParamModel, ParamView,
                      band_rows, bt_rows)
 from .widgets import (ATTACHED_GAP, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE, Action, Choice, Segmented,
@@ -506,17 +506,12 @@ class CurveLegend(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(GROUP_GAP)
         for keys in (("L", "R", "BT"), tuple(k for k, _, _ in self.LAYERS)):
-            group = QWidget()
-            group_lay = QHBoxLayout(group)
-            group_lay.setContentsMargins(0, 0, 0, 0)
-            group_lay.setSpacing(4)
             for k in keys:
                 item = self.items[k]
                 item.clicked.connect(lambda k=k: self.toggle(k))
                 item.double_clicked.connect(lambda k=k: self.isolate(k))
                 item.pointed.connect(lambda on, k=k: self.point(k, on))
-                group_lay.addWidget(item)
-            lay.addWidget(group)
+            lay.addWidget(LegendGroup([self.items[k] for k in keys]))
         self._before = None                              # the group's state before the first click of a double-click
         self.refresh()
 
@@ -559,8 +554,9 @@ class CurveLegend(QWidget):
             item = self.items[k]
             on = self.graph.visible[k]
             item.show_mark(kind, color if on else theme.OFF)
+            item.set_on(on)
             item.name.setText(name)
-            item.name.setStyleSheet("color: %s;" % (theme.TEXT if on else theme.OFF).name())
+            item.name.setStyleSheet("color: %s;" % (NAME_ON if on else NAME_OFF).name())
             group = ("channel", "channels") if k in ("L", "R", "BT") else ("layer", "layers")
             tip = self.input_tip if k == "input" else self.TIPS.get(k, "")
             item.setToolTip(tip + "Click: show or hide · Double-click: only this %s; again: all %s" % group)

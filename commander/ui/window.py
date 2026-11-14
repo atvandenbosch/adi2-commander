@@ -49,7 +49,7 @@ from .about import AboutDialog
 from .device import DevicePanel
 from .graph import LEGEND_GAP, SAMPLE_RATES, TITLE_ROOM, ZONE_INK, ResponseGraph, side_color
 from .inputs import InputPanel
-from .legend import ITEM_PAD, Legend
+from .legend import Legend
 from .importdialog import ImportDialog, read_file
 from .loudness import LoudnessGraph
 from .output import OutputPanel, shared_tip
@@ -121,7 +121,7 @@ class GraphHead(QWidget):
     """The line above the graph: the legend of the graph shown in the middle, the sample rates on the right. When
     both do not fit on one line, the legend's groups go one under the other, the sample rates beside the first; when
     that does not fit either, the sample rates go on a line of their own, above the legend, and all of it on the
-    right: the names end where kHz ends. As high as the highest of the legends needs, so the graph does not move
+    right: the legend ends where kHz ends. As high as the highest of the legends needs, so the graph does not move
     when the other one takes the stage."""
 
     GAP = 24
@@ -205,7 +205,7 @@ class GraphHead(QWidget):
         l, c = self.legend.size_for(stacked), self.controls.sizeHint()
         if how == "above":
             self.controls.setGeometry(w - c.width(), 0, c.width(), c.height())
-            x = w - l.width() + ITEM_PAD                 # the room after the last name over the edge
+            x = w - l.width()
             self.legend.setGeometry(x, c.height() + self.ABOVE_GAP, l.width(), l.height())
             return
         legend_y, controls_y = self._lead(self.legend)
