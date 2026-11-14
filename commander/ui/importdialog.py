@@ -546,7 +546,7 @@ class CurveLegend(QWidget):
             on = self.graph.visible[k]
             item.show_mark(kind, color if on else theme.OFF)
             item.name.setText(name)
-            item.name.setStyleSheet("color: %s;" % (theme.LABEL if on else theme.OFF).name())
+            item.name.setStyleSheet("color: %s;" % (theme.TEXT if on else theme.OFF).name())
             group = ("channel", "channels") if k in ("L", "R", "BT") else ("layer", "layers")
             tip = self.input_tip if k == "input" else self.TIPS.get(k, "")
             item.setToolTip(tip + "Click: show or hide · Double-click: only this %s; again: all %s" % group)

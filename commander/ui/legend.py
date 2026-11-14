@@ -223,7 +223,7 @@ class Legend(QWidget):
             if item.name.text() != names[k]:
                 item.name.setText(names[k])
                 item.updateGeometry()                # its new width counts now, not after the next event loop pass
-            item.name.setStyleSheet("color: %s;" % (theme.LABEL if on else theme.OFF).name())
+            item.name.setStyleSheet("color: %s;" % (theme.TEXT if on else theme.OFF).name())
             group = ("channel", "channels") if k in GROUPS[0] else ("layer", "layers")
             note = {"compare": "The sums at the rate the device runs at\n",
                     "bands": "Includes Bass and Treble\n" if self.graph.has_bt else "",
