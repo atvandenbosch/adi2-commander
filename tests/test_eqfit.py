@@ -1,8 +1,10 @@
 """From a curve to a device setting: the bands, a setting found back from its own curve, the level, the same setting
-at any level, the best on the grid, random starts, Bass and Treble, a start that is not lost, the grid, progress, what
+at any level, a fixed level, the best on the grid, random starts, Bass and Treble, a start that is not lost, the grid, progress, what
 is tried and cancelling."""
 
 import unittest
+
+import numpy as np
 
 from commander.conversion import eqfit as X
 from commander.device import filters as F
@@ -86,6 +88,28 @@ class Level(unittest.TestCase):
         self.assertEqual(up.settings, r.settings)
         self.assertAlmostEqual(up.level, r.level - 8.0, places=6)
         self.assertGreater(r.rms, 0.01)
+
+    def test_fixed_found_back_at_its_own_level(self):
+        r = X.fit(X.response(FIVE), free_level=False)
+        self.assertLess(r.rms, 0.01)
+        self.assertEqual(r.level, 0.0)
+        on_device(self, r.settings, False)
+
+    def test_fixed_a_constant_counts(self):
+        # five bands 3 dB up: a free level takes the five back and leaves 3 dB, a fixed one makes the 3 dB too
+        target = X.response(FIVE) + 3.0
+
+        def absolute(r):
+            return float(np.sqrt(((X.response(r.settings) - target) ** 2).mean()))
+
+        r, free = X.fit(target, free_level=False), X.fit(target)
+        self.assertEqual(r.level, 0.0)
+        self.assertAlmostEqual(r.rms, absolute(r))
+        self.assertAlmostEqual(absolute(free), 3.0, places=2)
+        self.assertLess(r.rms, 1.0)
+        grid = X.to_grid(r.settings, target, free_level=False)
+        self.assertEqual(grid.level, 0.0)
+        self.assertLessEqual(grid.rms, r.rms + 1e-9)
 
 
 class Grid(unittest.TestCase):

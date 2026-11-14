@@ -6,11 +6,11 @@ Cancel writes nothing. The conversion itself is eqimport's; this is what the use
                 (Origin ADI-2), or its Filter lines (Origin External). A curve: a summary instead, with the choice
                 of the column that is the curve.
     Conversion  Map or Fit, convert again, Close enough (stop the fit and take its best so far), Origin, fs, and with
-                Fit Bass/Treble. The graph: per channel the input (wide and see-through), the sum of the result
-                and its bands, on the main window's scale; below it, on the same scale, how far the sum is off the
-                input. The sum and its bands as the device makes them; a fit's free level moves the input onto
-                them ("Input (adj.)"). Only the result counts here, not the device. Its legend works as the main
-                window's.
+                Fit its Level and Bass/Treble. The graph: per channel the input (wide and see-through), the sum of
+                the result and its bands, on the main window's scale; below it, on the same scale, how far the sum
+                is off the input. The sum and its bands as the device makes them; a fit's free level moves the input
+                onto them, a fixed level centres a curve on 0 dB ("Input (adj.)"). Only the result counts here, not
+                the device. Its legend works as the main window's.
     Output      the result in the tables of the main window, read only; what the input does not set is '—', and
                 goes to the device at its factory default. A check box per block says whether OK writes it; a
                 block the input does not set at all starts unchecked. OK and Cancel.
@@ -654,9 +654,9 @@ class FitThread(QThread):
     tried = Signal(object, object)
     done = Signal(object)
 
-    def __init__(self, jobs, fs, tone, parent):
+    def __init__(self, jobs, fs, tone, free_level, parent):
         super().__init__(parent)
-        self.jobs, self.fs, self.tone = jobs, fs, tone
+        self.jobs, self.fs, self.tone, self.free_level = jobs, fs, tone, free_level
 
     def run(self):
         out = {}
@@ -666,7 +666,7 @@ class FitThread(QThread):
                 def progress(fraction, result, k=k, blocks=blocks):
                     self.progressed.emit((k + fraction) / n, {**out, blocks: result})
                 out[blocks] = X.fit(curve, self.fs, tone=self.tone, starts=starts, progress=progress,
-                                    cancel=self.isInterruptionRequested,
+                                    cancel=self.isInterruptionRequested, free_level=self.free_level,
                                     candidate=lambda result, blocks=blocks: self.tried.emit(blocks, result))
         except X.Cancelled:
             return
@@ -678,6 +678,7 @@ class FitThread(QThread):
 class ImportDialog(QDialog):
     SIZE = QSize(1500, 780)
     maximized = False                                     # as the last one was closed: the next one opens so too
+    fixed_level = False                                   # Fit's Level, as last chosen: the next one starts so too
 
     def __init__(self, source, path, session, out, live=None, fs=F.FS, parent=None, preset=None, name=None):
         """source: what read_file made of the file at path; session: a Session, or a Draft with preset its number
@@ -695,6 +696,7 @@ class ImportDialog(QDialog):
         self.dual = session.dual(out)
         self.connected = session.ready()
         self.mode, self.origin, self.tone = FIT, I.EXTERNAL, False
+        self.fixed = ImportDialog.fixed_level                # Fit with a fixed level: the curve at its own level
         self.eq, self.cf, self.column = None, None, None     # a filter file, or a curve and its column
         self.groups, self.chosen, self.problem = {}, [], ""
         self.drop_note = ""                                 # a file dropped on the dialog that is no filter file
@@ -808,11 +810,22 @@ class ImportDialog(QDialog):
         self.fs_box.currentIndexChanged.connect(self.set_fs)
         fs_label = self.label("<i>f</i><sub>s</sub>")
         fs_label.setTextFormat(Qt.RichText)
+        self.level_box = Choice()
+        self.level_box.addItems(["Free", "Fixed"])
+        self.level_box.setToolTip("Free: the level is adjusted for the closest fit.\n"
+                                  "Fixed: filters are matched as they are, a curve centred on 0 dB.")
+        self.level_box.currentIndexChanged.connect(self.set_level)
+        self.level_group = QWidget()                      # with its gap after it: Fit only
+        level_lay = QHBoxLayout(self.level_group)
+        level_lay.setContentsMargins(0, 0, 24 + 6, 0)
+        level_lay.setSpacing(6)
+        level_lay.addWidget(self.label("Level"))
+        level_lay.addWidget(self.level_box)
         self.tone_box = QCheckBox("Include Bass/Treble")     # a check box, as everything that takes part
         self.tone_box.setStyleSheet("color: %s;" % theme.LABEL.name())
         self.tone_box.clicked.connect(self.toggle_tone)
         controls = head(self.way, self.again, self.enough, 24, self.origin_group, fs_label, self.fs_box, self.label("kHz"), 24,
-                        self.tone_box)
+                        self.level_group, self.tone_box)
         self.graph = CurveGraph()
         self.graph.resolution_changed.connect(self.show_graph)
         self.legend = CurveLegend(self.graph)
@@ -1014,6 +1027,10 @@ class ImportDialog(QDialog):
         self.tone = not self.tone
         self.recompute(fit_now=True)
 
+    def set_level(self, index):
+        self.fixed = ImportDialog.fixed_level = index == 1
+        self.recompute(fit_now=True)
+
     def set_column(self, column):
         self.column = column
         self.summary.show_curve(self.cf, column)
@@ -1173,7 +1190,7 @@ class ImportDialog(QDialog):
             self.show_result()
             return
         self.results, self.job_curves, self.tried = {}, {blocks: curve for blocks, curve, _ in jobs}, {}
-        t = FitThread(jobs, self.fs, self.tone and self.tone_allowed(), self)
+        t = FitThread(jobs, self.fs, self.tone and self.tone_allowed(), not self.fixed, self)
         t.progressed.connect(lambda fraction, results, t=t: self.fit_progress(t, fraction, results))
         t.tried.connect(lambda blocks, result, t=t: self.fit_tried(t, blocks, result))
         t.done.connect(lambda results, t=t: self.fit_done(t, results))
@@ -1223,7 +1240,8 @@ class ImportDialog(QDialog):
         """Stop the fit and take its best so far, onto the device's grid as a fit ends."""
         if self.thread is None or set(self.results) != set(self.job_curves):
             return
-        results = {b: X.to_grid(r.settings, self.job_curves[b], self.fs) for b, r in self.results.items()}
+        results = {b: X.to_grid(r.settings, self.job_curves[b], self.fs, not self.fixed)
+                   for b, r in self.results.items()}
         self.stop_fit()
         self.fraction = 1.0
         self.take_fit(results)
@@ -1268,6 +1286,10 @@ class ImportDialog(QDialog):
                                    "External: the Filter lines are imported, as Cookbook filters."
                                    if commander else "ADI-2: the numbers as the device has them\n"
                                    "External: Cookbook filters, as filter files usually mean them")
+        self.level_group.setVisible(self.mode == FIT)
+        self.level_box.blockSignals(True)
+        self.level_box.setCurrentIndex(1 if self.fixed else 0)
+        self.level_box.blockSignals(False)
         self.tone_box.setVisible(self.mode == FIT and self.has_bt)
         allowed = self.tone_allowed()
         self.tone_box.setChecked(self.tone and allowed)
@@ -1331,11 +1353,18 @@ class ImportDialog(QDialog):
         return sum((self.curve(x, freqs) for x in xs), np.zeros(len(freqs)))
 
     def given(self, block, freqs):
-        """The input of an EQ block at freqs: the curve, or the sum of the lines checked for it; None without."""
+        """The input of an EQ block at freqs: the curve (centred with a fixed level), or the sum of the lines checked
+        for it; None without."""
         if self.cf is not None:
-            return None if self.column is None else C.curve(self.cf, self.column, freqs)
+            if self.column is None:
+                return None
+            return (C.centred if self.fixed else C.curve)(self.cf, self.column, freqs)
         group, tone = self.groups.get(block), I.tone_items(self.chosen)
         return None if group is None and not tone else self.summed((group or []) + tone, freqs)
+
+    def centring(self):
+        """A curve with a fixed level: centred on 0 dB."""
+        return self.cf is not None and self.column is not None and self.fixed
 
     def show_graph(self):
         """The conversion's result, and only that: what it does not set is flat. Which blocks go to the device, and
@@ -1350,9 +1379,10 @@ class ImportDialog(QDialog):
                 continue
             key = "L" if side == 0 else "R"
             placed = list(self.outcome.get(block, {}).values()) + list(self.outcome.get("BT", {}).values())
-            # the sum and its bands as the device makes them; the input moved to their level when a fit chose one
+            # the sum and its bands as the device makes them; the input moved to their level when a fit chose one,
+            # a curve centred on 0 dB with a fixed level
             level = self.levels.get(block, 0.0)
-            shifts[key] = level
+            shifts[key] = level - (C.level(self.cf, self.column) if self.centring() else 0.0)
             color = side_color(side, self.dual)
             shown_bands = [(self.curve(p, freqs), theme.BT if p.target in I.TONE else color,
                             "BT" if p.target in I.TONE else key) for p in placed]
@@ -1369,7 +1399,7 @@ class ImportDialog(QDialog):
             names[key] = (("EQ Left", "EQ Right")[side] if self.dual else "EQ (shared)", color)
         if self.outcome.get("BT"):
             names["BT"] = ("Bass/Treble", theme.BT)
-        self.legend.set_input(*_adjusted(shifts))
+        self.legend.set_input(*_adjusted(shifts, self.centring()))
         self.legend.set_fitting(self.fitting)
         self.graph.draw(channels)
         if names != self.names:
@@ -1466,8 +1496,9 @@ def _db(x):
     return round(float(x), 1) + 0.0                      # no -0.0
 
 
-def _adjusted(shifts):
-    """The input's name in the legend, and its tooltip: how far a fit moved it, per channel ({'L' or 'R': dB})."""
+def _adjusted(shifts, centred=False):
+    """The input's name in the legend, and its tooltip: how far it was moved, per channel ({'L' or 'R': dB}), by a
+    fit's free level or, centred, onto 0 dB."""
     if all(abs(v) < LEVEL_SHOWN for v in shifts.values()):
         return "Input", ""
     values = {"%+.1f dB" % _db(v) for v in shifts.values()}
@@ -1475,6 +1506,8 @@ def _adjusted(shifts):
         how = values.pop()
     else:
         how = ", ".join("%s %+.1f dB" % ({"L": "left", "R": "right"}[k], _db(v)) for k, v in shifts.items())
+    if centred:
+        return "Input (adj.)", "Moved %s: with a fixed level the curve is centred on 0 dB.\n" % how
     return "Input (adj.)", "Moved %s onto the sum: the fit leaves the level free.\n" % how
 
 

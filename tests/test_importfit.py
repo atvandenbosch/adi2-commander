@@ -1,5 +1,5 @@
 """Import by Fit: OK waits for the fit, Cancel and Close enough while it runs, converting again, the sum as the device
-makes it with the input moved onto it, garbage collection while it runs, and a curve."""
+makes it with the input moved onto it, garbage collection while it runs, a curve, and a fixed level."""
 
 import gc
 import time
@@ -8,6 +8,7 @@ import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
+from commander.conversion import curvefile as C
 from commander.conversion import eqfile as E
 from commander.conversion import eqfit as X
 from commander.conversion import eqimport as I
@@ -178,6 +179,28 @@ class ImportFit(ImportTest):
         np.testing.assert_allclose(total, sum(b[0] for b in bands))
         np.testing.assert_allclose(shown, given + level)
         self.assertEqual(dialog.legend.items["input"].name.text(), D._adjusted({key: level})[0])
+
+    def test_a_fixed_level_centres_a_curve_and_stays_for_the_next(self):
+        self.addCleanup(setattr, D.ImportDialog, "fixed_level", False)
+        dialog = self.open(self.file("curve.csv", table({"eq": 2.0 + PEAK})))
+        self.assertFalse(dialog.level_group.isHidden())
+        dialog.level_box.setCurrentIndex(1)
+        self.assertTrue(dialog.fitting)
+        wait_for_fit(dialog)
+        block = dialog.eq_blocks()[0]
+        self.assertEqual(dialog.levels[block], 0.0)
+        shown = dialog.graph.channels[0][2]
+        given = C.curve(dialog.cf, dialog.column, dialog.graph.freqs())
+        shift = -C.level(dialog.cf, dialog.column)
+        np.testing.assert_allclose(shown, given + shift)
+        self.assertEqual(dialog.legend.items["input"].name.text(), "Input (adj.)")
+        self.assertIn("centred on 0 dB", D._adjusted({"L": shift}, True)[1])
+        self.assertIn("Fitted", dialog.status.text())
+        self.assertNotIn("than the input", dialog.status.text())
+        dialog.done(0)
+        nxt = self.open(self.file("three.txt", THREE))
+        self.assertEqual((nxt.fixed, nxt.level_box.currentIndex()), (True, 1))
+        self.assertTrue(nxt.level_group.isHidden())               # Map: no level
 
     def test_the_input_named_when_a_fit_moved_it(self):
         self.assertEqual(D._adjusted({"L": 0.04, "R": -0.04}), ("Input", ""))

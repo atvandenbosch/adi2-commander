@@ -1,7 +1,8 @@
 """A correction curve as a table: the frequency in the first column, curves in dB beside it.
 
 A table is read for what it holds: a column can serve as EQ when its data can, whatever it is called. A curve is
-a correction, carried out as it stands; its level does not matter (a fit has a free level).
+a correction, carried out as it stands. With a free level (in a fit) its level does not count; with a fixed level it is
+centred on 0 dB (centred).
 
 What makes a table: after comment lines and at most one header, at least MIN_ROWS rows of numbers, split by a
 semicolon, a tab, a comma or spaces; the first column a rising frequency within FREQ_RANGE. A decimal comma only with
@@ -79,6 +80,18 @@ def unusable(cf, column):
 def curve(cf, column, freqs=F.FREQS):
     """A column at freqs: straight in dB over log f between the points, the first and last value beyond them."""
     return np.interp(np.log(freqs), np.log(cf.freqs), cf.columns[column])
+
+
+def level(cf, column):
+    """The level of a column in dB: its mean over the frequencies where curves are compared (as a free level takes
+    it), counting only those the table spans."""
+    inside = (F.FREQS >= cf.freqs[0]) & (F.FREQS <= cf.freqs[-1])
+    return float(curve(cf, column, F.FREQS[inside] if inside.any() else F.FREQS).mean())
+
+
+def centred(cf, column, freqs=F.FREQS):
+    """A column at freqs, centred on 0 dB: less its level."""
+    return curve(cf, column, freqs) - level(cf, column)
 
 
 def _rows(body, sep):
