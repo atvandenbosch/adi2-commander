@@ -3,7 +3,9 @@ Cancel writes nothing. The conversion itself is eqimport's; this is what the use
 
     Input       the file as written. A check box in the margin before every line that can be used; what cannot be
                 used is grey, its tooltip says why. In a Commander file the rows of its table are the lines to use
-                (Origin ADI-2), or its Filter lines (Origin External). A curve: a summary instead, with the choice
+                (Origin ADI-2), or its Filter lines (Origin External). A Preamp line starts unchecked and is used
+                with Fit at a fixed level; checking it sets both. Checked where it is not used, it is amber and
+                ignored. A curve: a summary instead, with the choice
                 of the column that is the curve.
     Conversion  Map or Fit, convert again, Close enough (stop the fit and take its best so far), Origin, fs, and with
                 Fit its Level and Bass/Treble. The graph: per channel the input (wide and see-through), the sum of
@@ -70,6 +72,11 @@ ZONE_TOP = INNER_GAP                             # px above the legend in the gr
 UNDEFINED = "—"
 UNDEFINED_TIP = "Not set: factory default"
 NO_BT = "%s has no Bass/Treble."                   # why a Bass or Treble row cannot be used, with the name
+PREAMP_OFF = "Used with Fit at a fixed level; checking it sets both"
+PREAMP_MAP = "Unmappable: used with Fit at a fixed level only"
+PREAMP_FREE = "Ignored: used with a fixed level only"
+PREAMP_NO_EQ = "Ignored: no filters checked for this channel"
+PREAMP_ALONE = "Preamp: used with filters only"
 STATE_ROLE, WARN_ROLE, MARK_ROLE = Qt.UserRole + 1, Qt.UserRole + 2, Qt.UserRole + 3
 AGAIN_ICON = 14                                  # px, the round arrow
 BOX, LINE_H = 22, 22                             # px: the check box's part of the margin; a line of the file
@@ -698,6 +705,7 @@ class ImportDialog(QDialog):
         self.mode, self.origin, self.tone = FIT, I.EXTERNAL, False
         self.fixed = ImportDialog.fixed_level                # Fit with a fixed level: the curve at its own level
         self.eq, self.cf, self.column = None, None, None     # a filter file, or a curve and its column
+        self.pre = {}                                       # {line: (channel, dB)} the file's Preamp lines
         self.groups, self.chosen, self.problem = {}, [], ""
         self.drop_note = ""                                 # a file dropped on the dialog that is no filter file
         self.outcome, self.levels, self.notes = {}, {}, {}        # {block: {target: Placed}}, {block: dB}, {key: text}
@@ -725,6 +733,7 @@ class ImportDialog(QDialog):
         curve = isinstance(source, C.CurveFile)
         self.eq, self.cf = (None, source) if curve else (source, None)
         self.column = source.chosen if curve else None
+        self.pre = {} if curve else I.preamps(source)
         self.path = path
         kind = "curve" if curve else I.category(source)
         self.mode = MAP if kind in ("commander", "fits") else FIT
@@ -1037,8 +1046,13 @@ class ImportDialog(QDialog):
         self.recompute(fit_now=True)
 
     def toggle_line(self, line):
+        """A line checked or unchecked; a Preamp line checked sets Fit at a fixed level, where it is used."""
         self.own = set(self.selection())
         self.own.symmetric_difference_update({line})
+        if line in self.pre and line in self.own and not self.preamp_used():
+            self.mode = FIT
+            self.way.set_current(FIT)
+            self.fixed = ImportDialog.fixed_level = True
         self.recompute(fit_now=False)
 
     def toggle_block(self, side):
@@ -1079,6 +1093,25 @@ class ImportDialog(QDialog):
                 why[line] = NO_BT % self.name
         return usable, why
 
+    def preamp_used(self):
+        """Preamp lines are used with Fit at a fixed level only."""
+        return self.mode == FIT and self.fixed
+
+    def preamp_lines(self):
+        """The Preamp lines checked, (channel, dB) each, when they are used."""
+        if not self.preamp_used():
+            return []
+        return [self.pre[n] for n in sorted(self.selection()) if n in self.pre]
+
+    def preamp(self, block):
+        """The dB the Preamp lines checked add to the input of an EQ block."""
+        return I.preamp_db(self.preamp_lines(), block)
+
+    def alike(self):
+        """With Dual EQ, both channels the same input: one fit for both."""
+        g = self.groups
+        return len(g) == 2 and g["L"] == g["R"] and self.preamp("L") == self.preamp("R")
+
     def selection(self):
         """The lines checked: once the user has changed one, theirs, with Map and Fit alike; until then the proposal
         for this way and Origin."""
@@ -1114,11 +1147,13 @@ class ImportDialog(QDialog):
         else:
             usable, why = self.usable()
             chosen = [usable[n] for n in sorted(self.selection()) if n in usable]
+            pre = {n: self.pre[n] for n in self.selection() if n in self.pre} if self.preamp_used() else {}
             try:
-                groups = I.channel_sets(chosen, self.dual)
+                groups = I.channel_sets(chosen, self.dual, [ch for ch, _ in pre.values()])
             except ValueError as e:
                 groups, self.problem = {}, str(e)
-                self.unmapped = {i.line for i in chosen if i.channel in ("L", "R")}
+                self.unmapped = ({i.line for i in chosen if i.channel in ("L", "R")} |
+                                 {n for n, (ch, _) in pre.items() if ch in ("L", "R")})
             if not usable:
                 self.problem = "Nothing to import"
             elif not chosen:
@@ -1165,18 +1200,17 @@ class ImportDialog(QDialog):
             return [(blocks, self.given(blocks[0], F.FREQS), [])]
         tone = I.tone_items(self.chosen)
         groups = self.groups
-        same = self.dual and len(groups) == 2 and groups["L"] == groups["R"]
+        same = self.dual and self.alike()
         out = []
         for blocks, g in ([(("L", "R"), groups["L"])] if same else [((b,), g) for b, g in groups.items()]):
             m = I.mapping(g, self.origin, self.fs)
             start = I.fit_start(m)
-            curve = I.target(g + tone, self.origin, self.fs)
+            curve = I.target(g + tone, self.origin, self.fs) + self.preamp(blocks[0])
             out.append((blocks, curve, [start] if start else []))
         return out
 
     def tone_allowed(self):
-        groups = self.groups
-        return not (self.dual and len(groups) == 2 and groups["L"] != groups["R"])
+        return not (self.dual and len(self.groups) == 2 and not self.alike())
 
     def start_fit(self):
         self.stop_fit()
@@ -1266,18 +1300,37 @@ class ImportDialog(QDialog):
         differ = E.disagreeing(self.eq) if self.origin == I.ADI2 else set()
         faults = E.table_faults(self.eq)
         tip = "%s.\nUncheck a filter, or try Fit." % self.unmap_reason if self.unmap_reason else self.problem
+        checkable = set(usable) | (set(self.pre) if usable else set())
         for no in range(1, len(self.eq.lines) + 1):
             if no in usable:
                 on = no in checked
                 warn = on and no in self.unmapped
                 self.input.show_line(no, "on" if on else "off", warn=warn, tip=tip if warn else "")
+            elif no in checkable:                        # a Preamp line
+                on = no in checked
+                ignored = self.preamp_ignored(no) if on else ""
+                warn = on and (no in self.unmapped or bool(ignored))
+                self.input.show_line(no, "on" if on else "off", warn=warn,
+                                     tip=tip if no in self.unmapped else ignored if on else PREAMP_OFF)
             else:
                 mark = no in differ or no in faults
                 self.input.show_line(no, None, mark=mark,
-                                     tip="Differs from the table" if no in differ else why.get(no, ""))
+                                     tip="Differs from the table" if no in differ else
+                                     PREAMP_ALONE if no in self.pre else why.get(no, ""))
         self.input.viewport().update()
-        n = len(usable)
-        self.input_note.setText("%d of %d checked" % (len(checked & set(usable)), n) if n else "")
+        n = len(checkable)
+        self.input_note.setText("%d of %d checked" % (len(checked & checkable), n) if n else "")
+
+    def preamp_ignored(self, line):
+        """Why a Preamp line checked is not used, or '': the setting in the way."""
+        if self.mode == MAP:
+            return PREAMP_MAP
+        if not self.fixed:
+            return PREAMP_FREE
+        channel = self.pre[line][0]
+        if self.dual and channel != "all" and channel not in self.groups:
+            return PREAMP_NO_EQ
+        return ""
 
     def show_controls(self):
         self.origin_group.setVisible(self.cf is None)
@@ -1360,7 +1413,9 @@ class ImportDialog(QDialog):
                 return None
             return (C.centred if self.fixed else C.curve)(self.cf, self.column, freqs)
         group, tone = self.groups.get(block), I.tone_items(self.chosen)
-        return None if group is None and not tone else self.summed((group or []) + tone, freqs)
+        if group is None and not tone:
+            return None
+        return self.summed((group or []) + tone, freqs) + self.preamp(block)
 
     def centring(self):
         """A curve with a fixed level: centred on 0 dB."""

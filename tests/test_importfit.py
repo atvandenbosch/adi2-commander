@@ -202,6 +202,30 @@ class ImportFit(ImportTest):
         self.assertEqual((nxt.fixed, nxt.level_box.currentIndex()), (True, 1))
         self.assertTrue(nxt.level_group.isHidden())               # Map: no level
 
+    def test_a_preamp_checked_sets_fit_at_a_fixed_level_and_counts_there_only(self):
+        self.addCleanup(setattr, D.ImportDialog, "fixed_level", False)
+        dialog = self.open(self.file("pre.txt", "Preamp: -3 dB\n" + THREE))
+        self.assertEqual((dialog.mode, dialog.selection()), (D.MAP, {2, 3, 4}))    # unchecked at first
+        self.assertEqual(dialog.input.item(0).toolTip(), D.PREAMP_OFF)
+        self.assertEqual(dialog.input_note.text(), "3 of 4 checked")
+        dialog.toggle_line(1)
+        self.assertEqual((dialog.mode, dialog.fixed, dialog.level_box.currentIndex()), (D.FIT, True, 1))
+        self.assertEqual(dialog.way.current, D.FIT)
+        wait_for_fit(dialog)
+        block = dialog.eq_blocks()[0]
+        filters = dialog.summed(dialog.groups[block], FREQS)
+        np.testing.assert_allclose(dialog.given(block, FREQS), filters - 3.0)
+        np.testing.assert_allclose(dialog.jobs()[0][1], I.target(dialog.groups[block], dialog.origin, dialog.fs) - 3.0)
+        self.assertEqual((dialog.input.item(0).data(D.WARN_ROLE), dialog.input.item(0).toolTip()), (False, ""))
+        dialog.level_box.setCurrentIndex(0)                      # Free: ignored, amber
+        self.assertEqual((dialog.input.item(0).data(D.WARN_ROLE), dialog.input.item(0).toolTip()),
+                         (True, D.PREAMP_FREE))
+        np.testing.assert_allclose(dialog.given(block, FREQS), filters)
+        dialog.way.buttons[D.MAP].click()                        # Map: unmappable
+        self.assertEqual((dialog.mode, dialog.input.item(0).data(D.WARN_ROLE), dialog.input.item(0).toolTip()),
+                         (D.MAP, True, D.PREAMP_MAP))
+        self.assertIn("Mapped", dialog.status.text())
+
     def test_the_input_named_when_a_fit_moved_it(self):
         self.assertEqual(D._adjusted({"L": 0.04, "R": -0.04}), ("Input", ""))
         self.assertEqual(D._adjusted({"L": -1.02}),

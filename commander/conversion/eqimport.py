@@ -10,7 +10,8 @@ Two ways to the device:
   on any band is limited, with a note; when no band is left that can take a filter, the selection does not map
   (unmappable, with the reason).
 - Fit: eqfit on the curve of the selected items; the mapped filters are one of its starts. A band it leaves at
-  0 dB is flat, and as with Map not set.
+  0 dB is flat, and as with Map not set. With a fixed level the selected Preamp lines add their dB to the curve of
+  their channel (preamp_db).
 
 The outcome is per block: the EQ of each channel ('L', 'R', or 'all' with Dual EQ off) and Bass/Treble ('BT').
 What it does not set is undefined; written, an undefined band gets its factory default (params.FACTORY_BANDS,
@@ -70,11 +71,10 @@ def q_range(target):
 # -- the lines of a file ---------------------------------------------------------------------------
 
 def items(eq, origin, fs):
-    """({line: Item} that can be selected, {line: why not} for the lines of filters and Preamp that cannot)."""
+    """({line: Item} that can be selected, {line: why not} for the lines of filters that cannot). The Preamp lines:
+    preamps."""
     usable, why = {}, {}
     rows = E.table(eq)
-    for _, _, no in eq.preamp:
-        why[no] = "Preamp: not needed on the device"
     for s in eq.skipped:
         why[s.line] = _capital(s.reason)
     if rows is not None and origin == ADI2:
@@ -100,6 +100,17 @@ def items(eq, origin, fs):
         else:
             usable[e.line] = Item(e.line, e.channel, e.kind, e.freq, e.gain, e.q, None)
     return usable, why
+
+
+def preamps(eq):
+    """{line: (channel, dB)} of the Preamp lines."""
+    return {no: (channel, db) for channel, db, no in eq.preamp}
+
+
+def preamp_db(lines, block):
+    """The dB Preamp lines, (channel, dB) each, add to the curve of an EQ block: the sum of those for its channel and
+    for both; with one EQ for both channels (block 'all'), of all of them."""
+    return sum((db for channel, db in lines if block == "all" or channel in ("all", block)), 0.0)
 
 
 def _row_kind(r):
@@ -129,15 +140,16 @@ def _on_grid(i):
     return abs(i.q * 10 - round(i.q * 10)) < 1e-6
 
 
-def channel_sets(chosen, dual):
+def channel_sets(chosen, dual, also=()):
     """The selected items per block of the EQ: {'L': [...], 'R': [...]} with Dual EQ, {'all': [...]} without. A
     file with one set gives both channels the same; items of only one channel leave the other out. Without Dual EQ,
-    items of the left and of the right channel together are a conflict: ValueError. Bass and Treble rows apart."""
+    items of the left and of the right channel together are a conflict: ValueError; also: the channels of further
+    lines selected (Preamp), which count for that. Bass and Treble rows apart."""
     eq_items = [i for i in chosen if i.target not in TONE]
     common = [i for i in eq_items if i.channel == "all"]
     own = {ch: [i for i in eq_items if i.channel == ch] for ch in ("L", "R")}
     if not dual:
-        if own["L"] and own["R"]:
+        if (own["L"] or "L" in also) and (own["R"] or "R" in also):
             raise ValueError("Dual EQ is off: one EQ for both channels. Choose left or right.")
         group = common + own["L"] + own["R"]
         return {"all": group} if group else {}

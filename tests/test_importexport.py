@@ -169,7 +169,7 @@ class ImportExport(ImportTest):
         self.assertEqual(dialog.problem, "Nothing to import")
         self.assertFalse(dialog.ok.isEnabled())
         self.assertEqual([dialog.input.item(n).toolTip() for n in range(3)],
-                         ["Preamp: not needed on the device", "Off in the file", "GraphicEQ: not an EQ filter"])
+                         [D.PREAMP_ALONE, "Off in the file", "GraphicEQ: not an EQ filter"])
         self.spin(300)
         self.assertEqual(self.sim.state, before)
 
