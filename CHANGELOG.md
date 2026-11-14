@@ -6,6 +6,8 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-14
+
 ### Added
 
 - ADI-2 Pro (all versions, including EX) and ADI-2/4 Pro (SE and EX), not tested with an actual device:
@@ -25,7 +27,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 
 - Load and Save are now Import and Export.
 - Tooltips appear only once the mouse rests.
-- Import: a refined deviation graph.
+- Import: the deviation is drawn as a filled area.
 
 ### Fixed
 
@@ -39,5 +41,6 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 - First release: control of the ADI-2 DAC FS over USB MIDI, filter set and curve conversion, and Simulated mode.
   See the [README](README.md).
 
-[Unreleased]: https://github.com/atvandenbosch/adi2-commander/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/atvandenbosch/adi2-commander/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/atvandenbosch/adi2-commander/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/atvandenbosch/adi2-commander/releases/tag/v0.1.0
