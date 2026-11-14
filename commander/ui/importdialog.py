@@ -489,8 +489,9 @@ class CurveLegend(QWidget):
     """As the main window's legend: the channels, then the layers. A click shows or hides an item, a double-click
     shows only this item of its group (again: the whole group), pointing at it lights its curves."""
 
+    # the curves of the graph, then the deviation below it
     LAYERS = [("input", "wide", "Input"), ("sum", "thick", "Sum"), ("bands", "thin", "Bands"),
-              ("deviation", "area", "Deviation"), ("candidate", "dotted", "Candidate")]
+              ("candidate", "dotted", "Candidate"), ("deviation", "area", "Deviation")]
     TIPS = {"bands": "Includes Bass and Treble\n", "deviation": "How far the sum is off the input, below\n",
             "candidate": "What the fit is trying now, better or not; while it fits\n"}
 
