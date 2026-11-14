@@ -1,6 +1,6 @@
 r"""Encodes and decodes ADI-2 SysEx parameters.
 
-Encoding, 3 bytes per parameter (MIDITable_ADI-2_230930 v0.2):
+Encoding, 3 bytes per parameter (MIDITable_ADI-2_261030 v1.2):
 
   byte1  bit 6..3  address
          bit 2..0  upper 3 bits of the index
