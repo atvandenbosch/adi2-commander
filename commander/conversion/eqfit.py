@@ -85,6 +85,13 @@ def slots(tone):
     return out
 
 
+def kind_groups(code):
+    """The filters of each kind in code (a flat array of codes): (code, their indices), or (code, a slice of all)
+    when there is one kind."""
+    cs = sorted(set(code.tolist()))
+    return [(cs[0], slice(None))] if len(cs) == 1 else [(c, np.flatnonzero(code == c)) for c in cs]
+
+
 class Model:
     """Responses at FREQS for one fs, of many filters at once."""
 
@@ -97,20 +104,21 @@ class Model:
         return self.mixed(np.array([CODES[kind]]), np.array([f], float), np.array([g], float),
                           np.array([q], float))[0]
 
-    def mixed(self, code, f, g, q):
+    def mixed(self, code, f, g, q, groups=None):
         """Responses of filters of mixed kinds (code per filter, broadcast against f, g, q), shape f.shape +
-        (len(FREQS),): filters.terms for all filters of a kind together."""
+        (len(FREQS),): filters.terms for all filters of a kind together. groups: kind_groups of code, when the
+        caller has them."""
         shape = np.shape(f)
         f, g, q = (np.asarray(x, float).ravel() if np.shape(x) == shape else np.broadcast_to(x, shape).ravel()
                    for x in (f, g, q))
         code = np.asarray(code)
         b = np.empty((len(f), 3))
         a = np.empty((len(f), 3))
-        if code.size == 1:
-            groups = [(int(code.flat[0]), slice(None))]
-        else:
-            code = (code if code.shape == shape else np.broadcast_to(code, shape)).ravel()
-            groups = [(c, code == c) for c in set(code.tolist())]
+        if groups is None:
+            if code.size == 1:
+                groups = [(int(code.flat[0]), slice(None))]
+            else:
+                groups = kind_groups((code if code.shape == shape else np.broadcast_to(code, shape)).ravel())
         for c, i in groups:
             bi, ai = terms(KINDS[c], f[i], g[i], q[i], self.fs)
             for k in range(3):
@@ -192,6 +200,7 @@ class Problem:
             i += n
         self.fi, self.gi, self.qi = np.array(fi), np.array(gi), np.array(qi)
         self.owner = np.repeat(np.arange(len(sl)), self.sizes)          # the band of each parameter
+        self.groups, self.pgroups = kind_groups(self.code), kind_groups(self.code[self.owner])
 
     def fgq(self, p):
         """f, g, q per band from one parameter vector."""
@@ -205,7 +214,7 @@ class Problem:
         f, q = 2 ** P_[np.arange(M), self.fi[self.owner]], 2 ** P_[np.arange(M), self.qi[self.owner]]
         gidx = self.gi[self.owner]
         g = np.where(gidx >= 0, P_[np.arange(M), np.maximum(gidx, 0)], 0.0)
-        pert = self.m.mixed(self.code[self.owner], f, g, q)
+        pert = self.m.mixed(self.code[self.owner], f, g, q, self.pgroups)
         return ((pert - parts[self.owner]) / h).T
 
     def vector(self, values):
@@ -229,7 +238,7 @@ class Problem:
     def lm(self, p, iters=60):
         """Levenberg-Marquardt within the bounds (steps clipped onto them)."""
         p = np.clip(np.asarray(p, float), self.lo, self.hi)
-        parts = self.m.mixed(self.code, *self.fgq(p))
+        parts = self.m.mixed(self.code, *self.fgq(p), self.groups)
         r = self.residual(parts.sum(0))
         cost = r @ r
         lam, M = 1e-2, len(p)
@@ -241,7 +250,7 @@ class Problem:
             while True:
                 step = np.linalg.solve(A + lam * (np.diag(np.diag(A)) + 1e-9 * np.eye(M)), -g)
                 pn = np.clip(p + step, self.lo, self.hi)
-                pparts = self.m.mixed(self.code, *self.fgq(pn))
+                pparts = self.m.mixed(self.code, *self.fgq(pn), self.groups)
                 rn = self.residual(pparts.sum(0))
                 cn = rn @ rn
                 if cn < cost:
