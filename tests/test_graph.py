@@ -527,7 +527,7 @@ class Graph(WindowTest):
         self.graph.reset_view()
         self.spin(50)
         self.assertAlmostEqual(icon.ratio, ratio(), places=9)
-        self.assertEqual(icon.toolTip(), "Aspect ratio: %.2f dB/decade" % ratio())
+        self.assertEqual(icon.toolTip(), "Aspect ratio: %.1f dB/decade" % ratio())
         plot = self.graph.mapFromScene(view.sceneBoundingRect()).boundingRect()
         pi = self.graph.getPlotItem()
         cross = QPointF(self.graph.mapFromScene(pi.getAxis("left").label.sceneBoundingRect().center()).x(),

@@ -266,7 +266,7 @@ def infinity(mid, steps=48):
 
 class RatioIcon(QWidget):
     """The aspect ratio of the view, small, as an icon of the axes: an arrow right and an arrow up from a corner, the
-    ratio between them (ratio_text); in the background. Its tooltip gives two decimals."""
+    ratio between them (ratio_text); in the background. Its tooltip gives one decimal."""
 
     PAD = 2                                      # pixels around the icon where its tooltip shows as well
 
@@ -278,7 +278,7 @@ class RatioIcon(QWidget):
     def show_ratio(self, ratio):
         if ratio != self.ratio:
             self.ratio = ratio
-            self.setToolTip("Aspect ratio: %.2f dB/decade" % ratio)
+            self.setToolTip("Aspect ratio: %.1f dB/decade" % ratio)
             self.update()
 
     def paintEvent(self, ev):
