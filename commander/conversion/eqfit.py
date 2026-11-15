@@ -136,7 +136,7 @@ class Candidates:
                     shape = model.mixed(np.array(CODES[kind]), F, np.zeros_like(F), Q)
                 else:
                     shape = model.mixed(np.array(CODES[kind]), F, np.full_like(F, 6.0), Q) / 6
-                self.table[(s.name, kind)] = (F, Q, shape)
+                self.table[(s.name, kind)] = (F, Q, shape, (shape * shape).sum(1))
                 c = shape - shape.mean(1, keepdims=True)
                 self.centred[(s.name, kind)] = (c, (c * c).sum(1))
 
@@ -145,12 +145,12 @@ class Candidates:
         gain g, without forming the residuals: |r|² - 2g S·r + g² |S|²."""
         best = None
         for kind in s.kinds:
-            F, Q, S = self.table[(s.name, kind)]
+            F, Q, S, SS = self.table[(s.name, kind)]
             if offset:
                 S, SS = self.centred[(s.name, kind)]
                 rr = r - r.mean()
             else:
-                SS, rr = (S * S).sum(1), r
+                rr = r
             Sr = S @ rr
             if kind in NO_GAIN:
                 G = np.zeros(len(F))
@@ -421,8 +421,9 @@ def random_fill(rng, model, cands, sl, target, offset=True):
                 continue
             seen.add(sig)
             for kind in s.kinds:
-                F, Q, S = cands.table[(s.name, kind)]
-                S, SS = cands.centred[(s.name, kind)] if offset else (S, (S * S).sum(1))
+                F, Q, S, SS = cands.table[(s.name, kind)]
+                if offset:
+                    S, SS = cands.centred[(s.name, kind)]
                 Sr = S @ rr
                 if kind in NO_GAIN:
                     G = np.zeros(len(F))
