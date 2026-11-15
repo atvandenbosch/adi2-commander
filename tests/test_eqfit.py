@@ -154,9 +154,9 @@ class FixedStarts(unittest.TestCase):
 
 class RandomStarts(unittest.TestCase):
     def test_found_where_the_fixed_starts_end_beside_it(self):
-        # a resonant High Pass under peaks and a shelf
-        given = [S("1", "HP", 403, 0.0, 3.6), S("2", "PK", 152, 5.5, 1.7), S("3", "PK", 71, 4.5, 2.1),
-                 S("4", "PK", 5370, 11.0, 1.5), S("5", "HS", 5720, 2.5, 4.5)]
+        # a Low Shelf and peaks under a resonant High Cut
+        given = [S("1", "LS", 24, 2.0, 2.8), S("2", "PK", 3310, -1.0, 1.5), S("3", "PK", 128, -10.5, 4.5),
+                 S("4", "PK", 14630, 9.5, 3.2), S("5", "LP", 11700, 0.0, 4.1)]
         r = X.fit(X.response(given))
         self.assertLess(r.rms, 0.01)
         on_device(self, r.settings, False)

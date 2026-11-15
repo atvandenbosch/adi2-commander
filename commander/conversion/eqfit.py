@@ -236,7 +236,8 @@ class Problem:
         return r - r.mean(-1, keepdims=True) if self.offset else r
 
     def lm(self, p, iters=60):
-        """Levenberg-Marquardt within the bounds (steps clipped onto them)."""
+        """Levenberg-Marquardt within the bounds: a parameter on a bound whose gradient points out stays out of the
+        step, the others are solved for without it (steps clipped onto the bounds)."""
         p = np.clip(np.asarray(p, float), self.lo, self.hi)
         parts = self.m.mixed(self.code, *self.fgq(p), self.groups)
         r = self.residual(parts.sum(0))
@@ -246,9 +247,15 @@ class Problem:
             J = self.jacobian(p, parts)
             if self.offset:
                 J = J - J.mean(0, keepdims=True)
-            A, g = J.T @ J, J.T @ r
+            g = J.T @ r
+            free = ~(((p <= self.lo + 1e-12) & (g > 0)) | ((p >= self.hi - 1e-12) & (g < 0)))
+            if not free.any():
+                return p, cost
+            Jf = J[:, free]
+            A, gf, n = Jf.T @ Jf, g[free], int(free.sum())
             while True:
-                step = np.linalg.solve(A + lam * (np.diag(np.diag(A)) + 1e-9 * np.eye(M)), -g)
+                step = np.zeros(M)
+                step[free] = np.linalg.solve(A + lam * (np.diag(np.diag(A)) + 1e-9 * np.eye(n)), -gf)
                 pn = np.clip(p + step, self.lo, self.hi)
                 pparts = self.m.mixed(self.code, *self.fgq(pn), self.groups)
                 rn = self.residual(pparts.sum(0))
