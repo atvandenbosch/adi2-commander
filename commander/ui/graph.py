@@ -11,7 +11,8 @@ drawn once.
     on an axis          the wheel and a drag zoom and pan that axis only
 
 In the corner where the axes meet, the aspect ratio of the view: how many dB of gain are as long as one decade of
-frequency (RatioCorner), about where the lines of the axis titles cross.
+frequency (RatioCorner), about where the lines of the axis titles cross. A click on it sets 10, 25 or 50 dB per
+decade (IEC 60263) or the ratio the view had, in turn; the gain scales around 0 dB.
 
 What is shown (commander.ui.legend): the channels EQ Left, EQ Right and Bass/Treble, and the layers Sum, Compare (the
 sums at the rate the device runs at, dashed, when it is known and not the chosen one; off at first), Bands and Handles
@@ -34,7 +35,7 @@ import math
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QPoint, QPointF, Qt, Signal
+from PySide6.QtCore import QPoint, QPointF, Qt, QTimer, QVariantAnimation, Signal
 from PySide6.QtGui import QBrush, QColor, QCursor, QFontMetricsF, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QToolTip, QWidget
 
@@ -101,9 +102,15 @@ TITLE_INK = 1                                    # pixels: an axis title's ink b
                                                  # looks (descenders, brackets); the dB axis's, turned, right of it
 ICON_HEAD = 2                                    # pixels: its arrowheads, back and to the side
 ICON_REST = 0.55                                 # its opacity: in the background
+ICON_LIT = 0.85                                  # ... under the mouse, where a click sets the ratio
 ICON_PT = 7                                      # points: the ratio in it
 RATIO_LOW, RATIO_HIGH = "<1", "∞"                # the aspect ratio rounded below 1, or above 99
 INFINITY = 9, 5                                  # pixels: RATIO_HIGH as the icon draws it, wide and high
+RATIOS = 10, 25, 50                              # dB per decade a click sets: those of IEC 60263
+RATIO_HINT = "Click for 10, 25 or 50 dB/dec (IEC 60263), around 0 dB"
+RATIO_CONFIRM = 3000                             # ms after the last click: the ratio set is the one to come back to;
+                                                 # the icon flashes then
+FLASH_HOLD, FLASH_FADE = 100, 250                # ms: that flash, at once full, then back
 
 
 def title_axes(plot_item, y_title):
@@ -266,24 +273,66 @@ def infinity(mid, steps=48):
 
 class RatioIcon(QWidget):
     """The aspect ratio of the view, small, as an icon of the axes: an arrow right and an arrow up from a corner, the
-    ratio between them (ratio_text); in the background. Its tooltip gives one decimal."""
+    ratio between them (ratio_text); in the background. Its tooltip gives one decimal. With a hint it takes clicks:
+    it lights up under the mouse, and its tooltip adds the hint; it flashes in ACCENT when a ratio is confirmed."""
 
     PAD = 2                                      # pixels around the icon where its tooltip shows as well
+    clicked = Signal()
 
-    def __init__(self, parent):
+    def __init__(self, parent, hint=None):
         super().__init__(parent)
         self.setFixedSize(ICON + 2 * self.PAD, ICON + 2 * self.PAD)
         self.ratio = None
+        self.hint = hint
+        if hint:
+            self.setCursor(Qt.PointingHandCursor)
+        self.glow = 0.0                          # 0 .. 1: how far it flashes from its own colour to ACCENT
+        self.flashing = QVariantAnimation(self, duration=FLASH_HOLD + FLASH_FADE, startValue=1.0, endValue=0.0)
+        self.flashing.setKeyValueAt(FLASH_HOLD / (FLASH_HOLD + FLASH_FADE), 1.0)
+        self.flashing.valueChanged.connect(self._glow)
+
+    def flash(self):
+        self.flashing.stop()
+        self.flashing.start()
+        self._glow(1.0)                          # at once: the animation tells only a change of its value
+
+    def _glow(self, value):
+        self.glow = value
+        self.update()
 
     def show_ratio(self, ratio):
         if ratio != self.ratio:
             self.ratio = ratio
-            self.setToolTip("Aspect ratio: %.1f dB/decade" % ratio)
+            self.setToolTip("Aspect ratio: %.1f dB/dec" % ratio + ("\n" + self.hint if self.hint else ""))
             self.update()
+
+    def enterEvent(self, ev):
+        self.update()
+        super().enterEvent(ev)
+
+    def leaveEvent(self, ev):
+        self.update()
+        super().leaveEvent(ev)
+
+    def mousePressEvent(self, ev):
+        ev.setAccepted(bool(self.hint) and ev.button() == Qt.LeftButton)     # the graph behind takes no pan
+
+    def mouseDoubleClickEvent(self, ev):
+        self.mousePressEvent(ev)                 # quick clicks: each its own step
+
+    def mouseReleaseEvent(self, ev):
+        if self.hint and ev.button() == Qt.LeftButton and self.rect().contains(ev.position().toPoint()):
+            ev.accept()
+            self.clicked.emit()
+        else:
+            ev.ignore()
 
     def paintEvent(self, ev):
         color = QColor(theme.SECONDARY)
-        color.setAlphaF(ICON_REST)
+        color.setAlphaF(ICON_LIT if self.hint and self.underMouse() else ICON_REST)
+        if self.glow:
+            g, to = self.glow, theme.ACCENT
+            color = QColor.fromRgbF(*(a + (b - a) * g for a, b in zip(color.getRgbF(), (*to.getRgbF()[:3], 1.0))))
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         # the lines whole pixels of the screen wide, on whole pixels of the screen: sharp at any display scaling,
@@ -320,21 +369,79 @@ class RatioIcon(QWidget):
 class RatioCorner:
     """The aspect ratio of a graph of dB over decades of frequency (a PlotWidget), as a RatioIcon where the lines of
     its axis titles cross, ICON_NEAR from there towards the corner of the plot area; its ink within the graph whatever
-    the titles' font. db_title: the dB axis's title, where that is not the axis's own label."""
+    the titles' font. db_title: the dB axis's title, where that is not the axis's own label.
 
-    def __init__(self, graph, db_title=None):
+    choose: for a graph that zooms, a click sets the next ratio of a round of RATIOS and the ratio the view had,
+    from small to large (step); one that rounds to one decimal as one of RATIOS counts once, as that one. The gain
+    scales around 0 dB. RATIO_CONFIRM after the last click, or any other change of the view, ends the round: the
+    ratio set is then the one to come back to. The time passing confirms it, and the icon flashes (time_up)."""
+
+    def __init__(self, graph, db_title=None, choose=False):
         self.graph = graph
         self.view = graph.getPlotItem().getViewBox()
         self.db_title = db_title if db_title is not None else graph.getPlotItem().getAxis("left").label
-        self.icon = RatioIcon(graph)
+        self.icon = RatioIcon(graph, RATIO_HINT if choose else None)
+        self.round = None                        # (the ratios, the index of the one set, the dB range at the start)
+        self._stepping = False
+        self.timer = QTimer(self.icon, singleShot=True, interval=RATIO_CONFIRM, timeout=self.time_up)
+        self.icon.clicked.connect(self.step)
         self.view.sigRangeChanged.connect(self.update)
         self.view.sigResized.connect(self.update)
         self.view.sigResized.connect(self.place)
+        self.view.sigRangeChanged.connect(self._changed)
+        self.view.sigResized.connect(self._changed)
 
     def ratio(self):
         """How many dB of gain are as long as one decade of frequency, as the view is now."""
         (x0, x1), (y0, y1) = self.view.viewRange()
         return (y1 - y0) / (x1 - x0) * self.view.width() / self.view.height()
+
+    def db_range(self, ratio):
+        """The dB range for ratio with the frequencies as they are: 0 dB where it is, as far as the view's limits
+        allow, else as close as they allow."""
+        (x0, x1), (y0, y1) = self.view.viewRange()
+        limits = self.view.state["limits"]
+        (lo, hi), (least, most) = limits["yLimits"], limits["yRange"]
+        span = min(ratio * (x1 - x0) * self.view.height() / self.view.width(), hi - lo)
+        span = max(span, least) if least is not None else span
+        span = min(span, most) if most is not None else span
+        bottom = y0 * span / (y1 - y0)
+        bottom = min(max(bottom, lo), hi - span)
+        return bottom, bottom + span
+
+    def step(self):
+        """The next ratio of the round, skipping one that would leave the view as it is."""
+        if self.round is None:
+            now = self.ratio()
+            same = [r for r in RATIOS if "%.1f" % r == "%.1f" % now]
+            ratios = sorted(set(RATIOS) | (set() if same else {now}))
+            self.round = ratios, ratios.index(same[0] if same else now), tuple(self.view.viewRange()[1])
+        ratios, i, start = self.round
+        here = self.view.viewRange()[1]
+        for _ in ratios[1:]:
+            i = (i + 1) % len(ratios)
+            to = self.db_range(ratios[i]) if ratios[i] in RATIOS else start     # back: the view as it was
+            if not all(math.isclose(a, b, abs_tol=1e-9) for a, b in zip(to, here)):
+                break
+        self.round = ratios, i, start
+        self._stepping = True
+        try:
+            self.view.setRange(yRange=to, padding=0)
+        finally:
+            self._stepping = False
+        self.timer.start()
+
+    def confirm(self):
+        self.timer.stop()
+        self.round = None
+
+    def time_up(self):
+        self.confirm()
+        self.icon.flash()
+
+    def _changed(self, *_):
+        if not self._stepping:
+            self.confirm()
 
     def update(self, *_):
         if self.view.width() > 0 and self.view.height() > 0:
@@ -431,7 +538,7 @@ class ResponseGraph(pg.PlotWidget):
             t.setZValue(11)
             self.addItem(t)
             self.labels.append(t)
-        self.ratio = RatioCorner(self)
+        self.ratio = RatioCorner(self, choose=True)
         self.view.sigRangeChanged.connect(self._resample)
         self.view.sigResized.connect(self._resample)
         self.view.sigRangeChanged.connect(self._place_labels)

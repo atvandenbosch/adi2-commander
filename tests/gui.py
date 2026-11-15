@@ -39,15 +39,15 @@ def tab(out):
 OUTPUT_TABS = [tab(out) for out in P.OUTPUT_ADDRESSES]
 
 
-def assert_ratio_corner(test, graph, db_title):
-    """graph.ratio (a RatioCorner): the aspect ratio as the view is, in the tooltip to one decimal; the icon near where
-    the lines of the axis titles cross (db_title: the dB axis's), under the dB values, left of the frequency values,
-    its ink within the graph."""
+def assert_ratio_corner(test, graph, db_title, choose=False):
+    """graph.ratio (a RatioCorner): the aspect ratio as the view is, in the tooltip to one decimal, with the hint to
+    click when it chooses; the icon near where the lines of the axis titles cross (db_title: the dB axis's), under the
+    dB values, left of the frequency values, its ink within the graph."""
     icon, view = graph.ratio.icon, graph.getPlotItem().getViewBox()
     (x0, x1), (y0, y1) = view.viewRange()
     ratio = (y1 - y0) / (x1 - x0) * view.width() / view.height()                # dB as long as one decade
     test.assertAlmostEqual(icon.ratio, ratio, places=9)
-    test.assertEqual(icon.toolTip(), "Aspect ratio: %.1f dB/decade" % ratio)
+    test.assertEqual(icon.toolTip().splitlines(), ["Aspect ratio: %.1f dB/dec" % ratio] + [G.RATIO_HINT] * choose)
     plot = graph.mapFromScene(view.sceneBoundingRect()).boundingRect()
     cross = QPointF(graph.mapFromScene(db_title.sceneBoundingRect().center()).x(),
                     graph.mapFromScene(graph.getPlotItem().getAxis("bottom").label.sceneBoundingRect().center()).y())

@@ -5,7 +5,7 @@ import math
 import unittest
 
 import numpy as np
-from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+from PySide6.QtCore import QAbstractAnimation, QEvent, QPoint, QPointF, Qt
 from PySide6.QtGui import QHelpEvent, QMouseEvent, QWheelEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QToolTip
@@ -526,7 +526,7 @@ class Graph(WindowTest):
 
         self.graph.reset_view()
         self.spin(50)
-        assert_ratio_corner(self, self.graph, self.graph.getPlotItem().getAxis("left").label)
+        assert_ratio_corner(self, self.graph, self.graph.getPlotItem().getAxis("left").label, choose=True)
         self.assertTrue(icon.isVisible())
         self.win.show_stage(loudness=True)
         self.assertFalse(icon.isVisible())                                     # with the response graph only
@@ -550,6 +550,63 @@ class Graph(WindowTest):
     def test_the_aspect_ratio_in_whole_db_per_decade(self):
         self.assertEqual([G.ratio_text(r) for r in (0.49, 0.5, 1.49, 24.5, 99.49, 99.5)],
                          [G.RATIO_LOW, "1", "1", "25", "99", G.RATIO_HIGH])
+
+    def test_a_click_on_the_aspect_ratio_sets_the_next(self):
+        corner, icon, view = self.graph.ratio, self.graph.ratio.icon, self.graph.view
+        view.setRange(xRange=(2.5, 3.5), yRange=(-12, 12), padding=0)          # room for all of them around 0 dB
+        self.spin(50)
+        start, now = view.viewRange(), corner.ratio()
+        self.assertFalse(any("%.1f" % r == "%.1f" % now for r in G.RATIOS))
+        self.assertEqual(icon.toolTip(), "Aspect ratio: %.1f dB/dec\n%s" % (now, G.RATIO_HINT))
+        self.assertEqual(icon.cursor().shape(), Qt.PointingHandCursor)
+        ratios = sorted(G.RATIOS + (now,))
+        zero = start[1][0] / (start[1][1] - start[1][0])                       # where 0 dB is, of the height
+        for k in range(1, 5):
+            QTest.mouseClick(icon, Qt.LeftButton)
+            self.spin(20)
+            (x0, x1), (y0, y1) = view.viewRange()
+            self.assertAlmostEqual(corner.ratio(), ratios[(ratios.index(now) + k) % 4], places=9)
+            self.assertEqual([x0, x1], start[0])                               # the gain gives
+            self.assertAlmostEqual(y0 / (y1 - y0), zero, places=9)             # around 0 dB
+            self.assertTrue(corner.timer.isActive())
+            self.assertEqual(icon.toolTip().splitlines()[0], "Aspect ratio: %.1f dB/dec" % corner.ratio())
+        self.assertEqual(view.viewRange(), start)                              # the view as it was
+        self.assertEqual(corner.timer.interval(), G.RATIO_CONFIRM)
+
+        # near one of them: it counts once, and comes back whole
+        view.setRange(yRange=corner.db_range(24.97), padding=0)
+        self.spin(20)
+        QTest.mouseClick(icon, Qt.LeftButton)                                  # two quick clicks: two steps
+        QTest.mouseDClick(icon, Qt.LeftButton)                                 # the second press, as Qt gives it
+        QTest.mouseRelease(icon, Qt.LeftButton)
+        self.spin(20)
+        self.assertAlmostEqual(corner.ratio(), 10, places=9)
+        QTest.mouseClick(icon, Qt.LeftButton)
+        self.assertAlmostEqual(corner.ratio(), 25, places=9)
+        corner.time_up()                                                       # the time passed: a new round
+        self.assertEqual(icon.flashing.state(), QAbstractAnimation.Running)    # confirmed, to see
+        self.assertEqual(icon.glow, 1.0)                                       # at once full
+        icon.flashing.stop()
+        QTest.mouseClick(icon, Qt.LeftButton)
+        self.assertAlmostEqual(corner.ratio(), 50, places=9)
+
+        # another change of the view ends the round, without a flash
+        view.setRange(xRange=(2, 3), padding=0)
+        self.spin(20)
+        self.assertIsNone(corner.round)
+        self.assertFalse(corner.timer.isActive())
+        self.assertEqual(icon.flashing.state(), QAbstractAnimation.Stopped)
+        self.graph.reset_view()
+
+    def test_the_aspect_ratio_as_close_as_the_limits_allow(self):
+        corner, view = self.graph.ratio, self.graph.view
+        view.setRange(xRange=(2, 2.3), yRange=(-1, 2), padding=0)
+        self.spin(20)
+        lo, hi = corner.db_range(1)
+        self.assertAlmostEqual(hi - lo, 3)                                     # the least gain in view
+        self.assertAlmostEqual(lo / (hi - lo), -1 / 3)
+        self.assertEqual(corner.db_range(1000), (-60, 40))
+        self.graph.reset_view()
 
     def test_a_faint_line_per_db(self):
         left = self.graph.getPlotItem().getAxis("left")
