@@ -267,36 +267,42 @@ def margin(s, f, q):
     return min(max(m, 0.0), 1.0)
 
 
-def assign(sl, kinds, vals, free=None):
-    """The band of each filter (indices into sl, all different) among those it fits, keeping the filters furthest
-    from their band's limits (the smallest margin first, then the next); None when there is no assignment. free:
-    the bands to use (all by default)."""
+def assignments(sl, kinds, vals, free=None):
+    """Each way to give every filter a band it fits (indices into sl, all different), as a tuple. free: the bands to
+    use (all by default)."""
     free = range(len(sl)) if free is None else free
     ok = [[j for j in free if fits(sl[j], k, v[0], v[2])] for k, v in zip(kinds, vals)]
     order = sorted(range(len(kinds)), key=lambda i: len(ok[i]))
-    cur, used, best = [None] * len(kinds), set(), [None, None]
+    cur, used = [None] * len(kinds), set()
 
     def rec(n):
         if n == len(order):
-            score = sorted(margin(sl[cur[i]], vals[i][0], vals[i][2]) for i in range(len(kinds)))
-            if best[0] is None or score > best[0]:
-                best[0], best[1] = score, list(cur)
+            yield tuple(cur)
             return
         i = order[n]
         for j in ok[i]:
             if j not in used:
                 used.add(j)
                 cur[i] = j
-                rec(n + 1)
+                yield from rec(n + 1)
                 used.discard(j)
 
-    rec(0)
-    return best[1]
+    return rec(0)
+
+
+def assign(sl, kinds, vals, free=None):
+    """The band of each filter (indices into sl, all different) among those it fits, keeping the filters furthest
+    from their band's limits (the smallest margin first, then the next); None when there is no assignment. free:
+    the bands to use (all by default)."""
+    best = max(assignments(sl, kinds, vals, free), default=None,
+               key=lambda a: sorted(margin(sl[a[i]], vals[i][0], vals[i][2]) for i in range(len(kinds))))
+    return None if best is None else list(best)
 
 
 def available(sl, kinds, vals):
     """The bands a further filter can take: those the filters there are can do without."""
-    return [j for j in range(len(sl)) if assign(sl, kinds, vals, [x for x in range(len(sl)) if x != j]) is not None]
+    return [j for j in range(len(sl))
+            if next(assignments(sl, kinds, vals, [x for x in range(len(sl)) if x != j]), None) is not None]
 
 
 def place(model, cands, sl, kinds, vals, r, offset, bands=None, only=None):

@@ -1,6 +1,7 @@
-"""From a curve to a device setting: the bands, a setting found back from its own curve, the level, the same setting
-at any level, a fixed level, the best on the grid, a start like an earlier one searched once, random starts, Bass and
-Treble, a start that is not lost, the grid, progress, what is tried and cancelling."""
+"""From a curve to a device setting: the bands and those a further filter can take, a setting found back from its own
+curve, the level, the same setting at any level, a fixed level, the best on the grid, a start like an earlier one
+searched once, random starts, Bass and Treble, a start that is not lost, the grid, progress, what is tried and
+cancelling."""
 
 import unittest
 from unittest import mock
@@ -44,6 +45,14 @@ class Bands(unittest.TestCase):
         self.assertEqual((sl["4"].flo, sl["4"].qhi), (200, 5.0))
         self.assertEqual((sl["B"].kinds, sl["B"].fhi, sl["T"].flo), (("LS",), 150, 3000))
         self.assertEqual([s.name for s in X.slots(False)], ["1", "2", "3", "4", "5"])
+
+    def test_the_bands_a_further_filter_can_take(self):
+        sl = X.slots(False)
+        # a Low Shelf only band 1 takes, Peaks below 200 Hz only bands 1 to 3
+        kinds, vals = ["LS", "PK", "PK"], [(100, 3.0, 1.0), (50, 3.0, 1.0), (60, -3.0, 2.0)]
+        self.assertEqual(X.available(sl, kinds, vals), [3, 4])
+        self.assertEqual(X.available(sl, kinds[:2], vals[:2]), [1, 2, 3, 4])
+        self.assertEqual(X.available(sl, [], []), [0, 1, 2, 3, 4])
 
 
 class FoundBack(unittest.TestCase):
