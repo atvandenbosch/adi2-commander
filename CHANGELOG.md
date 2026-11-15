@@ -11,7 +11,8 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 - Import: Level for Fit. Free adjusts the level for the closest fit, as before; Fixed matches filters as they are,
   and a curve centred on 0 dB.
 - Import: a Preamp line can be checked; it is used with Fit at a fixed level.
-- The response graph shows its aspect ratio in dB per decade, in the corner where the axes meet.
+- The graphs show their aspect ratio in dB per decade, in the corner where the axes meet: the response graph, the
+  Loudness graph and Import's.
 
 ### Changed
 

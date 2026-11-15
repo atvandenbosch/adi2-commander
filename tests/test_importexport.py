@@ -20,7 +20,7 @@ from commander.ui import importdialog as D
 from commander.ui import theme
 from commander.ui import window as W
 from commander.ui.widgets import INNER_GAP, SIDE
-from tests.gui import WindowTest, tab
+from tests.gui import WindowTest, assert_ratio_corner, tab
 from tests.support import TEN_FILTERS
 
 OUT, LEFT, RIGHT = 3, 4, 5
@@ -292,6 +292,10 @@ class ImportExport(ImportTest):
         self.assertEqual(len(dialog.deviation), len(before))
         for (t, g), (t0, g0) in zip(dialog.deviation, before):
             self.assertTrue((t == t0).all() and (g == g0).all())
+
+    def test_the_graph_shows_its_aspect_ratio(self):
+        dialog = self.open(self.file("three.txt", THREE))
+        assert_ratio_corner(self, dialog.graph, dialog.graph.axis.titles[0][0])   # the dB axis draws its own titles
 
     def test_the_legend_shows_and_hides(self):
         dialog = self.open(self.file("three.txt", THREE))

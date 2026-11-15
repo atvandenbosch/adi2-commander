@@ -52,7 +52,7 @@ from ..device import params as P
 from . import theme
 from .graph import (BAND_ALPHA, BAND_W, COMPARE_W, DEVIATION_FILL, DEVIATION_W, DIMMED, INPUT_ALPHA, INPUT_W,
                     LEGEND_GAP, MIN_POINTS, POINTS_PER_PIXEL, SUM_W, TITLE_ROOM, X_HI, X_LO, X_PAD, Y_HI, Y_LO, ZONE_INK,
-                    _fading_pen, _ticks, side_color, title_axes)
+                    RatioCorner, _fading_pen, _ticks, side_color, title_axes)
 from .legend import GROUP_GAP, NAME_OFF, NAME_ON, Group as LegendGroup, _Item as LegendItem
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, CellDelegate, Marks, ParamModel, ParamView,
                      band_rows, bt_rows)
@@ -379,6 +379,7 @@ class CurveGraph(pg.PlotWidget):
                                "candidate": self.plot(connect="finite"), "sum": self.plot(connect="finite"),
                                "deviation": self.plot(connect="finite", fillLevel=DIFF_MID)})
         self.items.reverse()
+        self.ratio = RatioCorner(self, db_title=self.axis.titles[0][0])     # the dB titles are TwoScales' own
 
     def fit_x(self):
         """20 Hz to 20 kHz with room for their labels: the main window's room, or more in a narrower graph."""

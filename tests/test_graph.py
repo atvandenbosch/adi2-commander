@@ -15,7 +15,7 @@ from commander.device import filters as F
 from commander.device import params as P
 from commander.ui import graph as G
 from commander.ui import theme
-from tests.gui import WindowTest, app, tab
+from tests.gui import WindowTest, app, assert_ratio_corner, tab
 
 
 class Graph(WindowTest):
@@ -518,7 +518,7 @@ class Graph(WindowTest):
         self.graph.reset_view()
 
     def test_the_aspect_ratio_in_the_corner_of_the_axes(self):
-        icon, view, vp = self.graph.ratio_icon, self.graph.view, self.graph.viewport()
+        icon, view, vp = self.graph.ratio.icon, self.graph.view, self.graph.viewport()
 
         def ratio():
             (x0, x1), (y0, y1) = view.viewRange()
@@ -526,21 +526,7 @@ class Graph(WindowTest):
 
         self.graph.reset_view()
         self.spin(50)
-        self.assertAlmostEqual(icon.ratio, ratio(), places=9)
-        self.assertEqual(icon.toolTip(), "Aspect ratio: %.1f dB/decade" % ratio())
-        plot = self.graph.mapFromScene(view.sceneBoundingRect()).boundingRect()
-        pi = self.graph.getPlotItem()
-        cross = QPointF(self.graph.mapFromScene(pi.getAxis("left").label.sceneBoundingRect().center()).x(),
-                        self.graph.mapFromScene(pi.getAxis("bottom").label.sceneBoundingRect().center()).y())
-        cross += QPointF(G.TITLE_INK, G.TITLE_INK)                             # where the axis titles cross
-        box = icon.geometry()
-        mid = QPointF(box.center()) + QPointF(0.5, 0.5)
-        corner = QPointF(plot.bottomLeft())
-        self.assertLess(math.hypot(*(mid - cross).toTuple()), math.hypot(*(mid - corner).toTuple()) / 2)   # near
-        self.assertLess(box.right(), plot.left())                              # under the dB values
-        self.assertGreater(box.top(), plot.bottom())                           # left of the frequency values
-        ink = box.adjusted(icon.PAD, icon.PAD, -icon.PAD, -icon.PAD)
-        self.assertTrue(self.graph.rect().contains(ink))                       # all of it in the graph
+        assert_ratio_corner(self, self.graph, self.graph.getPlotItem().getAxis("left").label)
         self.assertTrue(icon.isVisible())
         self.win.show_stage(loudness=True)
         self.assertFalse(icon.isVisible())                                     # with the response graph only

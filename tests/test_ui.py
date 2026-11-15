@@ -30,7 +30,7 @@ from commander.ui.output import PHONES_REF
 from commander.ui.untested import UntestedBox
 from commander.ui.window import PHONES_1_2, MainWindow
 from commander.ui.widgets import FRAME, SIDE, label_color, placement
-from tests.gui import OUTPUT_TABS, Clock, WindowTest, hover, tab, tooltip_color
+from tests.gui import OUTPUT_TABS, Clock, WindowTest, assert_ratio_corner, hover, tab, tooltip_color
 from tests.support import DUMP, PRESETS
 
 
@@ -252,6 +252,15 @@ class Window(WindowTest):
         self.assertEqual(g.boost, (0.0, 0.0))
         self.win.tabs.setCurrentIndex(tab(6))                                    # every output has its own
         self.assertAlmostEqual(g.boost[0], 7 * 0 / 20)                      # Phones at -10 dB: none
+
+    def test_the_loudness_graph_shows_its_aspect_ratio(self):
+        g = self.win.loudness_graph
+        self.win.show_stage(loudness=True)
+        self.spin(50)
+        assert_ratio_corner(self, g, g.getPlotItem().getAxis("left").label)
+        self.assertTrue(g.ratio.icon.isVisible() and not self.win.graph.ratio.icon.isVisible())   # one at a time
+        self.win.show_stage(loudness=False)
+        self.assertFalse(g.ratio.icon.isVisible())
 
     def test_the_loudness_graph_takes_the_stage_while_one_works_in_its_table(self):
         win, stage, head = self.win, self.win.stage, self.win.graph_head

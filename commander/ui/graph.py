@@ -11,7 +11,7 @@ drawn once.
     on an axis          the wheel and a drag zoom and pan that axis only
 
 In the corner where the axes meet, the aspect ratio of the view: how many dB of gain are as long as one decade of
-frequency (RatioIcon), about where the lines of the axis titles cross.
+frequency (RatioCorner), about where the lines of the axis titles cross.
 
 What is shown (commander.ui.legend): the channels EQ Left, EQ Right and Bass/Treble, and the layers Sum, Compare (the
 sums at the rate the device runs at, dashed, when it is known and not the chosen one; off at first), Bands and Handles
@@ -317,6 +317,39 @@ class RatioIcon(QWidget):
                 p.drawText(mid - box.center(), text)
 
 
+class RatioCorner:
+    """The aspect ratio of a graph of dB over decades of frequency (a PlotWidget), as a RatioIcon where the lines of
+    its axis titles cross, ICON_NEAR from there towards the corner of the plot area; its ink within the graph whatever
+    the titles' font. db_title: the dB axis's title, where that is not the axis's own label."""
+
+    def __init__(self, graph, db_title=None):
+        self.graph = graph
+        self.view = graph.getPlotItem().getViewBox()
+        self.db_title = db_title if db_title is not None else graph.getPlotItem().getAxis("left").label
+        self.icon = RatioIcon(graph)
+        self.view.sigRangeChanged.connect(self.update)
+        self.view.sigResized.connect(self.update)
+        self.view.sigResized.connect(self.place)
+
+    def ratio(self):
+        """How many dB of gain are as long as one decade of frequency, as the view is now."""
+        (x0, x1), (y0, y1) = self.view.viewRange()
+        return (y1 - y0) / (x1 - x0) * self.view.width() / self.view.height()
+
+    def update(self, *_):
+        if self.view.width() > 0 and self.view.height() > 0:
+            self.icon.show_ratio(self.ratio())
+
+    def place(self, *_):
+        graph, icon = self.graph, self.icon
+        cross = QPointF(self.db_title.sceneBoundingRect().center().x() + TITLE_INK,
+                        graph.getPlotItem().getAxis("bottom").label.sceneBoundingRect().center().y() + TITLE_INK)
+        to = QPointF(self.view.sceneBoundingRect().bottomLeft()) - cross
+        half = QPoint(icon.width() // 2, icon.height() // 2)          # the middle of its square
+        at = graph.mapFromScene(cross + to * (ICON_NEAR / math.hypot(to.x(), to.y()))) - half
+        icon.move(max(at.x(), -icon.PAD), min(at.y(), graph.height() - icon.height() + icon.PAD))
+
+
 class ResponseGraph(pg.PlotWidget):
     edited = Signal(object, int, bool)           # key, value, rounded: like the table delegates
     picked = Signal(object)                      # key of the point's frequency: select it in the table
@@ -398,10 +431,7 @@ class ResponseGraph(pg.PlotWidget):
             t.setZValue(11)
             self.addItem(t)
             self.labels.append(t)
-        self.ratio_icon = RatioIcon(self)
-        self.view.sigRangeChanged.connect(self._show_ratio)
-        self.view.sigResized.connect(self._show_ratio)
-        self.view.sigResized.connect(self._place_ratio_icon)
+        self.ratio = RatioCorner(self)
         self.view.sigRangeChanged.connect(self._resample)
         self.view.sigResized.connect(self._resample)
         self.view.sigRangeChanged.connect(self._place_labels)
@@ -410,27 +440,6 @@ class ResponseGraph(pg.PlotWidget):
     # -- drawing ------------------------------------------------------------------------------
     def reset_view(self):
         self.view.setRange(xRange=(X_LO - X_PAD, X_HI + X_PAD), yRange=(Y_LO, Y_HI), padding=0)
-
-    def aspect_ratio(self):
-        """How many dB of gain are as long as one decade of frequency, as the view is now."""
-        (x0, x1), (y0, y1) = self.view.viewRange()
-        return (y1 - y0) / (x1 - x0) * self.view.width() / self.view.height()
-
-    def _show_ratio(self, *_):
-        if self.view.width() > 0 and self.view.height() > 0:
-            self.ratio_icon.show_ratio(self.aspect_ratio())
-
-    def _place_ratio_icon(self, *_):
-        """Where the lines of the axis titles cross, ICON_NEAR from there towards the corner of the plot area; its ink
-        within the graph whatever the titles' font."""
-        icon = self.ratio_icon
-        pi = self.getPlotItem()
-        cross = QPointF(pi.getAxis("left").label.sceneBoundingRect().center().x() + TITLE_INK,
-                        pi.getAxis("bottom").label.sceneBoundingRect().center().y() + TITLE_INK)
-        to = QPointF(self.view.sceneBoundingRect().bottomLeft()) - cross
-        half = QPoint(icon.width() // 2, icon.height() // 2)          # the middle of its square
-        at = self.mapFromScene(cross + to * (ICON_NEAR / math.hypot(to.x(), to.y()))) - half
-        icon.move(max(at.x(), -icon.PAD), min(at.y(), self.height() - icon.height() + icon.PAD))
 
     def _sample(self):
         """The frequencies to compute: the part of 20 Hz .. 20 kHz in view, POINTS_PER_PIXEL per pixel. True

@@ -39,7 +39,7 @@ from ..device import filters as F
 from ..device import models
 from ..device import params as P
 from . import theme
-from .graph import (BAND_ALPHA, BAND_W, GRAB, LANE_PX, RING, X_HI, X_LO, X_PAD, Y_HI, Y_LO,
+from .graph import (BAND_ALPHA, BAND_W, GRAB, LANE_PX, RING, RatioCorner, X_HI, X_LO, X_PAD, Y_HI, Y_LO,
                     _pen, _ticks, title_axes)
 from .legend import GROUP_GAP, ITEM_PAD, ITEM_VPAD, MARK_H, MARK_W, mark_pixmap
 
@@ -213,6 +213,7 @@ class LoudnessGraph(pg.PlotWidget):
             t.setZValue(11)
             self.addItem(t)
         pi.getViewBox().sigResized.connect(self._place_labels)
+        self.ratio = RatioCorner(self)
         self.state, self.ref, self.on = {}, 0.0, False
         self._stick = None                       # (key, Low Vol Ref in dB, pixels from the press, time)
         self._stick_timer = QTimer(self, interval=STICK_TICK, timeout=self._stick_tick)
