@@ -1,5 +1,5 @@
-"""Import by Fit: OK waits for the fit, Cancel and Close enough while it runs, converting again (one button with Close
-enough), the sum as the device makes it with the input moved onto it, garbage collection while it runs, a curve, and a
+"""Import by Fit: OK waits for the fit, Cancel and Stop while it runs, Restart (one button with Stop, as wide as
+either), the sum as the device makes it with the input moved onto it, garbage collection while it runs, a curve, and a
 fixed level."""
 
 import gc
@@ -78,7 +78,9 @@ class ImportFit(ImportTest):
         path = self.file("ten.txt", TEN_FILTERS)
         dialog = D.ImportDialog(E.load(path), path, self.session, OUT, None, 48000.0, self.win)
         self.addCleanup(dialog.done, 0)
-        self.assertEqual(dialog.convert.toolTip(), D.CONVERT_TIPS["enough"])     # while it fits
+        self.assertEqual((dialog.convert.text(), dialog.convert.toolTip()),     # while it fits
+                         (D.CONVERT_TEXTS["stop"], D.CONVERT_TIPS["stop"]))
+        width = dialog.convert.width()
         t0 = time.monotonic()
         while not dialog.convert.isEnabled() and time.monotonic() - t0 < 60:
             time.sleep(0.02)
@@ -91,18 +93,20 @@ class ImportFit(ImportTest):
         dialog.convert.click()
         self.assertFalse(dialog.fitting)
         self.assertTrue(dialog.ok.isEnabled())
-        self.assertEqual((dialog.convert.isEnabled(), dialog.convert.toolTip()), (True, D.CONVERT_TIPS["again"]))
+        self.assertEqual((dialog.convert.isEnabled(), dialog.convert.text(), dialog.convert.toolTip()),
+                         (True, D.CONVERT_TEXTS["restart"], D.CONVERT_TIPS["restart"]))
+        self.assertEqual(dialog.convert.width(), width)
         self.assertFalse(dialog.legend.items["candidate"].isVisibleTo(dialog))
         freqs = {k: v for k, v in dialog.values.items() if k[1] in (5, 8, 11, 14, 18)}
         self.assertEqual({k: P.snap_freq(v, k[1]) for k, v in freqs.items()}, freqs)
 
-    def test_convert_again(self):
+    def test_restart(self):
         dialog = self.open(self.file("three.txt", THREE))
         self.assertFalse(dialog.convert.isVisibleTo(dialog))     # Map: the same plan every time
         dialog.way.buttons[D.FIT].click()
         self.assertTrue(dialog.convert.isVisibleTo(dialog))
         wait_for_fit(dialog)
-        dialog.convert.click()                                   # just changed: meant for Close enough, not taken
+        dialog.convert.click()                                   # just changed: meant for Stop, not taken
         self.assertFalse(dialog.fitting)
         past_guard()
         dialog.convert.click()                                   # Fit: it fits again, to the same end

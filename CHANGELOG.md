@@ -17,7 +17,8 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 
 ### Changed
 
-- Import: Origin and fs come first in the conversion row; Convert again and Close enough are one button.
+- Import: Origin and fs come first in the conversion row; Restart and Stop (of a fit) are one
+  button.
 - The legends of the graphs show what can be clicked and what is shown: each group is one control, the segment of a
   shown item outlined.
 

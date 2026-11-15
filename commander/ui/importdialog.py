@@ -7,7 +7,7 @@ Cancel writes nothing. The conversion itself is eqimport's; this is what the use
                 with Fit at a fixed level; checking it sets both. Checked where it is not used, it is amber and
                 ignored. A curve: a summary instead, with the choice of the column that is the curve.
     Conversion  Origin ('—' for a curve) and fs; Map or Fit, and with Fit its Level, Bass/Treble and one button:
-                Close enough while the fit runs (stop it and take its best so far), else convert again. The graph:
+                Stop while the fit runs (take its best so far), else Restart. The graph:
                 per channel the input (wide and see-through), the sum of the result and its bands, on the main
                 window's scale; below it, on the same scale, how far the sum is off the input. The sum and its
                 bands as the device makes them; a fit's free level moves the input onto them, a fixed level centres
@@ -20,7 +20,7 @@ Cancel writes nothing. The conversion itself is eqimport's; this is what the use
 
 What the file is decides how the dialog starts (once, on opening): a Commander file maps its table; a file that
 fits the device exactly as written maps; any other file fits, and a curve only fits. Every change recomputes; a fit runs in a thread of
-its own, again half a second after the last click on a line. OK waits for the fit, or for Close enough. The dialog
+its own, again half a second after the last click on a line. OK waits for the fit, or for Stop. The dialog
 follows the device when Dual EQ changes there, and keeps OK off while the device is gone.
 
 Into a preset being edited (the window's edit stand) it works the same, on the preset instead of the device, and says
@@ -31,14 +31,13 @@ include Bass/Treble, and Output has no Bass/Treble table. A preset being edited 
 """
 
 import itertools
-import math
 import os
 import time
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QIcon, QPainter, QPalette, QPen, QPixmap, QPolygonF
+from PySide6.QtCore import QPointF, QRect, QSize, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QPalette, QPen
 from PySide6.QtWidgets import (QApplication, QCheckBox, QDialog, QFrame, QGraphicsTextItem, QGridLayout, QHBoxLayout,
                                QLabel, QListWidget, QListWidgetItem, QProgressBar, QScrollArea, QSplitter,
                                QStackedWidget, QStyle, QStyledItemDelegate, QStyleOptionButton, QVBoxLayout, QWidget)
@@ -68,8 +67,9 @@ CURVES_KEPT = 4000                               # curves kept for drawing again
 PROGRESS_MS = 100                                # a fit's best so far is shown at most this often
 GUARD_MS = 400                                   # a click this soon after the convert button changed is not taken:
                                                  # it was meant for what the button was
-CONVERT_TIPS = {"again": "Convert again",
-                "enough": "Close enough: stop the fit and take what it has found so far."}
+CONVERT_TEXTS = {"restart": "Restart", "stop": "Stop"}
+CONVERT_TIPS = {"restart": "Fit again, from the start.",
+                "stop": "Stop the fit and take what it has found so far."}
 LEVEL_SHOWN = 0.05                               # dB: a fit's level from here on is said
 LABEL_ROOM = 12                                  # px beside 20 Hz and 20 kHz for their labels
 BODY_MARGIN = 12                                 # px above and below the columns
@@ -83,7 +83,6 @@ PREAMP_FREE = "Ignored: used with a fixed level only"
 PREAMP_NO_EQ = "Ignored: no filters checked for this channel"
 PREAMP_ALONE = "Preamp: used with filters only"
 STATE_ROLE, WARN_ROLE, MARK_ROLE = Qt.UserRole + 1, Qt.UserRole + 2, Qt.UserRole + 3
-AGAIN_ICON = 14                                  # px, the round arrow
 BOX, LINE_H = 22, 22                             # px: the check box's part of the margin; a line of the file
 ROW_SPACING = 6                                  # px between the widgets of a row, as widgets.head
 
@@ -249,51 +248,6 @@ class Summary(QFrame):
 
 def _hz(f):
     return "%.3g Hz" % f if f < 1000 else "%.3g kHz" % (f / 1000)
-
-
-def again_icon(color):
-    """A round arrow, clockwise: convert again."""
-    size, scale = AGAIN_ICON, 4                  # drawn large, shown small: sharp at any display scaling
-    pm = QPixmap(size * scale, size * scale)
-    pm.setDevicePixelRatio(scale)
-    pm.fill(Qt.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.Antialiasing)
-    pen = QPen(color, 1.0)                       # as thin as the letters of a button
-    pen.setCapStyle(Qt.FlatCap)
-    p.setPen(pen)
-    radius, start, span = size / 2 - 2.6, 60, -300    # degrees: from the top right, clockwise, open at the top
-    cx, cy = size / 2, size / 2 + 0.7            # lower: the arrowhead rises above the circle, and all of it centres
-    p.drawArc(QRectF(cx - radius, cy - radius, 2 * radius, 2 * radius), start * 16, span * 16)
-    end = math.radians(start + span)
-    at = QPointF(cx + radius * math.cos(end), cy - radius * math.sin(end))
-    ahead = QPointF(math.sin(end), math.cos(end))     # clockwise along the circle, on the screen
-    side = QPointF(-ahead.y(), ahead.x())
-    p.setPen(Qt.NoPen)
-    p.setBrush(color)
-    p.drawPolygon(QPolygonF([at + ahead * 2.2, at - ahead * 0.3 + side * 1.8, at - ahead * 0.3 - side * 1.8]))
-    p.end()
-    return QIcon(pm)
-
-
-def enough_icon(color, disabled):
-    """A check mark: close enough, take what the fit has found so far. Its own colour when it cannot be pressed."""
-    icon = QIcon()
-    for c, mode in ((color, QIcon.Normal), (disabled, QIcon.Disabled)):
-        size, scale = AGAIN_ICON, 4
-        pm = QPixmap(size * scale, size * scale)
-        pm.setDevicePixelRatio(scale)
-        pm.fill(Qt.transparent)
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.Antialiasing)
-        pen = QPen(c, 1.2)
-        pen.setCapStyle(Qt.RoundCap)
-        pen.setJoinStyle(Qt.RoundJoin)
-        p.setPen(pen)
-        p.drawPolyline(QPolygonF([QPointF(3.0, 7.4), QPointF(5.8, 10.2), QPointF(11.0, 4.0)]))
-        p.end()
-        icon.addPixmap(pm, mode)
-    return icon
 
 
 # -- the graph -----------------------------------------------------------------------------------------
@@ -796,13 +750,15 @@ class ImportDialog(QDialog):
 
         self.way = Segmented(["Map", "Fit"])
         self.way.changed.connect(self.set_mode)
-        # one button, as a browser's reload and stop: Close enough while a fit runs, else Convert again
+        # one button, as a browser's reload and stop: Stop while a fit runs, else Restart. One width for both
+        # texts: the row stays as it is when the button changes
         self.convert = Action(compact=True)
-        self.convert.setIconSize(QSize(AGAIN_ICON, AGAIN_ICON))
-        self.convert.setFixedSize(self.way.sizeHint().height(), self.way.sizeHint().height())
+        widths = []
+        for text in CONVERT_TEXTS.values():
+            self.convert.setText(text)
+            widths.append(self.convert.sizeHint().width())
+        self.convert.setFixedSize(max(widths), self.way.sizeHint().height())
         self.convert.clicked.connect(self.convert_clicked)
-        self.convert_icons = {"again": again_icon(theme.BUTTON_TEXT),
-                              "enough": enough_icon(theme.BUTTON_TEXT, theme.DISABLED)}
         self.convert_as, self.convert_since = None, 0.0      # what it does now, and since when (time.monotonic)
         self.origin_box = Choice()
         self.origin_box.addItems([I.ADI2, I.EXTERNAL])
@@ -1268,7 +1224,7 @@ class ImportDialog(QDialog):
     def convert_clicked(self):
         if time.monotonic() - self.convert_since < GUARD_MS / 1000:
             return
-        if self.convert_as == "enough":
+        if self.convert_as == "stop":
             self.good_enough()
         else:
             self.recompute(fit_now=True)
@@ -1496,10 +1452,10 @@ class ImportDialog(QDialog):
             for t, amber in parts))
         self.progress.setVisible(self.fitting)
         self.fitting_label.setVisible(self.fitting)
-        does = "enough" if self.fitting else "again"
+        does = "stop" if self.fitting else "restart"
         if does != self.convert_as:
             self.convert_as, self.convert_since = does, time.monotonic()
-            self.convert.setIcon(self.convert_icons[does])
+            self.convert.setText(CONVERT_TEXTS[does])
             self.convert.setToolTip(CONVERT_TIPS[does])
         self.convert.setEnabled(not self.fitting or self.thread is not None and
                                 set(self.results) == set(self.job_curves))
