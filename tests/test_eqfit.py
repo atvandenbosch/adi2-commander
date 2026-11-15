@@ -1,8 +1,9 @@
 """From a curve to a device setting: the bands, a setting found back from its own curve, the level, the same setting
-at any level, a fixed level, the best on the grid, random starts, Bass and Treble, a start that is not lost, the grid, progress, what
-is tried and cancelling."""
+at any level, a fixed level, the best on the grid, a start like an earlier one searched once, random starts, Bass and
+Treble, a start that is not lost, the grid, progress, what is tried and cancelling."""
 
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -124,6 +125,22 @@ class Grid(unittest.TestCase):
         r = X.fit(target, fs, progress=lambda done, best: calls.append(best))
         self.assertLess(r.rms, X.to_grid(calls[-1].settings, target, fs).rms - 0.005)
         on_device(self, r.settings, False)
+
+
+class FixedStarts(unittest.TestCase):
+    def test_a_start_like_an_earlier_one_is_searched_once(self):
+        fill, fills = X.fill, []
+
+        def recorded(*a, **k):
+            fills.append(fill(*a, **k))
+            return fills[-1]
+
+        with mock.patch.object(X, "fill", recorded), mock.patch.object(X, "backfit", wraps=X.backfit) as backfit:
+            r = X.fit(X.response(FIVE))                         # found back at once: no random starts
+        distinct = [x for i, x in enumerate(fills) if x not in fills[:i]]
+        self.assertLess(len(distinct), len(fills))
+        self.assertEqual(backfit.call_count, len(distinct))
+        self.assertLess(r.rms, 0.01)
 
 
 class RandomStarts(unittest.TestCase):

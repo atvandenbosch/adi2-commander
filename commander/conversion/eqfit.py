@@ -640,14 +640,18 @@ def fit(target, fs=FS, tone=False, starts=(), progress=None, cancel=None, candid
         if progress is not None:
             progress(done[0] / steps, result(min(pool + [st], key=lambda s: s.cost).settings(), curve, fs, free))
 
-    found = []
+    found, filled = [], []
     for refine, first in plans:
         tick()
         kinds, vals = fill(model, cands, five, target, refine, first, free)
-        st = State(model, five, target, free, kinds, vals, seen)
-        interim(st, found)
-        st = backfit(st, cands, tick, improved=lambda st: interim(st, found))
-        found.append(drop_passes(st, cands, tick))
+        if (kinds, vals) in filled:                             # the search from there is the same: so is its end
+            found.append(found[filled.index((kinds, vals))])
+        else:
+            st = State(model, five, target, free, kinds, vals, seen)
+            interim(st, found)
+            st = backfit(st, cands, tick, improved=lambda st: interim(st, found))
+            found.append(drop_passes(st, cands, tick))
+        filled.append((kinds, vals))
         report(min(found, key=lambda s: s.cost))
 
     # The random starts, searched to the end the same way, while there is something left to gain.
