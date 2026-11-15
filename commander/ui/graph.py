@@ -10,6 +10,9 @@ drawn once.
     wheel elsewhere     zoom; drag elsewhere: pan; double-click: back to the full view
     on an axis          the wheel and a drag zoom and pan that axis only
 
+In the corner where the axes meet, the aspect ratio of the view: how many dB of gain are as long as one decade of
+frequency (RatioIcon), about where the lines of the axis titles cross.
+
 What is shown (commander.ui.legend): the channels EQ Left, EQ Right and Bass/Treble, and the layers Sum, Compare (the
 sums at the rate the device runs at, dashed, when it is known and not the chosen one; off at first), Bands and Handles
 (the points); a point shows when both its channel and Handles are on. The band labels show with their channel; with
@@ -31,9 +34,9 @@ import math
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QPointF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QCursor, QLinearGradient, QPen
-from PySide6.QtWidgets import QToolTip
+from PySide6.QtCore import QPoint, QPointF, Qt, Signal
+from PySide6.QtGui import QBrush, QColor, QCursor, QFontMetricsF, QLinearGradient, QPainter, QPen
+from PySide6.QtWidgets import QToolTip, QWidget
 
 from ..device import filters as F
 from ..device import models
@@ -91,6 +94,16 @@ TITLE_ROOM = 3, 1                                # pixels pyqtgraph leaves left 
 LEGEND_GAP = 8                                   # a graph's legend line over it: part of the graph
 AXIS_TIPS = {"bottom": "Frequency: wheel to zoom, drag to pan",
              "left": "Gain: wheel to zoom, drag to pan"}
+ICON = 20                                        # pixels: the square the aspect ratio's icon fills
+ICON_NEAR = 5                                    # pixels from where the axis titles cross towards the plot
+                                                 # area: near them, its ink within the graph
+TITLE_INK = 1                                    # pixels: an axis title's ink below the middle of its line, as it
+                                                 # looks (descenders, brackets); the dB axis's, turned, right of it
+ICON_HEAD = 2                                    # pixels: its arrowheads, back and to the side
+ICON_REST = 0.55                                 # its opacity: in the background
+ICON_PT = 7                                      # points: the ratio in it
+RATIO_LOW, RATIO_HIGH = "<1", "∞"                # the aspect ratio rounded below 1, or above 99
+INFINITY = 9, 5                                  # pixels: RATIO_HIGH as the icon draws it, wide and high
 
 
 def title_axes(plot_item, y_title):
@@ -237,6 +250,73 @@ class _View(pg.ViewBox):
         self.graph.hover(pt, bool(by_label))
 
 
+def ratio_text(ratio):
+    """An aspect ratio rounded to whole dB per decade, as the icon shows it: 1 to 99, else RATIO_LOW or RATIO_HIGH."""
+    n = math.floor(ratio + 0.5)
+    return RATIO_LOW if n < 1 else RATIO_HIGH if n > 99 else "%d" % n
+
+
+def infinity(mid, steps=48):
+    """RATIO_HIGH as a line around mid: a lemniscate of Gerono INFINITY wide and high, whose loops cross clearly
+    even this small."""
+    w, h = INFINITY
+    return [QPointF(mid.x() + w / 2 * math.sin(t), mid.y() + h * math.sin(t) * math.cos(t))   # sin cos: at most 1/2
+            for t in (2 * math.pi * i / steps for i in range(steps + 1))]
+
+
+class RatioIcon(QWidget):
+    """The aspect ratio of the view, small, as an icon of the axes: an arrow right and an arrow up from a corner, the
+    ratio between them (ratio_text); in the background. Its tooltip gives two decimals."""
+
+    PAD = 2                                      # pixels around the icon where its tooltip shows as well
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setFixedSize(ICON + 2 * self.PAD, ICON + 2 * self.PAD)
+        self.ratio = None
+
+    def show_ratio(self, ratio):
+        if ratio != self.ratio:
+            self.ratio = ratio
+            self.setToolTip("Aspect ratio: %.2f dB/decade" % ratio)
+            self.update()
+
+    def paintEvent(self, ev):
+        color = QColor(theme.SECONDARY)
+        color.setAlphaF(ICON_REST)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        # the lines whole pixels of the screen wide, on whole pixels of the screen: sharp at any display scaling,
+        # also where the icon itself starts within a pixel (at 125 %, say)
+        k = self.devicePixelRatioF()
+        width = max(1, int(k))
+        pen = QPen(color, width)
+        pen.setCosmetic(True)
+        p.setPen(pen)
+        at = QPointF(self.mapTo(self.window(), QPoint(0, 0))) * k
+
+        def snap(v, o):
+            return (round(v * k + o - width / 2) + width / 2 - o) / k
+
+        h = ICON_HEAD
+        top, y0 = snap(self.PAD + 0.5, at.y()), snap(self.PAD + ICON - h - 0.5, at.y())
+        x0, end = snap(self.PAD + h + 0.5, at.x()), snap(self.PAD + ICON - 0.5, at.x())   # both arrows as long
+        p.drawPolyline([QPointF(x0, top), QPointF(x0, y0), QPointF(end, y0)])
+        p.drawPolyline([QPointF(end - h, y0 - h), QPointF(end, y0), QPointF(end - h, y0 + h)])
+        p.drawPolyline([QPointF(x0 - h, top + h), QPointF(x0, top), QPointF(x0 + h, top + h)])
+        if self.ratio is not None:
+            text = ratio_text(self.ratio)
+            # the middle between the arrows within their heads, across only half a head off: centred to the eye
+            mid = QPointF((x0 + end - h / 2) / 2, (top + h + y0) / 2)
+            if text == RATIO_HIGH:
+                p.drawPolyline(infinity(mid))        # drawn as the arrows: the same whatever fonts there are
+            else:
+                font = theme.ui_font(ICON_PT)
+                box = QFontMetricsF(font).tightBoundingRect(text)      # the ink, from the start of the baseline
+                p.setFont(font)
+                p.drawText(mid - box.center(), text)
+
+
 class ResponseGraph(pg.PlotWidget):
     edited = Signal(object, int, bool)           # key, value, rounded: like the table delegates
     picked = Signal(object)                      # key of the point's frequency: select it in the table
@@ -318,6 +398,10 @@ class ResponseGraph(pg.PlotWidget):
             t.setZValue(11)
             self.addItem(t)
             self.labels.append(t)
+        self.ratio_icon = RatioIcon(self)
+        self.view.sigRangeChanged.connect(self._show_ratio)
+        self.view.sigResized.connect(self._show_ratio)
+        self.view.sigResized.connect(self._place_ratio_icon)
         self.view.sigRangeChanged.connect(self._resample)
         self.view.sigResized.connect(self._resample)
         self.view.sigRangeChanged.connect(self._place_labels)
@@ -326,6 +410,27 @@ class ResponseGraph(pg.PlotWidget):
     # -- drawing ------------------------------------------------------------------------------
     def reset_view(self):
         self.view.setRange(xRange=(X_LO - X_PAD, X_HI + X_PAD), yRange=(Y_LO, Y_HI), padding=0)
+
+    def aspect_ratio(self):
+        """How many dB of gain are as long as one decade of frequency, as the view is now."""
+        (x0, x1), (y0, y1) = self.view.viewRange()
+        return (y1 - y0) / (x1 - x0) * self.view.width() / self.view.height()
+
+    def _show_ratio(self, *_):
+        if self.view.width() > 0 and self.view.height() > 0:
+            self.ratio_icon.show_ratio(self.aspect_ratio())
+
+    def _place_ratio_icon(self, *_):
+        """Where the lines of the axis titles cross, ICON_NEAR from there towards the corner of the plot area; its ink
+        within the graph whatever the titles' font."""
+        icon = self.ratio_icon
+        pi = self.getPlotItem()
+        cross = QPointF(pi.getAxis("left").label.sceneBoundingRect().center().x() + TITLE_INK,
+                        pi.getAxis("bottom").label.sceneBoundingRect().center().y() + TITLE_INK)
+        to = QPointF(self.view.sceneBoundingRect().bottomLeft()) - cross
+        half = QPoint(icon.width() // 2, icon.height() // 2)          # the middle of its square
+        at = self.mapFromScene(cross + to * (ICON_NEAR / math.hypot(to.x(), to.y()))) - half
+        icon.move(max(at.x(), -icon.PAD), min(at.y(), self.height() - icon.height() + icon.PAD))
 
     def _sample(self):
         """The frequencies to compute: the part of 20 Hz .. 20 kHz in view, POINTS_PER_PIXEL per pixel. True

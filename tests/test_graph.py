@@ -517,6 +517,54 @@ class Graph(WindowTest):
         self.assertFalse(QToolTip.isVisible() and QToolTip.text() in G.AXIS_TIPS.values())  # the grid takes none
         self.graph.reset_view()
 
+    def test_the_aspect_ratio_in_the_corner_of_the_axes(self):
+        icon, view, vp = self.graph.ratio_icon, self.graph.view, self.graph.viewport()
+
+        def ratio():
+            (x0, x1), (y0, y1) = view.viewRange()
+            return (y1 - y0) / (x1 - x0) * view.width() / view.height()          # dB as long as one decade
+
+        self.graph.reset_view()
+        self.spin(50)
+        self.assertAlmostEqual(icon.ratio, ratio(), places=9)
+        self.assertEqual(icon.toolTip(), "Aspect ratio: %.2f dB/decade" % ratio())
+        plot = self.graph.mapFromScene(view.sceneBoundingRect()).boundingRect()
+        pi = self.graph.getPlotItem()
+        cross = QPointF(self.graph.mapFromScene(pi.getAxis("left").label.sceneBoundingRect().center()).x(),
+                        self.graph.mapFromScene(pi.getAxis("bottom").label.sceneBoundingRect().center()).y())
+        cross += QPointF(G.TITLE_INK, G.TITLE_INK)                             # where the axis titles cross
+        box = icon.geometry()
+        mid = QPointF(box.center()) + QPointF(0.5, 0.5)
+        corner = QPointF(plot.bottomLeft())
+        self.assertLess(math.hypot(*(mid - cross).toTuple()), math.hypot(*(mid - corner).toTuple()) / 2)   # near
+        self.assertLess(box.right(), plot.left())                              # under the dB values
+        self.assertGreater(box.top(), plot.bottom())                           # left of the frequency values
+        ink = box.adjusted(icon.PAD, icon.PAD, -icon.PAD, -icon.PAD)
+        self.assertTrue(self.graph.rect().contains(ink))                       # all of it in the graph
+        self.assertTrue(icon.isVisible())
+        self.win.show_stage(loudness=True)
+        self.assertFalse(icon.isVisible())                                     # with the response graph only
+        self.win.show_stage(loudness=False)
+        self.assertTrue(icon.isVisible())
+        before = icon.ratio
+        p = self.graph.mapFromScene(view.sceneBoundingRect().center())
+        app.sendEvent(vp, QWheelEvent(QPointF(p), QPointF(vp.mapToGlobal(p)), QPoint(0, 0), QPoint(0, 120),
+                                      Qt.NoButton, Qt.NoModifier, Qt.NoScrollPhase, False))
+        self.spin(50)
+        self.assertNotEqual(view.viewRange()[0], [G.X_LO - G.X_PAD, G.X_HI + G.X_PAD])
+        self.assertAlmostEqual(icon.ratio, before, places=6)                   # in the view both axes zoom alike
+        view.setRange(yRange=(-30, 30), padding=0)                             # one axis on its own
+        self.spin(50)
+        self.assertAlmostEqual(icon.ratio, ratio(), places=9)
+        self.win.resize(1000, 700)
+        self.spin(100)
+        self.assertAlmostEqual(icon.ratio, ratio(), places=9)
+        self.graph.reset_view()
+
+    def test_the_aspect_ratio_in_whole_db_per_decade(self):
+        self.assertEqual([G.ratio_text(r) for r in (0.49, 0.5, 1.49, 24.5, 99.49, 99.5)],
+                         [G.RATIO_LOW, "1", "1", "25", "99", G.RATIO_HIGH])
+
     def test_a_faint_line_per_db(self):
         left = self.graph.getPlotItem().getAxis("left")
         self.assertEqual(left.tickSpacing(G.Y_LO, G.Y_HI, 600), [(6, 0), (3, 0), (1, 0)])
