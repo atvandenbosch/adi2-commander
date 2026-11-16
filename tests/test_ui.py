@@ -941,6 +941,7 @@ class ProWindow(WindowTest):
         self.sim.front_panel([(7, 28, 3), (10, 28, 3)])               # Preset 2 on Phones 1/2 and Phones 3/4
         self.spin(1500)
         self.assertEqual(self.win.presets.rows[3].tags.text(), "P34")
+        self.assertEqual(self.win.presets.rows[3].tags.toolTip(), "Selected on Phones 3/4")
 
     def test_export_names_the_device_and_the_output(self):
         self.win.tabs.setCurrentIndex(tab(9))
@@ -1051,7 +1052,8 @@ class AnalogIn(WindowTest):
         self.assertEqual(self.sim.state[(1, 28)], 3)
         self.assertTrue(win.presets.rows[3].dot.on)
         win.tabs.setCurrentIndex(tab(3))
-        self.assertEqual(win.presets.rows[3].tags.text(), "In")       # selected on Analog In
+        self.assertEqual(win.presets.rows[3].tags.text(), "In")
+        self.assertEqual(win.presets.rows[3].tags.toolTip(), "Selected on Analog In")
 
     def test_select_and_store_say_what_they_do_without_its_bass_treble(self):
         hover(self.win, self.win.presets.rows[3])

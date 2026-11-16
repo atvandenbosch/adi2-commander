@@ -194,6 +194,11 @@ class PresetPanel(WindowTest):
         self.session.set((7, 28), 3)                                          # Phones: Preset 2
         self.settle()
         self.assertEqual(self.row(3).tags.text(), "P")
+        self.assertEqual(self.row(3).tags.toolTip(), "Selected on Phones 1/2")
+        self.session.set((10, 28), 3)                                         # Phones 3/4: Preset 2 too
+        self.settle()
+        self.assertEqual(self.row(3).tags.text(), "P I")
+        self.assertEqual(self.row(3).tags.toolTip(), "Selected on Phones 1/2 and Phones 3/4 · IEM")
         self.session.set((7, 28), 0)                                          # Phones: Manual
         self.settle()
         self.assertEqual(self.row(MANUAL).tags.text(), "")                    # Manual is each output's own

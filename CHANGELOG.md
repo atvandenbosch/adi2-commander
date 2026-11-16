@@ -25,6 +25,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
   the current user only, by default in %LOCALAPPDATA%\Programs; updates keep that. To install for all users instead,
   uninstall Commander first.
 - Backups are kept per device, named by the model, the serial number and the time: the last five of each device.
+- The tooltip of the letters beside a preset names the outputs it is selected on.
 
 ### Fixed
 

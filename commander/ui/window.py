@@ -1414,10 +1414,10 @@ class MainWindow(QMainWindow):
         editing = None if d is None else (d.slot, d.name, ready and not d.locked and d.changed(), self.edit_warning(),
                                           "Nothing to write: the preset is unchanged." if not d.changed() else
                                           "" if ready else "OK waits for the device: it is not connected.")
-        tags = {o: tag for tag, (_, o, _, _) in zip(self.model.tags, P.OUTPUTS)
+        tags = {o: (tag, self.channel_name(o)) for tag, (_, o, _, _) in zip(self.model.tags, P.OUTPUTS)
                 if o in self.model.controlled or self.session.controls(o)}
         if self.model.input is not None:
-            tags = {P.INPUT_ADDRESS: INPUT_TAG, **tags}
+            tags = {P.INPUT_ADDRESS: (INPUT_TAG, self.channel_name(P.INPUT_ADDRESS)), **tags}
         self.presets.refresh(s, (self.output_name(),) + self.output[1:], self.session.slots, ready,
                              self.session.operation(), self.slot_issues, editing, tags)
         self.source.copy(self.presets.rows.get(s.get((left, P.EQ_PRESET_SELECT))) if ready and not editing else None,

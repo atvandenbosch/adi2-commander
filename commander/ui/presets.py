@@ -39,7 +39,7 @@ from .widgets import ATTACHED_GAP, GROUP_STYLE, INNER_GAP, TITLE_STYLE, Action, 
 
 MANUAL, TEMP, CLEAR, RUMBLE = 0, 1, 22, P.RUMBLE  # EQ Preset Select; Preset n is n + 1
 BUILT_IN = (CLEAR, RUMBLE)                       # presets that are no slot: Select only
-TAGS = {3: "L", 6: "P", 9: "I"}                  # output address -> its letter
+TAGS = {o: (tag, name) for tag, (name, o, _, _) in zip("LPI", P.OUTPUTS)}   # output address -> its letter, name
 INPUT_TAG = "In"                                 # the analog input's mark, on a model that has one
 CLEAR_TIP = ("The factory state, all bands 0 dB\n"
              "To reset a preset: select Clear, then Store in the preview of that preset.\n")
@@ -205,8 +205,8 @@ class _Row(QWidget):
             w.setVisible(edited and not busy)
         self.ok.setEnabled(ok)
         self.ok.setToolTip(ok_tip if not ok and ok_tip else OK_TIP)
-        self.tags.setText(" ".join(tags))
-        self.tags.setToolTip("Selected on " + ", ".join(tags) if tags else "")
+        self.tags.setText(" ".join(tag for tag, _ in tags))
+        self.tags.setToolTip("Selected on " + " and ".join(name for _, name in tags) if tags else "")
         self.setCursor(Qt.ArrowCursor if edited or self.previewable else Qt.PointingHandCursor)
         self.setEnabled(enabled or edited)
 
@@ -271,9 +271,9 @@ class PresetPanel(QWidget):
         """state: the session's; output: (name, address, left, right) of this tab; slots: as read; operation: the
         Store or Write under way (Session.operation); issues: {slot: how it read back otherwise}; editing: the slot
         open in the edit stand, its name as typed, whether OK can write it now, what OK changes beyond the preset,
-        and why OK cannot be clicked; or None; tags: {output address: its mark} of the outputs a preset shows it is
-        selected on (default TAGS). Nothing can be clicked while not ready, while an operation is under way, or while
-        a slot is edited."""
+        and why OK cannot be clicked; or None; tags: {output address: (its mark, its name)} of the outputs a preset
+        shows it is selected on (default TAGS). Nothing can be clicked while not ready, while an operation is under
+        way, or while a slot is edited."""
         name, out, left, _ = output
         tags_of = TAGS if tags is None else tags
         self.output_title.setText(name.upper())
