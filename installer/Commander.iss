@@ -1,7 +1,8 @@
 ; Inno Setup script for ADI-2 Commander, compiled by tools/build.py, which defines Version, NumericVersion, Folder
 ; (the program folder PyInstaller made), Wizard (the wizard's images), the taskbar identities and the descriptions of
 ; the shortcuts.
-; Per user, without administrator rights: the program goes to %LOCALAPPDATA%\Programs\ADI-2 Commander.
+; For all users, in Program Files, or for the current user only, in %LOCALAPPDATA%\Programs; an update keeps that
+; choice.
 
 #ifndef Version
   #error Compile with tools/build.py
@@ -15,7 +16,11 @@ AppVersion={#Version}
 AppPublisher=Alexander van den Bosch
 AppCopyright=Copyright (C) 2026 Alexander van den Bosch
 VersionInfoVersion={#NumericVersion}
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
+; A dialog offers both; Setup skips it when it finds an earlier installation and uses that one's mode.
+PrivilegesRequiredOverridesAllowed=dialog
+; [Registry] writes to HKCU only in an installation for the current user.
+UsedUserAreasWarning=no
 DefaultDirName={autopf}\ADI-2 Commander
 DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible
@@ -36,14 +41,19 @@ SolidCompression=yes
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[Messages]
+; The two modes as equal choices; all users stays preselected.
+PrivilegesRequiredOverrideAllUsersRecommended=Install for &all users
+
 [InstallDelete]
 ; An update replaces the program folder, so that no file of an older version stays behind.
 Type: filesandordirs; Name: "{app}\_internal"
 Type: filesandordirs; Name: "{app}\licenses"
 
 [Registry]
-; What the app remembers (QSettings), removed with it.
-Root: HKCU; Subkey: "Software\ADI-2 Commander"; Flags: uninsdeletekey
+; What the app remembers (QSettings), per user: removed with an installation for the current user only. The
+; uninstaller of an installation for all users reaches one user's settings only, so it leaves them all.
+Root: HKCU; Subkey: "Software\ADI-2 Commander"; Flags: uninsdeletekey; Check: not IsAdminInstallMode
 
 [Files]
 Source: "{#Folder}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

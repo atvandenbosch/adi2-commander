@@ -21,6 +21,9 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
   button.
 - The legends of the graphs show what can be clicked and what is shown: each group is one control, the segment of a
   shown item outlined.
+- The installer offers Install for all users, in Program Files, and Install for me only. Up to 0.2.0 it installed for
+  the current user only, by default in %LOCALAPPDATA%\Programs; updates keep that. To install for all users instead,
+  uninstall Commander first.
 
 ## [0.2.0] - 2026-11-14
 

@@ -5,8 +5,8 @@
 
 Needs Inno Setup 6 as well (https://jrsoftware.org/isinfo.php). PyInstaller makes the program folder
 dist\\Commander (installer\\Commander.spec); the licenses of Commander and of what it bundles go into it; the wizard's
-images are drawn into build\\wizard; Inno Setup packs that folder (installer\\Commander.iss), per user and without
-administrator rights, with two Start menu shortcuts: the device and the simulator.
+images are drawn into build\\wizard; Inno Setup packs that folder (installer\\Commander.iss), for all users or for the
+current user only, with two Start menu shortcuts: the device and the simulator.
 """
 
 import importlib.metadata
