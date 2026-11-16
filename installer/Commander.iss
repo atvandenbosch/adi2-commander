@@ -46,9 +46,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 PrivilegesRequiredOverrideAllUsersRecommended=Install for &all users
 
 [InstallDelete]
-; An update replaces the program folder, so that no file of an older version stays behind.
-Type: filesandordirs; Name: "{app}\_internal"
-Type: filesandordirs; Name: "{app}\licenses"
+; An update replaces the program folder, so that no file of an older version stays behind. While Commander still runs,
+; the folder stays: copying then stops at Commander.exe, the first file, and Cancel leaves the installed version whole.
+Type: filesandordirs; Name: "{app}\_internal"; Check: not CommanderRunning
+Type: filesandordirs; Name: "{app}\licenses"; Check: not CommanderRunning
 
 [Registry]
 ; What the app remembers (QSettings), per user: removed with an installation for the current user only. The
@@ -68,3 +69,56 @@ Name: "{autoprograms}\ADI-2 Commander (simulated)"; Filename: "{app}\Commander.e
 
 [Run]
 Filename: "{app}\Commander.exe"; Description: "{cm:LaunchProgram,ADI-2 Commander}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+const
+  GENERIC_WRITE = $40000000;
+  FILE_SHARE_READ = 1;
+  FILE_SHARE_WRITE = 2;
+  FILE_SHARE_DELETE = 4;
+  OPEN_EXISTING = 3;
+  INVALID_HANDLE_VALUE = -1;
+  ERROR_SHARING_VIOLATION = 32;
+
+function CreateFile(FileName: String; DesiredAccess, ShareMode, SecurityAttributes, CreationDisposition,
+  FlagsAndAttributes: Cardinal; TemplateFile: THandle): THandle; external 'CreateFileW@kernel32.dll stdcall';
+function CloseHandle(Handle: THandle): BOOL; external 'CloseHandle@kernel32.dll stdcall';
+
+// A running Commander keeps Commander.exe open, in any account or Windows session, also while it starts; Windows then
+// refuses to open the file for writing.
+function CommanderRunning: Boolean;
+var
+  Handle: THandle;
+begin
+  Handle := CreateFile(ExpandConstant('{app}\Commander.exe'), GENERIC_WRITE,
+    FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE, 0, OPEN_EXISTING, 0, 0);
+  Result := (Handle = INVALID_HANDLE_VALUE) and (DLLGetLastError = ERROR_SHARING_VIOLATION);
+  if Handle <> INVALID_HANDLE_VALUE then
+    CloseHandle(Handle);
+end;
+
+// Asks to close Commander until it is gone: OK looks again; False on Cancel.
+function CommanderClosed(Message: TSetupMessageID): Boolean;
+begin
+  Result := True;
+  while Result and CommanderRunning do
+    Result := SuppressibleMsgBox(FmtMessage(SetupMessage(Message), ['{#SetupSetting("AppName")}']), mbError,
+      MB_OKCANCEL, IDCANCEL) = IDOK;
+end;
+
+// Preparing to Install closes the Commanders it lists when the user agrees; with one in another Windows session it
+// lists none. Otherwise the user closes them here, before anything is changed.
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+    if not (WizardForm.PreparingYesRadio.Visible and WizardForm.PreparingYesRadio.Checked) then
+      if not CommanderClosed(msgSetupAppRunningError) then
+        Abort;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usAppMutexCheck then
+    if not CommanderClosed(msgUninstallAppRunningError) then
+      Abort;
+end;

@@ -25,6 +25,11 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
   the current user only, by default in %LOCALAPPDATA%\Programs; updates keep that. To install for all users instead,
   uninstall Commander first.
 
+### Fixed
+
+- Setup asks to close Commander while it runs, also in another account or Windows session, before it changes
+  anything; a cancelled update could leave a Commander that did not start. The uninstaller asks as well.
+
 ## [0.2.0] - 2026-11-14
 
 ### Added
