@@ -161,6 +161,21 @@ class RandomStarts(unittest.TestCase):
         self.assertLess(r.rms, 0.01)
         on_device(self, r.settings, False)
 
+    def test_a_greedy_start_picks_among_different_candidates(self):
+        class Rng:
+            def __init__(self):
+                self.options = []
+
+            def choice(self, seq):
+                self.options.append(seq)
+                return seq[0]
+
+        rng, model, sl = Rng(), X.Model(X.FS), X.slots(False)
+        X.random_fill(rng, model, X.Candidates(model, sl), sl, X.response(FIVE))
+        self.assertEqual(len(rng.options), 5)
+        for options in rng.options:
+            self.assertEqual(len({o[1:] for o in options}), X.TOP)
+
 
 class Tone(unittest.TestCase):
     def test_bass_and_treble_take_part(self):

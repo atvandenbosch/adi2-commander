@@ -432,11 +432,11 @@ def random_fill(rng, model, cands, sl, target, offset=True):
         rr = r - r.mean() if offset else r
         for j in available(sl, kinds, vals):
             s = sl[j]
-            sig = (s.kinds, s.flo, s.fhi, s.qlo, s.qhi)
-            if sig in seen:
-                continue
-            seen.add(sig)
             for kind in s.kinds:
+                sig = (kind, s.flo, s.fhi, s.qlo, s.qhi)       # the same candidates: Peak on 1 and 2, on 4 and 5
+                if sig in seen:
+                    continue
+                seen.add(sig)
                 F, Q, S, SS = cands.table[(s.name, kind)]
                 if offset:
                     S, SS = cands.centred[(s.name, kind)]
