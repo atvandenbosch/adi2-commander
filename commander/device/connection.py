@@ -9,6 +9,7 @@ Pitfalls of the device, and what follows from them:
 """
 
 import ctypes as C
+import re
 import threading
 import time
 from ctypes import wintypes as W
@@ -71,6 +72,83 @@ for _f in ("midiInOpen", "midiOutOpen", "midiInPrepareHeader", "midiInUnprepareH
     getattr(_mm, _f).restype = C.c_uint
 
 
+class _GUID(C.Structure):
+    _fields_ = [("a", C.c_uint32), ("b", C.c_uint16), ("c", C.c_uint16), ("d", C.c_ubyte * 8)]
+
+
+class _DEVPROPKEY(C.Structure):
+    _fields_ = [("fmtid", _GUID), ("pid", C.c_ulong)]
+
+
+def _key(a, b, c, d, pid):
+    return _DEVPROPKEY(_GUID(a, b, c, (C.c_ubyte * 8)(*d)), pid)
+
+
+_cm = C.WinDLL("cfgmgr32")
+_INSTANCE_ID = _key(0x78c34fc8, 0x104a, 0x4aca, [0x9e, 0xa4, 0x52, 0x4d, 0x52, 0x99, 0x6e, 0x57], 256)
+_BUS_REPORTED_DESC = _key(0x540b947e, 0x8b40, 0x45bc, [0xa8, 0xa2, 0x6a, 0x0b, 0x89, 0x4c, 0xbd, 0xa2], 4)
+DRV_QUERYDEVICEINTERFACE, DRV_QUERYDEVICEINTERFACESIZE = 0x80C, 0x80D
+_mm.midiInMessage.argtypes = [C.c_void_p, C.c_uint, C.c_void_p, C.c_void_p]
+_mm.midiInMessage.restype = C.c_uint
+_cm.CM_Get_Device_Interface_PropertyW.argtypes = [C.c_wchar_p, C.POINTER(_DEVPROPKEY), C.POINTER(C.c_ulong),
+                                                  C.c_void_p, C.POINTER(C.c_ulong), C.c_ulong]
+_cm.CM_Locate_DevNodeW.argtypes = [C.POINTER(C.c_ulong), C.c_wchar_p, C.c_ulong]
+_cm.CM_Get_DevNode_PropertyW.argtypes = [C.c_ulong, C.POINTER(_DEVPROPKEY), C.POINTER(C.c_ulong), C.c_void_p,
+                                         C.POINTER(C.c_ulong), C.c_ulong]
+_cm.CM_Get_Parent.argtypes = [C.POINTER(C.c_ulong), C.c_ulong, C.c_ulong]
+_cm.CM_Get_Device_IDW.argtypes = [C.c_ulong, C.c_wchar_p, C.c_ulong, C.c_ulong]
+
+# The device reports its USB product name as "ADI-2 DAC (<serial number>)"; with Windows' own driver that is also
+# the name of its MIDI port.
+_SERIAL = re.compile(r"ADI-2.*\(([0-9A-Za-z]+)\)\s*$")
+
+
+def _property(get, *args):
+    t, size = C.c_ulong(), C.c_ulong(0)
+    get(*args, C.byref(t), None, C.byref(size), 0)
+    if not size.value:
+        return None
+    buf = C.create_string_buffer(size.value)
+    if get(*args, C.byref(t), buf, C.byref(size), 0):
+        return None
+    return C.wstring_at(buf)
+
+
+def _interface(port):
+    """The device interface of an input port, as a path."""
+    size = W.DWORD(0)
+    if _mm.midiInMessage(C.c_void_p(port), DRV_QUERYDEVICEINTERFACESIZE, C.byref(size), None) or not size.value:
+        return None
+    buf = C.create_string_buffer(size.value)
+    if _mm.midiInMessage(C.c_void_p(port), DRV_QUERYDEVICEINTERFACE, buf, C.c_void_p(size.value)):
+        return None
+    return C.wstring_at(buf)
+
+
+def serial_number(port, name):
+    """The serial number of the device behind input port number port, named name: from the name, else from the
+    product name of the USB device the port belongs to. None when neither says."""
+    m = _SERIAL.search(name)
+    if m:
+        return m.group(1)
+    path = _interface(port)
+    instance = path and _property(_cm.CM_Get_Device_Interface_PropertyW, C.c_wchar_p(path), C.byref(_INSTANCE_ID))
+    node = C.c_ulong()
+    if not instance or _cm.CM_Locate_DevNodeW(C.byref(node), instance, 0):
+        return None
+    while True:
+        buf = C.create_unicode_buffer(400)
+        if _cm.CM_Get_Device_IDW(node, buf, 400, 0) or not buf.value.upper().startswith("USB\\"):
+            return None
+        m = _SERIAL.search(_property(_cm.CM_Get_DevNode_PropertyW, node, C.byref(_BUS_REPORTED_DESC)) or "")
+        if m:
+            return m.group(1)
+        parent = C.c_ulong()
+        if _cm.CM_Get_Parent(C.byref(parent), node, 0):
+            return None
+        node = parent
+
+
 def list_ports():
     """([input port names], [output port names])"""
     ins, outs = [], []
@@ -119,7 +197,8 @@ def _check(result, what):
 
 
 class WinmmPort:
-    """The ADI-2 MIDI ports through winmm: raw SysEx out, raw SysEx in. The simulator replaces this."""
+    """The ADI-2 MIDI ports through winmm: raw SysEx out, raw SysEx in; serial: the device's serial number, or None.
+    The simulator replaces this."""
     NBUF, BUFLEN = 32, 1024
 
     def __init__(self):
@@ -131,6 +210,7 @@ class WinmmPort:
         if not ii or not oo:
             raise DeviceNotFound("no ADI-2 MIDI port found (in: %s; out: %s)" % (ins, outs))
         self.names = (ins[ii[0]], outs[oo[0]])
+        self.serial = serial_number(ii[0], ins[ii[0]])
         self.h_in, self.h_out = _H(), _H()
         try:
             _check(_mm.midiInOpen(C.byref(self.h_in), ii[0], 0, 0, 0), "midiInOpen")

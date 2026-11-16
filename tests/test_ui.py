@@ -1249,6 +1249,13 @@ class Backup(unittest.TestCase):
             self.assertEqual(f.read(), setupfile.write(taken, session.slots, session.model, session.revision()))
         self.assertEqual(self.sim.state[(4, 7)], taken[(4, 7)] + 4)
 
+    def test_named_by_the_serial_number(self):
+        self.sim.serial = "12345678"
+        win, session = self.window(backups=self.folder)
+        self.run_for(win, 8)
+        [name] = self.copies()
+        self.assertTrue(name.startswith("ADI-2 DAC FS 12345678 "))
+
     def test_a_new_copy_only_when_the_state_differs(self):
         win, session = self.window(backups=self.folder)
         self.run_for(win, 8)

@@ -24,6 +24,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 - The installer offers Install for all users, in Program Files, and Install for me only. Up to 0.2.0 it installed for
   the current user only, by default in %LOCALAPPDATA%\Programs; updates keep that. To install for all users instead,
   uninstall Commander first.
+- Backups are kept per device, named by the model, the serial number and the time: the last five of each device.
 
 ### Fixed
 

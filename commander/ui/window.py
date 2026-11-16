@@ -230,7 +230,7 @@ class MainWindow(QMainWindow):
         self.simulation = simulation
         self.simulated = simulated or simulation is not None
         self.backups = backups
-        self.taken = None                            # the state as connected, (state, model), until saved
+        self.taken = None                            # the state as connected, (state, model, serial), until saved
         self.settings = settings if settings is not None else QSettings(untested.ORGANIZATION, untested.APPLICATION)
         self.warned = set()                          # the untested models the notice was shown for in this run
         self.marks = Marks()
@@ -620,7 +620,7 @@ class MainWindow(QMainWindow):
             self.set_model(self.session.model)
         if status == "ready":
             if self.backups is not None and not self.simulated:     # before anything can be written
-                self.taken = (dict(self.session.state), self.session.model)
+                self.taken = (dict(self.session.state), self.session.model, self.session.port.serial)
             QTimer.singleShot(0, self.warn_untested)    # after this event: the notice is modal
         else:
             self.taken = None
@@ -698,10 +698,10 @@ class MainWindow(QMainWindow):
         """The state as connected, with the preset slots once all are read, as a copy in the backups folder."""
         if self.taken is None or any(n not in self.session.slots for n in setupfile.SLOTS):
             return
-        (state, model), self.taken = self.taken, None
+        (state, model, serial), self.taken = self.taken, None
         try:
             text = setupfile.write(state, self.session.slots, model, self.session.revision())
-            backup.keep(self.backups, model, text)
+            backup.keep(self.backups, model, text, serial=serial)
         except (OSError, ValueError) as e:
             self.note("Backup not saved: %s" % e, theme.WARN)
 
