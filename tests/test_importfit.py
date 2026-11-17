@@ -234,6 +234,28 @@ class ImportFit(ImportTest):
         for given, total in ((left, left_sum), (right, right_sum)):
             self.assertLess(np.sqrt(np.mean((total - given) ** 2)), 0.5)       # each sum on its own input
 
+    def test_the_channel_a_fit_does_not_work_on_steps_back(self):
+        path = self.file("lr.txt", LEFT_RIGHT)
+        dialog = D.ImportDialog(E.load(path), path, self.session, OUT, None, 48000.0, self.win)
+        self.addCleanup(dialog.done, 0)
+        graph = dialog.graph
+        alpha = lambda item: round(item.opts["pen"].color().alphaF(), 3)          # noqa: E731
+        inputs = lambda: tuple(alpha(items["input"]) for items in graph.items)  # noqa: E731
+        rest, back = D.INPUT_ALPHA, round(D.INPUT_ALPHA * D.DIMMED, 3)
+        seen = []                                                              # (channel, inputs) as they change
+        t0 = time.monotonic()
+        while dialog.fitting and time.monotonic() - t0 < 120:
+            time.sleep(0.02)
+            QApplication.processEvents()
+            if graph.fitted is not None and (not seen or seen[-1] != (graph.fitted, inputs())):
+                seen.append((graph.fitted, inputs()))
+        self.assertEqual(seen, [("L", (rest, back)), ("R", (back, rest))])    # the left first, then the right
+        self.assertIsNone(graph.fitted)
+        self.assertEqual(inputs(), (rest, rest))
+        graph.draw(graph.channels, graph.bt, "R")                              # as while the right is fitted
+        dialog.legend.point("L", True)                                         # a legend item pointed at goes first
+        self.assertEqual(inputs(), (rest, back))
+
     def test_a_fixed_level_centres_a_curve_and_stays_for_the_next(self):
         self.addCleanup(setattr, D.ImportDialog, "fixed_level", False)
         dialog = self.open(self.file("curve.csv", table({"eq": 2.0 + PEAK})))

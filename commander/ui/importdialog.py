@@ -12,7 +12,8 @@ Cancel writes nothing. The conversion itself is eqimport's; this is what the use
                 window's scale; below it, on the same scale, how far the sum is off the input. The sum and its
                 bands as the device makes them; a fit's free level moves the input onto them, a fixed level centres
                 a curve on 0 dB ("Input (adj.)"). While a fit runs, what it tries now: white dots, as thick as the
-                sum. Only the result counts here, not the device. Its legend works as the main window's.
+                sum; fitting one channel after the other, the channel it does not work on steps back. Only the
+                result counts here, not the device. Its legend works as the main window's.
     Output      the result in the tables of the main window, read only; what the input does not set is '—', and
                 goes to the device at its factory default. A check box per block says whether OK writes it; a
                 block the input does not set at all starts unchecked. OK and Cancel.
@@ -327,6 +328,7 @@ class CurveGraph(pg.PlotWidget):
         self.visible = {k: True for k in ("L", "R") + self.LAYERS}
         self.drawn = {}                                  # {item: (curve, look)} as it is on screen
         self.emphasis = None                             # a legend item pointed at
+        self.fitted = None                               # the channel a fit works on, of two fitted one after the other
         self.channels = []
         self.bt = []                                     # the curves of Bass and Treble, for all channels
         # a fixed set of items, updated in place: per channel (left last, on top) the input, its bands, what the fit
@@ -363,11 +365,11 @@ class CurveGraph(pg.PlotWidget):
             self.points = points
             self.resolution_changed.emit()
 
-    def draw(self, channels, bt=()):
+    def draw(self, channels, bt=(), fitted=None):
         """channels: per channel (key 'L' or 'R', colour, input, sum or None, [band curve], what the fit tries now or
         None), at freqs(); the input and what is tried moved to the sum's level already. bt: the curves of Bass and
-        Treble, in every sum."""
-        self.channels, self.bt = channels, list(bt)
+        Treble, in every sum. fitted: the key of the channel a fit works on while the other waits or is done."""
+        self.channels, self.bt, self.fitted = channels, list(bt), fitted
         self.x = np.linspace(X_LO, X_HI, len(channels[0][2])) if channels else self.x
         self.redraw()
 
@@ -417,11 +419,15 @@ class CurveGraph(pg.PlotWidget):
                 self._show(items["input"], "input", given, color, INPUT_W, INPUT_ALPHA, (key, "input"))
 
     def _dim(self, keys):
-        return DIMMED if self.emphasis is not None and self.emphasis not in keys else 1.0
+        """DIMMED where this steps back: a legend item is pointed at and it is none of keys; else, while a fit works
+        on one channel of two, it is of the other."""
+        if self.emphasis is not None:
+            return DIMMED if self.emphasis not in keys else 1.0
+        return DIMMED if self.fitted is not None and self.fitted not in keys else 1.0
 
     def _band(self, item, y, color, keys):
-        """A band as in the main window: fading in its tails; full while Bands is pointed at, DIMMED while another
-        item is that it does not belong to (keys), else BAND_ALPHA."""
+        """A band as in the main window: fading in its tails; full while Bands is pointed at, DIMMED where it steps
+        back (_dim; keys: what it belongs to), else BAND_ALPHA."""
         alpha = 1.0 if self.emphasis == "bands" else DIMMED if self._dim(keys) < 1 else BAND_ALPHA
         self._put(item, y, ("band", QColor(color).rgba(), alpha), lambda: _fading_pen(color, BAND_W, alpha, self.x, y))
 
@@ -1444,7 +1450,8 @@ class ImportDialog(QDialog):
             names[key] = (CHANNEL_NAMES[side] if self.dual else SHARED_NAME, color)
         self.legend.set_input(*_adjusted(shifts, self.centring()))
         self.legend.set_fitting(self.fitting)
-        self.graph.draw(channels, bt)
+        fitted = next(iter(self.tried), None) if self.fitting else None
+        self.graph.draw(channels, bt, fitted[0] if fitted and len(fitted) == 1 and len(channels) == 2 else None)
         shown = names, bool(self.outcome.get("BT"))
         if shown != self.names:
             self.names = shown

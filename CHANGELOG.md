@@ -37,6 +37,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
   on Sections in the legend. The legend names the channels Left and Right.
 - Import's legend names the channels Left and Right too; Bass/Treble shows with them.
 - Import: what a fit tries now (Candidate) shows as white dots over the sum.
+- Import: while a fit works on one channel of two, the other steps back.
 
 ### Fixed
 
