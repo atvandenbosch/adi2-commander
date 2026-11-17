@@ -40,6 +40,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 - Import: what a fit tries now (Candidate) shows as white dots over the sum.
 - The Loudness graph is drawn as the response graph; with a DSD input, Loudness is faded.
 - Import: while a fit works on one channel of two, the other steps back.
+- The tooltips of the keys under DEVICE say what each key does with Remap Keys as it is set.
 
 ### Fixed
 

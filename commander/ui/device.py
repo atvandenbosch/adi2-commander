@@ -54,33 +54,60 @@ TIPS = {
     P.VOLUME_SCREEN: "Whether turning VOLUME shows the Volume screen",
     P.LOCK_UI: "What on the device is locked; VOLUME always works.\n"
                "To unlock on the device, hold encoder 1. Commander can still change it.",
-    P.REMAP_KEYS: "Where the keys below have the functions chosen for them\n"
-                  "On: on the device and on the remote control; Remote: on the remote control only",
+    P.REMAP_KEYS: "Which keys have the functions chosen below\n"
+                  "Remote: keys %(remote_keys)s on the remote control\n"
+                  "On: also VOL, I/O, EQ and SETUP on the device; held for half a second, they open their menu.\n"
+                  "Off: none; keys %(remote_keys)s on the remote control do nothing.",
 }
-KEY_TIP = ("The function of key %d on the remote control, and of %s on the device with Remap Keys On\n"
-           "On the device %s keeps its own function when pushed for half a second.")
-REMOTE_KEY_TIP = "The function of key %d on the remote control"
+# a key's tooltip by Remap Keys (Off, On, Remote) and by whether it has a function (value 0, Default, has none):
+# %(device)s is its key on the device, %(n)d its key on the remote control
+KEY_TIPS = {
+    (1, True): "The function of %(device)s on the device and of key %(n)d on the remote control; "
+               "held for half a second, %(device)s opens its menu.",
+    (1, False): "No function: %(device)s on the device opens its menu and key %(n)d on the remote control does "
+                "nothing.",
+    (2, True): "Remap Keys is Remote, so this is the function of key %(n)d on the remote control; %(device)s on the "
+               "device opens its menu.",
+    (2, False): "Remap Keys is Remote, so key %(n)d on the remote control does nothing; %(device)s on the device "
+                "opens its menu.",
+    (0, None): "Remap Keys is off, so %(device)s on the device opens its menu and key %(n)d on the remote control "
+               "does nothing.",
+}
+# a key on the remote control only (IR 5 .. IR 7)
+REMOTE_KEY_TIPS = {True: "The function of key %(n)d on the remote control",
+                   False: "No function: key %(n)d on the remote control does nothing.",
+                   None: "Remap Keys is off, so key %(n)d on the remote control does nothing."}
+# the keys on the device whose names a fixed key on the remote control has too
+SAME_NAME = "Note: the %s key on the remote control is a separate key, not affected by Remap Keys."
 EXTRA = {(models.PRO.id, P.BAL_PHONES): "Line Out is then muted.",
          (models.PRO_24.id, P.BAL_PHONES): "The Pentaconn jack is always balanced."}
 NEEDS_DUAL_PHONES = "Can be set with Dual Phones on"
 PAGES = ("Audio", "Controls")
 CONTROLS = {"POWER", "DISPLAY", "KEYS"}          # the groups on the second page
 NOT_IN_USE = "Not in use: DSD Direct is off."
-KEYS_OFF = "Not in use: Remap Keys is off."
 DAC_MODE_ONLY = "Takes effect in Basic Mode DAC"
 
 
 def tip(model, setting):
     """What setting chooses, on model."""
-    if setting.index in P.KEYS:
-        n, key = P.KEYS.index(setting.index) + 1, setting.name.split()[0]
-        return KEY_TIP % (n, key, key) if n <= 4 else REMOTE_KEY_TIP % n
     pro = model.sources is not None                   # an ADI-2 Pro or ADI-2/4 Pro
     text = TIPS[setting.index] % {"inputs": "AES, SPDIF and USB" if pro else "SPDIF and USB",
                                   "phones": "Phones 1/2 is" if pro else "Phones and IEM are",
-                                  "high": setting.names[1] if setting.names else ""}
+                                  "high": setting.names[1] if setting.names else "",
+                                  "remote_keys": "1–7" if pro else "1–4"}
     extra = EXTRA.get((model.id, setting.index))
     return text if extra is None else text + "\n" + extra
+
+
+def key_tip(setting, remap, value):
+    """What a key does with Remap Keys at remap (None: not known yet, taken as On) and its function value."""
+    n, device = P.KEYS.index(setting.index) + 1, setting.name.split()[0]
+    remap = 1 if remap is None else remap
+    has = None if remap == 0 else value != 0
+    if n > 4:
+        return REMOTE_KEY_TIPS[has] % {"n": n}
+    text = KEY_TIPS[remap, has] % {"n": n, "device": device}
+    return text + "\n" + SAME_NAME % device if device in ("VOL", "EQ") else text
 
 
 class DevicePanel(QWidget):
@@ -182,7 +209,7 @@ class DevicePanel(QWidget):
         value = lambda i: s.get((P.DEVICE_ADDRESS, i)) if ready else None          # noqa: E731
         for i, (x, stepper) in self.steppers.items():
             key, v = (P.DEVICE_ADDRESS, i), value(i)
-            lines = [tip(self.model, x)]
+            lines = [key_tip(x, value(P.REMAP_KEYS), v) if i in P.KEYS else tip(self.model, x)]
             faded = i == P.DSD_FILTER and value(P.DSD_DIRECT) == 0
             if faded:
                 lines.append(NOT_IN_USE)
@@ -191,7 +218,6 @@ class DevicePanel(QWidget):
                     stepper.names = session.key_names()
                 if value(P.REMAP_KEYS) == 0:
                     faded = True
-                    lines.append(KEYS_OFF)
                 elif v in self.model.keys.dac_mode and session.basic_mode() != P.MODE_DAC:
                     faded = True
                     lines.append(DAC_MODE_ONLY)

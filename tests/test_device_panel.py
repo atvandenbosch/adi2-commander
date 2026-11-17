@@ -82,7 +82,36 @@ class DevicePanel(WindowTest):
         self.session.set((12, P.REMAP_KEYS), 0)
         self.settle()
         self.assertTrue(key.faded)
-        self.assertTrue(key.toolTip().endswith("Not in use: Remap Keys is off."))
+        self.assertTrue(key.toolTip().startswith("Remap Keys is off, so VOL on the device opens its menu and key 1 "
+                                                 "on the remote control does nothing."))
+
+    def test_a_key_tells_what_it_does_by_remap_keys(self):
+        key = self.panel.steppers[27][1]                                        # I/O (2)
+        tips = {}
+        for remap, value in ((1, 17), (1, 0), (2, 17), (2, 0), (0, 17)):
+            self.session.set((12, P.REMAP_KEYS), remap)
+            self.session.set((12, 27), value)
+            self.settle()
+            tips[remap, value] = key.toolTip()
+        self.assertEqual(tips[1, 17], "The function of I/O on the device and of key 2 on the remote control; "
+                                      "held for half a second, I/O opens its menu.")
+        self.assertEqual(tips[1, 0], "No function: I/O on the device opens its menu and key 2 on the remote "
+                                     "control does nothing.")
+        self.assertEqual(tips[2, 17], "Remap Keys is Remote, so this is the function of key 2 on the remote "
+                                      "control; I/O on the device opens its menu.")
+        self.assertEqual(tips[2, 0], "Remap Keys is Remote, so key 2 on the remote control does nothing; I/O on "
+                                     "the device opens its menu.")
+        self.assertEqual(tips[0, 17], "Remap Keys is off, so I/O on the device opens its menu and key 2 on the "
+                                      "remote control does nothing.")
+
+    def test_vol_and_eq_set_apart_from_the_keys_of_the_remote_control(self):
+        note = lambda i: [x for x in self.panel.steppers[i][1].toolTip().split("\n")         # noqa: E731
+                          if x.startswith("Note:")]
+        self.assertEqual(note(26), ["Note: the VOL key on the remote control is a separate key, not affected by "
+                                    "Remap Keys."])
+        self.assertEqual(note(28), ["Note: the EQ key on the remote control is a separate key, not affected by "
+                                    "Remap Keys."])
+        self.assertEqual((note(27), note(29)), ([], []))                        # I/O, SETUP
 
     def test_a_change_on_the_device_is_shown(self):
         self.sim.front_panel([(12, P.LOCK_UI, 3)])
@@ -143,6 +172,18 @@ class DevicePanel24(DevicePanel):
         self.assertIn("Pentaconn", self.panel.steppers[P.BAL_PHONES][1].toolTip())
         self.assertEqual(self.rows()[-1][1][-3:], ["IR 5", "IR 6", "IR 7"])
         self.assertEqual((self.text(22), self.text(24)), ("Source SPDIF coax", "Source USB 1/2"))     # IR 5, IR 7
+        self.assertIn("keys 1–7 on the remote control", self.panel.steppers[P.REMAP_KEYS][1].toolTip())
+
+    def test_a_key_of_the_remote_control_only(self):
+        key = self.panel.steppers[22][1]                                        # IR 5: Source SPDIF coax
+        first = lambda: key.toolTip().split("\n")[0]                             # noqa: E731
+        self.assertEqual(first(), "The function of key 5 on the remote control")
+        self.session.set((12, 22), 0)
+        self.settle()
+        self.assertEqual(key.toolTip(), "No function: key 5 on the remote control does nothing.")
+        self.session.set((12, P.REMAP_KEYS), 0)
+        self.settle()
+        self.assertEqual(key.toolTip(), "Remap Keys is off, so key 5 on the remote control does nothing.")
 
     def test_a_source_on_a_key_in_basic_mode_dac(self):
         key = self.panel.steppers[26][1]                                        # VOL (1): Source Analog
