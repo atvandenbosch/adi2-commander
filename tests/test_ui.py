@@ -435,6 +435,17 @@ class Window(WindowTest):
         self.spin(1000)
         self.assertEqual(self.win.windowTitle(), "ADI-2 Commander")
 
+    def test_the_serial_number_in_the_title(self):
+        self.sim.power(False)
+        self.spin(1000)
+        self.sim.serial = "12345678"
+        self.sim.power(True)
+        for _ in range(60):
+            self.spin(50)
+            if self.session.ready():
+                break
+        self.assertEqual(self.win.windowTitle(), "ADI-2 Commander – ADI-2 DAC FS 12345678")
+
     def test_a_model_that_is_not_supported(self):
         self.sim.power(False)
         self.spin(1000)

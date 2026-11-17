@@ -641,12 +641,15 @@ class MainWindow(QMainWindow):
         self.refresh()                                   # DSD bypasses the DSP: the switches, curves and cells follow
 
     def show_title(self):
-        """The title names the connected model; in Simulated mode the simulated model."""
+        """The title names the connected model and its serial number; in Simulated mode the simulated model."""
         title = "ADI-2 Commander"
         if self.simulation is not None:
             title += " – SIMULATED " + self.simulation.name()
         elif self.session.ready() and self.session.model is not None:     # dropping, the model is gone first
             title += " – " + models.full_name(self.session.model, self.session.revision())
+            serial = getattr(self.session.port, "serial", None)
+            if serial:
+                title += " " + serial
         self.setWindowTitle(title)
 
     def show_tabs(self):

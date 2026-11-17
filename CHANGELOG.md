@@ -26,6 +26,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
   uninstall Commander first.
 - Backups are kept per device, named by the model, the serial number and the time: the last five of each device.
 - Export offers a file name with the serial number after the model.
+- The title bar shows the serial number after the model.
 - The tooltip of the letters beside a preset names the outputs it is selected on.
 
 ### Fixed
