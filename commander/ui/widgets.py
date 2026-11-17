@@ -219,9 +219,11 @@ class Action(QPushButton):
         self.setCursor(Qt.PointingHandCursor)
         self.plain = ACTION_STYLE.replace("padding: 2px 10px", "padding: 1px 6px") if compact else ACTION_STYLE
         self.setStyleSheet(self.plain)
+        self.warns = False                       # a click does more than it seems (warn)
 
     def warn(self, on):
         """Its name in amber, under the mouse too, when a click does more than it seems; its tooltip says what."""
+        self.warns = on
         sheet = self.plain
         if on:
             sheet = sheet.replace("{ color: %s;" % theme.BUTTON_TEXT.name(), "{ color: %s;" % theme.WARN.name())

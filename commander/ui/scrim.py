@@ -4,10 +4,7 @@ under the veil, drawn but out of reach. An outline goes around what stays clear.
 the row, over the edges of the rows beside it, on the ground of the page's column.
 
 The veil only draws: mouse events go through it. What lies under it is disabled by the window, so that neither the
-mouse nor the keyboard reaches it.
-
-Without the veil (veil False) only the outline and the tab are drawn: the preview of a preset, which joins its row in
-the same way but puts nothing out of reach."""
+mouse nor the keyboard reaches it."""
 
 from PySide6.QtCore import QEvent, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
@@ -24,10 +21,6 @@ RISE = 4                                         # px the tab stands out above a
 
 
 class Scrim(QWidget):
-    outline = True                               # the line around what stays clear
-    veil = True                                  # False: no veil, only the outline and the tab
-    margin = MARGIN                              # px between the page's widgets and the outline
-
     def __init__(self, parent):
         super().__init__(parent)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
@@ -85,7 +78,7 @@ class Scrim(QWidget):
         page = self._rect(shown[0])
         for w in shown[1:]:
             page = page.united(self._rect(w))
-        page = page.adjusted(-self.margin, -self.margin, self.margin, self.margin)
+        page = page.adjusted(-MARGIN, -MARGIN, MARGIN, MARGIN)
         page = page.intersected(QRectF(self.rect()).adjusted(0, 0, -1, -1))       # the outline all around
         path.addRoundedRect(page, RADIUS, RADIUS)
         seen = self.tab.visibleRegion().boundingRect() if self.tab is not None else None
@@ -108,12 +101,10 @@ class Scrim(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         clear, beyond = self.clear_area()
         p.fillPath(beyond, GROUND)
-        if self.veil:
-            veil = QPainterPath()
-            veil.setFillRule(Qt.OddEvenFill)
-            veil.addRect(QRectF(self.rect()))
-            veil.addPath(clear)
-            p.fillPath(veil, VEIL)
-        if self.outline:
-            p.setPen(QPen(OUTLINE, 1))
-            p.drawPath(clear.translated(0.5, 0.5))
+        veil = QPainterPath()
+        veil.setFillRule(Qt.OddEvenFill)
+        veil.addRect(QRectF(self.rect()))
+        veil.addPath(clear)
+        p.fillPath(veil, VEIL)
+        p.setPen(QPen(OUTLINE, 1))
+        p.drawPath(clear.translated(0.5, 0.5))

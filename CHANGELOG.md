@@ -28,6 +28,11 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 - Export offers a file name with the serial number after the model.
 - The title bar shows the serial number after the model.
 - The tooltip of the letters beside a preset names the outputs it is selected on.
+- Presets: the row under the mouse offers Select, over its dot and number, and for a preset Edit and Store at its
+  end. Manual and Temp are selected with Select as well; a click on a row selects nothing. A double click selects,
+  except on an unused preset and where Select is amber.
+- The preview of a preset lies over the left of the graph while the mouse is on its row, at 25 dB per decade.
+- The letters of the outputs a preset is selected on follow its name; a name cut short fades out before them.
 
 ### Fixed
 

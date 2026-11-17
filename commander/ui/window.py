@@ -10,12 +10,11 @@ part is a table headed by its own switch, in the corner above the row names, on 
 a state is shown once, where it is set. Room between the parts groups them: less between the two channels than
 between the EQ, Bass/Treble and Loudness.
 
-A preset's row, Clear or Rumble under the mouse opens its preview (PresetPreview) just past the names in the presets
-panel, joined to the row as its tab, with Select, Edit and Store; the row of its actions lies level with the row where
-there is room. It stays open while the mouse is on the row, on the preview, or between them, follows the mouse to
-another such row, and closes when an action is clicked.
+A row of the presets panel under the mouse shows its actions: Select, and for a slot Edit and Store. A slot's row,
+Clear or Rumble also opens its preview (PresetPreview) over the left of the graph, level with the row where there is
+room. Both follow the mouse to another row and go when it leaves the rows, or an action is clicked.
 
-Edit in a preset's preview opens the edit stand: the stage and the column show the preset (a Draft) instead of the
+Edit in a preset's row opens the edit stand: the stage and the column show the preset (a Draft) instead of the
 output's EQ, and all else lies under a veil (Scrim), out of reach, with the row joined to them as their tab. The title
 is PRESET, with the number and the name, which can be typed; the switches are titles, as a preset has none; Loudness,
 no part of a preset, is gone. Import and Export work on the preset; nothing goes to the device. Nothing is chosen at the
@@ -53,9 +52,9 @@ from .legend import Legend
 from .importdialog import ImportDialog, read_file
 from .loudness import LoudnessGraph
 from .output import OutputPanel, shared_tip
-from .presets import INPUT_TAG, ChosenRow, NameEditor, PresetPanel, SideTab
+from .presets import INPUT_TAG, ChosenRow, NameEditor, PresetPanel, SideTab, actions
 from .preview import PresetPreview
-from .scrim import RISE, Scrim
+from .scrim import Scrim
 from . import simulated as simulated_choice
 from . import untested
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, LOUDNESS_COLUMNS, CellDelegate, Marks,
@@ -94,8 +93,7 @@ SHARE = ("Share L > R", "Share R > L")
 SPLIT = "Split L <> R"
 
 BT_IN_PRESET = "Bass/Treble of this preset: it comes along only where Load Bass/Treble with preset is on."
-PREVIEW_GAP = 16                                 # px from the end of the longest name to a preset's preview
-PREVIEW_INSET = 8                                # px in from the graph's zone: the preview no further right, nor higher
+PREVIEW_INSET = 8                                # px in from the graph's zone: the preview's left edge, and no higher
 
 
 class Lamp(QWidget):
@@ -239,7 +237,7 @@ class MainWindow(QMainWindow):
         self.before_edit = None                      # where the work was when it opened: see leave_edit
         self.draft_marks = Marks()                   # its flashes; nothing of it is read back
         self.draft_marks.on_flash = self.marks.on_flash
-        self.preview_row = None                      # the row whose preview is open
+        self.hovered_row = None                      # the row under the mouse: its actions, and its preview if any
         self.pointer = QCursor.pos                   # where the mouse is, on the screen
         self.setWindowTitle("ADI-2 Commander")
 
@@ -435,9 +433,12 @@ class MainWindow(QMainWindow):
         self.load_bt = Option("Load Bass/Treble with preset")      # RME's name for it, in full
         self.load_bt.clicked.connect(self.toggle_load_bt)
         self.presets = PresetPanel(self.load_bt)
-        self.presets.selected.connect(self.select_preset)
+        self.presets.selected.connect(lambda value: self.from_row(self.select_preset, value))
         self.presets.finished.connect(self.finish_edit)
-        self.presets.peeked.connect(self.open_preview)
+        self.presets.entered.connect(self.enter_row)
+        self.presets.aimed.connect(self.aim)
+        self.presets.edited.connect(lambda slot: self.from_row(self.edit_preset, slot))
+        self.presets.stored.connect(lambda slot: self.from_row(self.store_preset, slot))
         self.presets_area = QScrollArea()
         self.presets_area.setWidget(self.presets)
         self.presets_area.setWidgetResizable(True)
@@ -546,12 +547,6 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         self.scrim = Scrim(root)
         self.preview = PresetPreview(root)
-        self.preview.selected.connect(lambda value: self.from_preview(self.select_preset, value))
-        self.preview.edited.connect(lambda slot: self.from_preview(self.edit_preset, slot))
-        self.preview.stored.connect(lambda slot: self.from_preview(self.store_preset, slot))
-        self.peek = Scrim(root)                          # the preview's outline and tab
-        self.peek.veil = False
-        self.peek.margin = 0
 
         session.on_connection.append(self.on_connection)
         session.on_changed.append(self.on_changed)
@@ -600,8 +595,8 @@ class MainWindow(QMainWindow):
         self.lamp.busy = bool(self.session.pending or self.session.sent or self.session.operating())
         self.lamp.phase += 1
         self.lamp.update()
-        if self.preview_row is not None:
-            self.follow_preview(self.pointer())
+        if self.hovered_row is not None:
+            self.follow_mouse(self.pointer())
 
     def set_model(self, model):
         """Lay the window out for a model: the names of the outputs; the panel of the output's other settings, where
@@ -1082,93 +1077,88 @@ class MainWindow(QMainWindow):
         self.note("Storing the EQ of %s in Preset %d …" % (self.output[0], slot))
         self.refresh()
 
-    # -- a preset's preview ------------------------------------------------------------------------
-    def previewable(self, row):
-        """A row that can show its preview now (a slot's, Clear, Rumble): not while it cannot be clicked."""
-        return row.previewable and row.isEnabled() and not row.edited
+    # -- the row under the mouse: its actions, a preset's preview --------------------------------------------------------------------
+    def actionable(self, row):
+        """A row that can show its actions now: not while it cannot be clicked, nor while the edit stand is open."""
+        return row.isEnabled() and not row.edited and self.draft is None
 
-    def open_preview(self, value):
-        """A slot's row, Clear or Rumble came under the mouse: its preview, beside it."""
+    def enter_row(self, value):
+        """A row came under the mouse: its actions; for a slot, Clear or Rumble also its preview."""
         row = self.presets.rows[value]
-        if row is self.preview_row or self.draft is not None or not self.previewable(row):
+        if row is self.hovered_row:
             return
-        self.preview_row = row
-        self.presets.peek(value)
-        self.refresh_preview()
-        self.place_preview()
-        self.preview.show()
-        self.preview.raise_()
-        self.peek.cover(self.preview.page(), row)
+        self.leave_row()
+        if not self.actionable(row):
+            return
+        self.hovered_row = row
+        self.refresh_hovered()
+        if row.previewable:
+            self.place_preview()
+            self.preview.show()
+            self.preview.raise_()
 
-    def close_preview(self):
-        if self.preview_row is None:
+    def leave_row(self):
+        if self.hovered_row is None:
             return
-        self.preview_row = None
+        self.hovered_row.show_actions(None)
+        self.hovered_row = None
         self.preview.hide()
-        self.peek.uncover()
-        self.presets.peek(None)
+        self.preview.show_graph(False)
 
-    def from_preview(self, act, value):
-        """An action in the preview: done with it."""
-        self.close_preview()
+    def aim(self, value, on):
+        """The mouse came on (on) or left the Select of the row of value: the preview shows what it loads, or what the
+        slot holds. Only for the row under the mouse: leaving one Select can come after entering the next."""
+        if self.hovered_row is not None and self.hovered_row.value == value:
+            self.preview.show_graph(on)
+
+    def from_row(self, act, value):
+        """An action in a row: done with its actions and preview."""
+        self.leave_row()
         act(value)
 
-    def refresh_preview(self):
-        row = self.preview_row
+    def refresh_hovered(self):
+        row = self.hovered_row
         if row is None:
             return
-        if self.draft is not None or not self.previewable(row) or not self.presets_area.isVisible():
-            self.close_preview()
+        if not self.actionable(row) or not self.presets_area.isVisible():
+            self.leave_row()
             return
-        s, (_, _, left, _), name = self.session.state, self.output, self.output_name()
-        others = [self.channel_name(out) for _, out, l, _ in P.CHANNELS
-                  if l != left and self.session.controls(out) and s.get((l, P.EQ_PRESET_SELECT)) == row.value]
-        self.preview.show_preset(row.value, self.session.slots.get(row.slot), name,
-                                 s.get(self.session.at((left, P.LOAD_BT))) == 1,
-                                 s.get((left, P.EQ_PRESET_SELECT)) == row.value, self.graph.fs, others,
-                                 P.has_bt(self.output[1]))
+        s, (_, out, left, _), name = self.session.state, self.output, self.output_name()
+        others = [self.channel_name(o) for _, o, l, _ in P.CHANNELS
+                  if l != left and self.session.controls(o) and s.get((l, P.EQ_PRESET_SELECT)) == row.value]
+        stored, load_bt = self.session.slots.get(row.slot), s.get(self.session.at((left, P.LOAD_BT))) == 1
+        row.show_actions(actions(row.value, stored, name, load_bt, s.get((left, P.EQ_PRESET_SELECT)) == row.value,
+                                 others, P.has_bt(out)))
+        if row.previewable:
+            self.preview.show_preset(row.value, stored, load_bt, self.graph.fs, P.has_bt(out))
 
     def place_preview(self):
-        """Just past the longest name in the panel, and past the tags of its own row, which stay in sight; the rest of
-        the panel lies under it, the graph's zone too where it reaches that far. An edge of the tab runs on as the
-        preview's, never nearly: its lower edge, so that the row of its actions lies level with the row; where the
-        preview would then rise above the graph's zone, its upper edge."""
-        root, row, preview = self.centralWidget(), self.preview_row, self.preview
+        """Over the left of the graph's zone. Its lower edge level with the row's; where the preview would then rise
+        above the graph's zone, its upper edge."""
+        root, row, preview = self.centralWidget(), self.hovered_row, self.preview
         preview.resize(preview.sizeHint())
         zone = QRect(self.display.mapTo(root, QPoint(0, 0)), self.display.size())
-        names = max(r.mapTo(root, QPoint(r.text_end(r is row), 0)).x() for r in self.presets.rows.values()
-                    if r.isVisible())
-        level = row.mapTo(root, QPoint(0, row.height())).y() + RISE - preview.height()
-        top = level if level >= zone.top() + PREVIEW_INSET else row.mapTo(root, QPoint(0, 0)).y() - RISE
-        at = QPoint(min(names + PREVIEW_GAP, zone.left() + PREVIEW_INSET), top)
+        level = row.mapTo(root, QPoint(0, row.height())).y() - preview.height()
+        top = level if level >= zone.top() + PREVIEW_INSET else row.mapTo(root, QPoint(0, 0)).y()
+        at = QPoint(zone.left() + PREVIEW_INSET, top)
         if preview.pos() != at:
             preview.move(at)
 
-    def follow_preview(self, pos):
-        """The mouse at pos (on the screen): on another such row, its preview; on the row, the preview or between
-        them, this one stays; elsewhere it closes."""
+    def follow_mouse(self, pos):
+        """The mouse at pos (on the screen): on another row, its actions and preview; on none, they go."""
         def rect(w):
             return QRect(w.mapToGlobal(QPoint(0, 0)), w.size())
 
-        shown, page = rect(self.presets_area.viewport()), rect(self.preview)
-        if page.contains(pos):                           # over rows too: the preview lies over them
-            self.place_preview()
-            return
+        shown = rect(self.presets_area.viewport())
         for row in self.presets.rows.values():
-            if self.previewable(row) and row.isVisible() and rect(row).contains(pos) and shown.contains(pos):
-                if row is not self.preview_row:
-                    self.open_preview(row.value)
-                break
-        row = self.preview_row
-        if row is None:
-            return
-        page, tab = rect(self.preview), rect(row)
-        beside = QRect(QPoint(tab.left(), tab.top() - RISE), QPoint(page.left(), tab.bottom() + RISE))
-        gap = QRect(QPoint(shown.right(), page.top()), QPoint(page.left(), page.bottom()))     # when it is beyond
-        if any(r.contains(pos) for r in (beside, gap)):
-            self.place_preview()                         # the row moves when the panel scrolls
-        else:
-            self.close_preview()
+            if row.isVisible() and rect(row).contains(pos) and shown.contains(pos):
+                if row is self.hovered_row:
+                    if row.previewable:
+                        self.place_preview()         # the row moves when the panel scrolls
+                else:
+                    self.enter_row(row.value)
+                return
+        self.leave_row()
 
     # -- the edit stand ---------------------------------------------------------------------------
     def eq(self):
@@ -1427,7 +1417,7 @@ class MainWindow(QMainWindow):
                              self.session.operation(), self.slot_issues, editing, tags)
         self.source.copy(self.presets.rows.get(s.get((left, P.EQ_PRESET_SELECT))) if ready and not editing else None,
                          bool(self.session.stale(out)))
-        self.refresh_preview()
+        self.refresh_hovered()
 
     def refresh_slots(self):
         """The slots show only in the presets panel."""

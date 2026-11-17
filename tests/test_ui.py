@@ -1067,11 +1067,11 @@ class AnalogIn(WindowTest):
         self.assertEqual(win.presets.rows[3].tags.toolTip(), "Selected on Analog In")
 
     def test_select_and_store_say_what_they_do_without_its_bass_treble(self):
-        hover(self.win, self.win.presets.rows[3])
+        row = self.win.presets.rows[3]
+        hover(self.win, row)
         self.spin(20)
-        preview = self.win.preview
-        self.assertEqual(preview.select.toolTip(), "Select it on Analog In: its EQ is loaded there.")
-        self.assertTrue(preview.store.toolTip().startswith(
+        self.assertEqual(row.select.toolTip(), "Select it on Analog In: its EQ is loaded there.")
+        self.assertTrue(row.store.toolTip().startswith(
             "Store the current EQ of Analog In in Preset 2, with Bass/Treble at 0 dB.\n"))
         clear = self.win.presets.rows[22]
         self.assertTrue(clear.toolTip().endswith("Store sets the Bass/Treble of the preset to 0 dB."))
