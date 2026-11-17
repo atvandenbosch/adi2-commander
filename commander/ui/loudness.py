@@ -7,12 +7,13 @@ The axis spans 30 dB around Low Vol Ref, as high as the response graph: from 5 d
 lowest volume without boost, so where Loudness acts is always in the same place. The reference and the current
 volume can lie outside it.
 
-    Loudness            thin, as a band in the response graph: the full boost, at Low Vol Ref; the main curve
+    Loudness            as a section in the response graph: the full boost, at Low Vol Ref; the main curve
     No boost            as the Loudness curve: flat at Low Vol Ref + 20 dB, the lowest volume without boost
     Handles             as in the response graph
-    At current volume   the line of the family at the output's volume, lit, when it is in view (if only in part)
-    behind them the family: the response at every 0.5 dB of volume, faint and dotted, to show how Loudness
-    follows the volume; in the legend as the response graph's: the curves as its channels, then the layers
+    At current volume   the line of the family at the output's volume, full, when it is in view (if only in part)
+    behind them the family: the response at every 0.5 dB of volume, faint and thin, to show how Loudness
+    follows the volume; both in round dots as the compared sums of the response graph, the current volume as thick
+    as the Loudness curve; in the legend as the response graph's: the curves as its channels, then the layers
 
     a point per shelf as the handles of the response graph: a ring at its frequency and full gain above Low Vol
     Ref, and B or T in the label lane; and one for Low Vol Ref, at the lowest of the full boost (the middle of it,
@@ -22,8 +23,8 @@ volume can lie outside it.
     drag a shelf        its gain, on the device's grid; frequency and Q are fixed in the device
     drag Low Vol Ref    as a joystick: the point and the curves stay, the scale and the grid move, the faster the
                         further the mouse is from where it was pressed, as long as the button is down
-    the Loudness lines dimmed with Loudness off, as the table, and from 705.6 kHz, where the device has no
-    Loudness; a legend above the graph (self.legend)
+    the Loudness lines grey with Loudness off, as the table, and from 705.6 kHz, where the device has no
+    Loudness; on but bypassed (DSD) faded, as in the response graph; a legend above the graph (self.legend)
 """
 
 import math
@@ -39,8 +40,8 @@ from ..device import filters as F
 from ..device import models
 from ..device import params as P
 from . import theme
-from .graph import (BAND_ALPHA, BAND_W, GRAB, LANE_PX, RING, RatioCorner, X_HI, X_LO, X_PAD, Y_HI, Y_LO,
-                    _pen, _ticks, title_axes)
+from .graph import (BAND_ALPHA, COMPARE_DOTS, DOT, DOT_PEN, GRAB, LANE_PX, OFF_CURVE_DB, RING, SECTION_W,
+                    RatioCorner, X_HI, X_LO, X_PAD, Y_HI, Y_LO, _pen, _ticks, round_dots, title_axes)
 from .legend import GROUP_GAP, ITEM_PAD, ITEM_VPAD, MARK_H, MARK_W, mark_pixmap
 
 FLAT_DB = 0.01                                   # dB: this close to its lowest, the full boost counts as flat
@@ -48,8 +49,8 @@ FAMILY_STEP = 0.5                                # dB between the curves of the 
                                                  # device's step of volume, so the current volume is one of them
 FAMILY_BELOW = P.OUTPUT_RANGES[P.LD_BASS][1] / 2   # dB below the view: the most boost brings these into it
 FAMILY_ALPHA = 0.25
-FAMILY_DOTS = [1, 3]                             # px on, off: dotted, unlike the grid
-NOW_ALPHA = 1.0                                  # the family's line at the current volume: lit
+FAMILY_W = 1.0                                   # px: in the background, as the grid; Qt draws this many curves only
+                                                 # at exactly 1 px fast enough to follow a drag
 STICK_TICK = 40                                  # ms between the steps of the joystick, at the least
 STICK_PX = 6                                     # pixels further per dB/s, up to STICK_MAX dB/s
 STICK_MAX = 20.0
@@ -207,6 +208,10 @@ class LoudnessGraph(pg.PlotWidget):
         self.handles.setAcceptedMouseButtons(Qt.NoButton)
         self.handles.setZValue(0.5)                      # under the curves: they run through the rings
         self.addItem(self.handles)
+        self.dots = pg.ScatterPlotItem(pxMode=True)      # the centre of the chosen point, off its curve
+        self.dots.setAcceptedMouseButtons(Qt.NoButton)
+        self.dots.setZValue(11)                          # off the curve: nothing to cover
+        self.addItem(self.dots)
         self.handle_labels = [pg.TextItem(anchor=(0.5, 1.0)) for _ in range(2)]   # B, T
         for t in self.handle_labels:
             t.setFont(theme.ui_font(8))
@@ -214,7 +219,7 @@ class LoudnessGraph(pg.PlotWidget):
             self.addItem(t)
         pi.getViewBox().sigResized.connect(self._place_labels)
         self.ratio = RatioCorner(self)
-        self.state, self.ref, self.on = {}, 0.0, False
+        self.state, self.ref, self.on, self.bypassed, self.color = {}, 0.0, False, False, theme.OFF
         self._stick = None                       # (key, Low Vol Ref in dB, pixels from the press, time)
         self._stick_timer = QTimer(self, interval=STICK_TICK, timeout=self._stick_tick)
         self.full = []                           # the shelves at the full boost
@@ -229,32 +234,34 @@ class LoudnessGraph(pg.PlotWidget):
         plays. draw False, while the graph is not on the stage: only the legend, which the window's head measures
         all the same."""
         shelves = F.loudness_filters(state, out)
-        for item in [self.no_boost, self.full_boost, self.now, self.family, self.handles] + self.handle_labels:
+        for item in [self.no_boost, self.full_boost, self.now, self.family, self.handles, self.dots] + \
+                self.handle_labels:
             item.setVisible(bool(shelves))
         self.boost, self.full, self.points = None, [], []
         if not shelves:
             self.legend.show_items([])
             return
-        on = self.on = shelves[0].active and not bypassed and fs < self.no_bt_from
+        in_path = shelves[0].active and fs < self.no_bt_from
+        self.on, self.bypassed = in_path and not bypassed, in_path and bypassed
+        color = self.color = theme.faded(theme.LOUDNESS) if self.bypassed else theme.LOUDNESS if in_path else theme.OFF
         ref = self.ref = state[(out, P.LD_LOW_VOL_REF)] / 2
         self.state = state
         volume = state[(out, P.VOLUME)] / 10
         self.boost = (shelves[0].gain, shelves[1].gain)
-        color = theme.LOUDNESS if on else theme.OFF
         lo, hi = ref - BELOW, ref - BELOW + (Y_HI - Y_LO)
         now = volume + self._boost_db(state, out, volume, fs)
         in_range = bool(now.max() >= lo and now.min() <= hi)   # in view, if only in part
         # the curves, then the layers, as in the response graph's legend; the current volume last
-        items = [(color, "curve", "Loudness"), (color, "line", "No boost"), None, (color, "ring", "Handles")]
+        items = [(color, "curve", "Loudness"), (color, "medium", "No boost"), None, (color, "ring", "Handles")]
         items += [(color, "dotted", "At current volume")] if in_range else []
         self.legend.show_items([item and (item[0].name(), *item[1:]) for item in items])
         if not draw:
             return
         self.no_boost.setData(self.x, np.full_like(self.x, ref + F.LOUDNESS_RANGE))      # flat from here on
-        self.no_boost.setPen(_pen(color, BAND_W, alpha=BAND_ALPHA))    # as the Loudness curve
+        self.no_boost.setPen(_pen(color, SECTION_W))                   # as the Loudness curve
         full = self._boost_db(state, out, ref, fs)
         self.full_boost.setData(self.x, ref + full)
-        self.full_boost.setPen(_pen(color, BAND_W, alpha=BAND_ALPHA))  # as a band in the response graph
+        self.full_boost.setPen(_pen(color, SECTION_W))                 # as a section in the response graph
         levels = [lo - FAMILY_BELOW + k * FAMILY_STEP for k in range(int((hi - lo + FAMILY_BELOW) / FAMILY_STEP) + 1)]
         # Loudness and No boost are two of them, and the current volume is drawn lit
         self.family_levels = [v for v in levels if v not in (ref, ref + F.LOUDNESS_RANGE, volume)]
@@ -262,14 +269,10 @@ class LoudnessGraph(pg.PlotWidget):
         apart = np.full((len(ys), 1), np.nan)            # each curve a row, ended by a gap
         self.family.setData(np.hstack([np.tile(self.x, (len(ys), 1)), apart]).ravel(),
                             np.hstack([ys, apart]).ravel(), connect="finite")
-        pen = _pen(color, 1.0, alpha=FAMILY_ALPHA)
-        pen.setDashPattern(FAMILY_DOTS)
-        self.family.setPen(pen)
+        self.family.setPen(round_dots(_pen(color, FAMILY_W, alpha=FAMILY_ALPHA), COMPARE_DOTS))
         self.now.setVisible(in_range)
         self.now.setData(self.x, now)
-        pen = _pen(color, 1.0, alpha=NOW_ALPHA)
-        pen.setDashPattern(FAMILY_DOTS)
-        self.now.setPen(pen)
+        self.now.setPen(round_dots(_pen(color, SECTION_W), COMPARE_DOTS))
         self.setRange(xRange=(X_LO - X_PAD, X_HI + X_PAD), yRange=(lo, hi), padding=0)
         # the shelves' points, as the handles of the response graph: at the full boost, off its curve; Low Vol
         # Ref's at the lowest of it
@@ -279,28 +282,36 @@ class LoudnessGraph(pg.PlotWidget):
         self.points.append(((out, P.LD_LOW_VOL_REF), (self.x[low[0]] + self.x[low[-1]]) / 2, ref + full.min(), None))
         self._draw_handles()
         self.setToolTip("Loudness: the full boost at Low Vol Ref (%.1f dB) and below, none from %.1f dB (No boost);\n"
-                        "dotted: per 0.5 dB of volume, lit at the current volume, %.1f dB\n"
+                        "dotted: per 0.5 dB of volume, full at the current volume, %.1f dB\n"
                         "Shelves %g Hz and %g kHz, Q %g, fixed in the device"
                         % (ref, ref + F.LOUDNESS_RANGE, volume, shelves[0].freq, shelves[1].freq / 1000,
                            shelves[0].q))
 
     def _draw_handles(self):
-        """As in the response graph: the chosen point's ring thicker, the one under the mouse larger; their labels
-        bold, the others' a little faint."""
-        color = theme.LOUDNESS if self.on else theme.OFF
+        """As in the response graph: a point's ring and label one opacity, full when chosen or under the mouse, else
+        BAND_ALPHA; the chosen ring thicker, the one under the mouse larger, their labels bold. The chosen point
+        has a centre dot when it lies off the full boost (a shelf: there its curve has about half its gain)."""
         self.handles.setData([{"pos": (x, y), "size": RING + 2 if key == self.hovered else RING,
-                               "brush": QColor(0, 0, 0, 0), "pen": _pen(color, 2.0 if key == self.current else 1.5)}
+                               "brush": QColor(0, 0, 0, 0),
+                               "pen": _pen(self.color, 2.0 if key == self.current else 1.5, self._alpha(key))}
                               for key, x, y, _ in self.points])
+        curve = self.full_boost.getData()[1]
+        self.dots.setData([{"pos": (x, y), "size": DOT, "brush": QColor(self.color), "pen": DOT_PEN}
+                           for key, x, y, _ in self.points
+                           if key == self.current and abs(np.interp(x, self.x, curve) - y) > OFF_CURVE_DB])
         for t, (key, _, _, text) in zip(self.handle_labels, self._labelled()):
             lit = key in (self.current, self.hovered)
-            c = QColor(color)
-            c.setAlphaF(1.0 if lit else 0.75)
+            c = QColor(self.color)
+            c.setAlphaF(self._alpha(key))
             font = theme.ui_font(8)
             font.setWeight(QFont.Bold if lit else QFont.Normal)
             t.setText(text)
             t.setColor(c)
             t.setFont(font)
         self._place_labels()
+
+    def _alpha(self, key):
+        return 1.0 if key in (self.current, self.hovered) else BAND_ALPHA
 
     def _labelled(self):
         return [p for p in self.points if p[3]]
@@ -394,7 +405,9 @@ class LoudnessGraph(pg.PlotWidget):
                  "%s  %d Hz  Q %.1f, fixed in the device" % ({"LS": "Low Shelf", "HS": "High Shelf"}[f.kind],
                                                               f.freq, f.q),
                  "+%.1f dB at and below Low Vol Ref · %.1f … %.1f dB" % (f.gain, lo / 2, hi / 2)]
-        if not self.on:
+        if self.bypassed:
+            lines.append("DSD input: no DSP, not in the signal path")
+        elif not self.on:
             lines.append("Loudness not in the signal path")
         lines.append("Drag: gain")
         return "\n".join(lines)

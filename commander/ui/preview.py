@@ -20,14 +20,14 @@ from ..device import models
 from ..device import params as P
 from ..session import built_in, loaded
 from . import theme
-from .graph import X_HI, X_LO, Y_HI, Y_LO, side_color
+from .graph import SECTION_W, X_HI, X_LO, Y_HI, Y_LO, side_color
 from .presets import BUILT_IN, RUMBLE
 
 GRAPH_SIZE = 266, 107                            # px: 25 dB as long as a decade, one of the ratios of IEC 60263
 POINTS = 240                                     # along the graph: at least one per pixel
 GRID_DB = (-12, -6, 6, 12)
 GRID_HZ = (100, 1000, 10000)
-LINE_W = 1.5                                     # px: the EQ and Bass/Treble alike, thinner than in the main graph
+LINE_W = SECTION_W                               # px: the EQ and Bass/Treble alike, sections as in the main graph
 PAD = 4                                          # px from the outline to the graph
 
 

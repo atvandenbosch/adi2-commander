@@ -11,6 +11,7 @@ from unittest import mock
 
 import numpy as np
 from PySide6.QtCore import QPoint, QPointF, QRect, QSettings, QSize, Qt
+from PySide6.QtGui import QPen
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel
 
@@ -22,6 +23,7 @@ from commander.device.simulator import SimPort, SimulatedAdi2
 from commander.session import Session
 from commander import app as commander_app
 from commander.ui import about
+from commander.ui.graph import BAND_ALPHA, COMPARE_DOTS, SECTION_W, round_dots
 from commander.ui import loudness as L
 from commander.conversion import setupfile
 from commander.ui import simulated, theme
@@ -229,9 +231,12 @@ class Window(WindowTest):
         self.assertEqual(g.legend.names(), ["Loudness", "No boost", "Handles", "At current volume"])
         self.assertEqual(len(g.family_levels), 78)                         # -45 ... -5 dB but three:
         self.assertFalse({-30, -10, -20.5} & set(g.family_levels))         # Loudness, No boost, the current volume
-        family, now = g.family.opts["pen"], g.now.opts["pen"]
-        self.assertEqual((family.dashPattern(), round(family.color().alphaF(), 2)), ([1.0, 3.0], L.FAMILY_ALPHA))
-        self.assertEqual((now.dashPattern(), now.color().alphaF()), ([1.0, 3.0], 1.0))   # its own line, lit
+        full_pen, family, now = g.full_boost.opts["pen"], g.family.opts["pen"], g.now.opts["pen"]
+        self.assertEqual((full_pen.widthF(), full_pen.color().alphaF()), (SECTION_W, 1.0))   # a section
+        dots = lambda w: round_dots(QPen(Qt.black, w), COMPARE_DOTS).dashPattern()          # noqa: E731
+        self.assertEqual((family.widthF(), family.dashPattern(), round(family.color().alphaF(), 2)),
+                         (1.0, dots(1.0), L.FAMILY_ALPHA))                 # as Compare, thin: in the background
+        self.assertEqual((now.widthF(), now.dashPattern(), now.color().alphaF()), (SECTION_W, dots(SECTION_W), 1.0))
         self.assertEqual(self.sim.state[(3, 12)], -205)                     # -20.5 dB
         self.assertAlmostEqual(g.boost[0], 7 * (20 - 9.5) / 20)             # 9.5 dB above it
         self.sim.front_panel([(3, 12, -350)])                               # turned down to -35 dB
@@ -361,6 +366,10 @@ class Window(WindowTest):
         p, q = at(-23.0), at(-25.0)
         QTest.mousePress(g.viewport(), Qt.LeftButton, Qt.NoModifier, p)
         self.assertEqual((view.currentIndex().row(), g.current), (1, (3, P.LD_TREBLE)))   # Treble, on the press
+        rings = [round(s.pen().color().alphaF(), 2) for s in g.handles.points()]
+        labels = [round(t.color.alphaF(), 2) for t in g.handle_labels]
+        self.assertEqual((rings[:2], labels), ([BAND_ALPHA, 1.0], [BAND_ALPHA, 1.0]))   # one opacity, as a band's
+        self.assertEqual([s.pos() for s in g.dots.points()], [spots[1]])   # off its curve: a centre dot
         for i in range(1, 11):
             QTest.mouseMove(g.viewport(), QPoint(p.x(), p.y() + (q.y() - p.y()) * i // 10))
             self.spin(20)
@@ -383,6 +392,7 @@ class Window(WindowTest):
         p = at()
         QTest.mouseClick(g.viewport(), Qt.LeftButton, Qt.NoModifier, p)
         self.assertEqual((view.currentIndex().row(), g.current), (2, key))  # Low Vol Ref, on the press
+        self.assertEqual(g.dots.points().size, 0)                            # on its curve: no centre dot
         g.stick_start(key)
         g.stick(-60)                                                        # 60 px up: 10 dB/s
         k, ref, dy, t = g._stick
@@ -510,6 +520,22 @@ class Window(WindowTest):
         self.assertNotIn("dashed", self.win.bt_switch.styleSheet())             # off stays off
         self.sim.signal(usb=176400)
         self.assertEqual(state(), (False, False, False, True))
+
+    def test_dsd_fades_the_loudness_graph(self):
+        g, view = self.win.loudness_graph, self.win.loudness_view
+        QTest.mouseClick(self.win.loudness_switch, Qt.LeftButton)           # on
+        view.setFocus()
+        view.setCurrentIndex(view.model().index(1, 1))                      # Treble: the Loudness stage
+        self.sim.front_panel([(out, 1, 3) for out in (3, 6, 9)])            # USB
+        self.sim.signal(usb=176400, dsd=True)
+        self.spin(1100)
+        color = lambda item: item.opts["pen"].color().rgb()                 # noqa: E731
+        self.assertEqual({color(i) for i in (g.full_boost, g.no_boost, g.now)}, {theme.faded(theme.LOUDNESS).rgb()})
+        self.assertIn("DSD input: no DSP", g._describe((3, P.LD_TREBLE)))
+        QTest.mouseClick(self.win.loudness_switch, Qt.LeftButton)           # off: grey, as without DSD
+        self.spin(300)
+        self.assertEqual(color(g.full_boost), theme.OFF.rgb())
+        self.assertIn("Loudness not in the signal path", g._describe((3, P.LD_TREBLE)))
 
     def test_the_active_output_has_a_dot_on_its_tab(self):
         def marked():

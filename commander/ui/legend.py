@@ -41,8 +41,8 @@ MARKS = {"L": "thick", "R": "thick",                                  # a channe
 def mark_pixmap(kind, color):
     """The mark of an item, drawn: a line in a channel's colour, or a layer as it looks in the graph: a thick line
     for Sum, a medium one for Sections, a thin one for Bands, a ring for the handles, round dots for the compared
-    sums. Also the Loudness graph's: a small curve for Loudness, high at both ends as its boost, and dotted for the
-    current volume. And Import's deviation: a wave about 0 with the area between filled."""
+    sums. Also the Loudness graph's: a small curve for Loudness, high at both ends as its boost, and round dots as
+    thick as a section for the current volume. And Import's deviation: a wave about 0 with the area between filled."""
     scale = 4                                    # drawn large, shown small: sharp at any display scaling
     pm = QPixmap(MARK_W * scale, MARK_H * scale)
     pm.setDevicePixelRatio(scale)
@@ -80,20 +80,18 @@ def mark_pixmap(kind, color):
         path.lineTo(QPointF(MARK_W, top))
         p.drawPath(path)
     else:
-        width = {"line": 2.0, "thick": SUM_W, "medium": SECTION_W, "thin": BAND_W, "dots": SUM_W, "dotted": 1.0,
-                 "wide": INPUT_W}[kind]
+        width = {"line": 2.0, "thick": SUM_W, "medium": SECTION_W, "thin": BAND_W, "dots": SUM_W,
+                 "dotted": SECTION_W, "wide": INPUT_W}[kind]
         if kind == "wide":                       # as see-through as an input. A band's mark is as bright as the
             color = QColor(color)                # others: faint, it would read as hidden
             color.setAlphaF(color.alphaF() * INPUT_ALPHA)
         pen = QPen(color, width)
         pen.setCapStyle(Qt.FlatCap)
         x0, x1 = 1, MARK_W - 1
-        if kind == "dots":                       # as in the graph: as many as fit, in the middle
+        if kind in ("dots", "dotted"):           # as in the graph: as many as fit, in the middle
             round_dots(pen, COMPARE_DOTS)
             span = (MARK_W - width) // COMPARE_DOTS * COMPARE_DOTS
             x0, x1 = (MARK_W - span) / 2, (MARK_W + span) / 2 + 0.01
-        elif kind == "dotted":
-            pen.setDashPattern([1, 3])                                     # as the Loudness graph's family
         p.setPen(pen)
         y = cy + 0.5 if width == 1 else cy       # 1 px on one row of pixels: thinner than Sum at any scaling
         p.drawLine(QPointF(x0, y), QPointF(x1, y))
