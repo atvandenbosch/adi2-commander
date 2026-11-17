@@ -46,7 +46,7 @@ from ..draft import Draft
 from . import theme
 from .about import AboutDialog
 from .device import DevicePanel
-from .graph import LEGEND_GAP, SAMPLE_RATES, TITLE_ROOM, ZONE_INK, ResponseGraph, side_color
+from .graph import LEGEND_GAP, SAMPLE_RATES, SECTION, TITLE_ROOM, ZONE_INK, ResponseGraph, side_color
 from .inputs import InputPanel
 from .legend import Legend
 from .importdialog import ImportDialog, read_file
@@ -93,6 +93,9 @@ SHARE = ("Share L > R", "Share R > L")
 SPLIT = "Split L <> R"
 
 BT_IN_PRESET = "Bass/Treble of this preset: it comes along only where Load Bass/Treble with preset is on."
+# a section's switch pointed at, while the response graph is on the stage (point_section)
+POINTED = "Pointed at: what it adds, in the graph"
+LOUDNESS_POINTED = "Pointed at: what it adds, in the graph, and the sums with it at the current volume"
 PREVIEW_INSET = 8                                # px in from the graph's zone: the preview's left edge, and no higher
 
 
@@ -310,6 +313,8 @@ class MainWindow(QMainWindow):
         self.dual_actions = [Action(), Action()]
         for side in (0, 1):
             self.eq_switches[side].clicked.connect(lambda _=False, side=side: self.toggle_eq(side))
+            self.eq_switches[side].pointed.connect(           # with Dual EQ off both are the one EQ, the left's
+                lambda on, side=side: self.point_section(SECTION[side if self.eq().dual(self.output[1]) else 0], on))
             self.dual_actions[side].clicked.connect(lambda _=False, side=side: self.dual_action(side))
             self.band_views[side].set_corner(self.eq_switches[side])
 
@@ -321,10 +326,12 @@ class MainWindow(QMainWindow):
         self.bt_view = ParamView(self.bt_model, self.bt_delegate, under_bands)
         self.bt_switch = Switch("BASS/TREBLE", theme.BT)
         self.bt_switch.clicked.connect(self.toggle_bt)
+        self.bt_switch.pointed.connect(lambda on: self.point_section("BT", on))
         self.bt_view.set_corner(self.bt_switch)
 
-        # Loudness: on the output address, for both channels; volume dependent, so not in the response graph,
-        # but in its own in the response graph's place while one works in the table: the boost against the volume
+        # Loudness: on the output address, for both channels; volume dependent, so in the response graph only while its
+        # switch is pointed at, and in a graph of its own in the response graph's place while one works in the table:
+        # the boost against the volume
         self.loudness_model = ParamModel(session, self.marks, loudness_rows, LOUDNESS_COLUMNS)
         self.loudness_delegate = CellDelegate(self.loudness_model, self.marks, theme.LOUDNESS)
         self.loudness_view = ParamView(self.loudness_model, self.loudness_delegate, under_bands)
@@ -333,6 +340,7 @@ class MainWindow(QMainWindow):
         self.loudness_graph.picked.connect(self.select_cell)
         self.loudness_switch = Switch("LOUDNESS", theme.LOUDNESS)
         self.loudness_switch.clicked.connect(self.toggle_loudness)
+        self.loudness_switch.pointed.connect(lambda on: self.point_section("LD", on))
         self.loudness_view.set_corner(self.loudness_switch)
 
         # the response graph, with what it shows spelled out above it
@@ -1041,16 +1049,16 @@ class MainWindow(QMainWindow):
         """Bass/Treble Enable: shared by both channels, on the left address."""
         self.toggle_section((self.output[2], P.BT_ENABLE), self.bt_view)
 
-    def toggle_section(self, key, view):
-        """Turn a section on or off by its switch. Turning it on is work in it: its table takes the focus, and the
-        stage follows. Turning it off gives the focus back to where it was."""
+    def toggle_section(self, key, view, work=True):
+        """Turn a section on or off by its switch. Turning it on is work in it (work): its table takes the focus,
+        and the stage follows. Turning it off gives the focus back to where it was."""
         on = 0
         if self.draft is not None:                       # a title in the edit stand, no switch
             return
         if self.session.writable(key):
             on = 1 - self.session.state[key]
             self.write(key, on, False)
-        if on:
+        if on and work:
             view.take_focus()
         elif self.before_switch:
             self.before_switch.setFocus()
@@ -1250,6 +1258,7 @@ class MainWindow(QMainWindow):
         for d in self.band_delegates + [self.bt_delegate]:
             d.marks = marks
         self.graph.session = source
+        self.graph.loudness = source is self.session         # a preset has no Loudness
 
     def rename_draft(self, text):
         if self.draft is not None and not self.draft.locked:
@@ -1277,9 +1286,15 @@ class MainWindow(QMainWindow):
             lines.append("Preset %d was changed on the device meanwhile: OK writes this over it." % d.slot)
         return "\n".join(lines)
 
+    def point_section(self, key, on):
+        """A section's switch under the mouse: in the response graph what it adds, and the rest steps back."""
+        self.graph.emphasis = key if on else None
+        self.graph.redraw()
+
     def toggle_loudness(self):
-        """Loudness Enable: on the output address, for both channels."""
-        self.toggle_section((self.output[1], P.LOUDNESS_ENABLE), self.loudness_view)
+        """Loudness Enable: on the output address, for both channels. The stage stays: with the mouse on the switch,
+        the response graph shows what Loudness changes."""
+        self.toggle_section((self.output[1], P.LOUDNESS_ENABLE), self.loudness_view, work=False)
 
     def on_current(self, side, idx):
         """The table's current row is drawn highlighted in the graph; a left and a right point on the same
@@ -1451,17 +1466,19 @@ class MainWindow(QMainWindow):
         bypassed = ready and eq.bypassed()
         dsd = DSD_BYPASS if bypassed else None
         eq_bypass = dsd or (input_eq_bypass(eq) if ready and eq.eq_bypassed(out) else None)
+        response = not self.loudness_shown()             # on the stage: pointing at a switch shows there
+        pointed, loudness_pointed = ("\n" + POINTED, "\n" + LOUDNESS_POINTED) if response else ("", "")
         for side, name in enumerate(("left", "right")):
             switch = self.eq_switches[side]
             switch.name = EQ_OWN[side] if dual else EQ_SHARED[side]           # its own channel first
             switch.color = side_color(side, dual)
             if editing:
-                switch.show_title("EQ of the %s channel in this preset" % name if dual else
-                                  "Dual EQ off: one EQ for both channels in this preset")
+                switch.show_title(("EQ of the %s channel in this preset" % name if dual else
+                                   "Dual EQ off: one EQ for both channels in this preset") + pointed)
             else:
-                switch.show_state(eq_on[side], ready, switch_tip("EQ of the %s channel" % name, eq_on[side]) if dual
-                                  else "Dual EQ off: one EQ for both channels\n" + switch_tip("EQ", eq_on[side]),
-                                  eq_bypass)
+                switch.show_state(eq_on[side], ready, (switch_tip("EQ of the %s channel" % name, eq_on[side]) if dual
+                                  else "Dual EQ off: one EQ for both channels\n" + switch_tip("EQ", eq_on[side]))
+                                  + pointed, eq_bypass)
             self.band_delegates[side].color = side_color(side, dual)
             act = self.dual_actions[side]
             act.setEnabled(ready and self.editable())
@@ -1476,12 +1493,13 @@ class MainWindow(QMainWindow):
         live = self.session.ready()
         load_bt = live and self.session.state.get(self.session.at((left, P.LOAD_BT))) == 1
         if editing:
-            self.bt_switch.show_title(BT_IN_PRESET)
+            self.bt_switch.show_title(BT_IN_PRESET + pointed)
         else:
             self.bt_switch.show_state(bt_on, ready, switch_tip("Bass/Treble, both channels", bt_on) + "\n" + (
                 "Loaded with a preset: Load Bass/Treble with preset is on." if load_bt else
-                "Not loaded with a preset: Load Bass/Treble with preset is off."), dsd)
-        self.loudness_switch.show_state(loudness_on, ready, switch_tip("Loudness, both channels", loudness_on), dsd)
+                "Not loaded with a preset: Load Bass/Treble with preset is off.") + pointed, dsd)
+        self.loudness_switch.show_state(loudness_on, ready, switch_tip("Loudness, both channels", loudness_on)
+                                        + loudness_pointed, dsd)
         tip = ("Load Bass/Treble with preset: %s\n"
                "On: selecting a preset brings its Bass/Treble too, and changing Bass/Treble on a\n"
                "preset makes it Temp.%s" % ("on" if load_bt else "off", "" if self.model.id != models.DAC.id else

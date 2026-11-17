@@ -151,12 +151,22 @@ class Switch(QPushButton):
     """A channel's setting that is on or off: its name, after a dot that is filled when on and a ring when off. A
     rounded outline in the channel's colour, as in the graph."""
 
+    pointed = Signal(bool)                       # the mouse came onto it, or left it
+
     def __init__(self, name, color=theme.LEFT):
         super().__init__()
         self.name, self.color, self.on = name, color, False
         self.setCursor(Qt.PointingHandCursor)
         self.setIconSize(QSize(DOT + DOT_GAP, DOT))
         self.setFixedHeight(SWITCH_HEIGHT)
+
+    def enterEvent(self, e):
+        super().enterEvent(e)
+        self.pointed.emit(True)
+
+    def leaveEvent(self, e):
+        super().leaveEvent(e)
+        self.pointed.emit(False)
 
     def show_state(self, on, enabled, tip, bypassed=None):
         """bypassed: why what it switches is bypassed (DSD_BYPASS, input_eq_bypass()), or None."""

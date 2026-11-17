@@ -49,7 +49,7 @@ from ..conversion import eqimport as I
 from ..device import filters as F
 from ..device import params as P
 from . import theme
-from .graph import (BAND_ALPHA, BAND_W, COMPARE_W, DEVIATION_FILL, DEVIATION_W, DIMMED, INPUT_ALPHA, INPUT_W,
+from .graph import (BAND_ALPHA, BAND_W, DEVIATION_FILL, DEVIATION_W, DIMMED, INPUT_ALPHA, INPUT_W,
                     LEGEND_GAP, MIN_POINTS, POINTS_PER_PIXEL, SUM_W, TITLE_ROOM, X_HI, X_LO, X_PAD, Y_HI, Y_LO, ZONE_INK,
                     RatioCorner, _fading_pen, _ticks, side_color, title_axes)
 from .legend import GROUP_GAP, NAME_OFF, NAME_ON, Group as LegendGroup, _Item as LegendItem
@@ -62,7 +62,8 @@ MAP, FIT = 0, 1
 DIFF_ROOM = 8.0                                  # dB below the main window's scale, for the deviation
 DIFF_MID = Y_LO - DIFF_ROOM / 2
 REFIT_MS = 500                                   # after the last click on a line, the fit starts again
-CANDIDATE_ALPHA = 0.85                           # what the fit tries now: a little faint
+CANDIDATE_W = 1.5                                # what the fit tries now: thinner than the sum
+CANDIDATE_ALPHA = 0.85                           # ... and a little faint
 CURVES_KEPT = 4000                               # curves kept for drawing again, before they are let go
 PROGRESS_MS = 100                                # a fit's best so far is shown at most this often
 GUARD_MS = 400                                   # a click this soon after the convert button changed is not taken:
@@ -371,7 +372,7 @@ class CurveGraph(pg.PlotWidget):
             if tried is None:
                 self._clear(items["candidate"])
             else:
-                self._show(items["candidate"], "candidate", tried, color, COMPARE_W, CANDIDATE_ALPHA,
+                self._show(items["candidate"], "candidate", tried, color, CANDIDATE_W, CANDIDATE_ALPHA,
                            (key, "candidate"), style=Qt.DotLine)
             for item, band in itertools.zip_longest(items["bands"], bands):
                 if band is None or not self.visible["bands"] or not self.visible[band[2]]:

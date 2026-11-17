@@ -14,21 +14,29 @@ In the corner where the axes meet, the aspect ratio of the view: how many dB of 
 frequency (RatioCorner), about where the lines of the axis titles cross. A click on it sets 10, 25 or 50 dB per
 decade (IEC 60263) or the ratio the view had, in turn; the gain scales around 0 dB.
 
-What is shown (commander.ui.legend): the channels EQ Left, EQ Right and Bass/Treble, and the layers Sum, Compare (the
-sums at the rate the device runs at, dashed, when it is known and not the chosen one; off at first), Bands and Handles
-(the points); a point shows when both its channel and Handles are on. The band labels show with their channel; with
-Handles off they only inform and take no mouse. The curves are computed at a chosen sample rate. Visibility never
-changes the sums: they are what the device runs.
+What is shown (commander.ui.legend): the channels, Left and Right (Left = Right with Dual EQ off), and the layers Sum,
+what the device does to the channel, its EQ and Bass/Treble together; Sections, what each EQ and Bass/Treble adds (off
+at first); Bands; Handles (the points); and Compare, the sums at the rate the device runs at, when it is known and not
+the chosen one (off at first). Bass/Treble belongs to every channel: its bands and points show while a channel does.
+A point shows when both its channel and Handles are on. The band labels show with their channel; with Handles off they
+only inform and take no mouse. The curves are computed at a chosen sample rate. Visibility never changes the sums:
+they are what the device runs.
 
-The lines: colour is the channel; weight is rank, the sum strongest and none so thick that one looks for its middle;
-the line style is the layer, solid for what the device runs, dashed for the comparison. Out of the path (EQ or
-Bass/Treble off) a band is grey, as a switch that is off; on but bypassed (DSD) faded. A band shows where it does
-something and fades out in its tails. Nothing grows to stand out: the rest steps back.
+Pointing at a section's switch (the window's point_section) shows what that section adds; all else steps back but its
+bands, which stay as they are. Loudness follows the volume and is in no sum but while its switch is pointed at: then
+the sums include it, at the output's volume, and stay lit. A preset being edited has no Loudness.
 
-Two marks per band, each with one meaning. Chosen (1.5 px, full, a fill to 0 dB): the row one works in, shared with
+The lines: weight is the level, the sums strongest (SUM_W), a section between (SECTION_W), a band thinnest; none so
+thick that one looks for its middle. A sum and an EQ in their channel's colour, Bass/Treble and Loudness in their own.
+Solid for what runs at the chosen rate, round dots for the compared sums. Out of the path (EQ or Bass/Treble off) a
+band is grey, as a switch that is off; on but bypassed (DSD) faded. A band shows where it does something and fades out
+in its tails. Nothing grows to stand out: the rest steps back.
+
+Two marks per band, each with one meaning. Chosen (full, a fill to 0 dB): the row one works in, shared with
 the table; set by pressing a point or its label, by any edit from the graph (drag, wheel), or by a cell. Attention
 (all but its band steps back): only in the graph, while the mouse is on a point or its label or its button is down.
-Pointing at a legend item sets back what does not belong to it.
+Pointing at a legend item sets back what does not belong to it: a channel keeps its sum, its sections and its bands;
+a layer keeps itself.
 """
 
 import math
@@ -61,8 +69,11 @@ DOT = 3                                          # pixels: that centre dot
 DOT_PEN = QPen(Qt.NoPen)
 DOT_PEN.setWidthF(2)
 # the lines, in pixels at 100 % scaling: the sum the strongest, none so thick that one looks for its middle to read
-SUM_W, CHOSEN_W, BAND_W, COMPARE_W = 2.0, 1.5, 1.0, 1.5     # bands: Qt draws exactly 1 px three times as fast
-INPUT_W, INPUT_ALPHA = 3 * SUM_W, 0.5           # a curve fitted to (Import): wide and see-through, under the sum
+SUM_W, CHOSEN_W, BAND_W = 2.5, 1.0, 1.0         # bands: Qt draws exactly 1 px three times as fast
+COMPARE_DOTS = 5.0                               # px from dot to dot: the sums at the rate the device runs at, as
+                                                 # thick as the sums; round, they look lighter
+SECTION_W = 1.5                                  # what one section adds: between the sum and a band
+INPUT_W, INPUT_ALPHA = 6.0, 0.5                  # a curve fitted to (Import): wide and see-through, under the sum
 BAND_ALPHA = 0.6                                 # a band beside the sum
 DEVIATION_W, DEVIATION_FILL = 1.0, 0.2           # how far the sum is off the input (Import): a thin edge to an area
 BAND_FLOOR, BAND_FULL = 0.02, 0.5               # dB: in its tails a band fades in from this much to this much:
@@ -74,7 +85,8 @@ CHANNEL = [theme.LEFT, theme.RIGHT]
 pg.setConfigOptions(antialias=True)
 
 SAMPLE_RATES = P.SAMPLE_RATES
-CHANNEL_KEY = {0: "L", 1: "R", None: "BT"}
+CHANNEL_KEY = {0: "L", 1: "R"}
+SECTION = {0: "eqL", 1: "eqR", None: "BT"}       # the section a band of this side belongs to
 
 
 def _ticks():
@@ -140,6 +152,14 @@ def _pen(color, width=1.0, alpha=1.0, style=Qt.SolidLine):
     p.setStyle(style)
     p.setCosmetic(True)
     return p
+
+
+def round_dots(pen, pitch):
+    """The pen drawing round dots as wide as itself, pitch px apart: dashes of next to nothing with round caps."""
+    tiny = 1e-3                                  # in pen widths, as the rest of the pattern
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setDashPattern([tiny, pitch / pen.widthF() - tiny])
+    return pen
 
 
 def _tail_fade(y):
@@ -477,8 +497,12 @@ class ResponseGraph(pg.PlotWidget):
         self.hovered_by_label = False            # ... through its label
         self.dual = True
         self.has_bt = True                       # the output shown has Bass/Treble; the input has none
-        self.visible = {"L": True, "R": True, "BT": True, "sum": True, "compare": False, "bands": True, "handles": True}
-        self.emphasis = None                     # a legend item under the mouse: its curves light up
+        self.visible = {"L": True, "R": True, "sum": True, "sections": False, "compare": False, "bands": True,
+                        "handles": True}
+        self._channels = ()                      # the keys of the channels drawn
+        self.emphasis = None                     # a legend item or a section's switch under the mouse: its curves
+                                                 # light up; "LD": Loudness
+        self.loudness = True                     # whether there is Loudness to point at: not in a preset being edited
         self.held = None                         # the key of a point while the mouse button is down on it
         self._off = set()                        # (side, filter name) set but out of the path: EQ or B/T off
         self.fs = 48000
@@ -517,7 +541,9 @@ class ResponseGraph(pg.PlotWidget):
             self.band_items[(None, name)] = self.plot(x, np.zeros_like(x))
         self.sum_items = [self.plot(x, np.zeros_like(x)) for _ in (0, 1)]
         self.compare_items = [self.plot(x, np.zeros_like(x)) for _ in (0, 1)]
-        for item in list(self.band_items.values()) + self.sum_items + self.compare_items:
+        self.section_items = {k: self.plot(x, np.zeros_like(x)) for k in ("eqL", "eqR", "BT", "LD")}
+        for item in (list(self.band_items.values()) + self.sum_items + self.compare_items
+                     + list(self.section_items.values())):
             item.setVisible(False)
         self.scatter = pg.ScatterPlotItem(pxMode=True)
         self.scatter.sigClicked.connect(self._scatter_clicked)   # the scatter takes clicks on its spots itself
@@ -572,6 +598,38 @@ class ResponseGraph(pg.PlotWidget):
         """Bass/Treble as the device runs it at this sample rate: not at all from no_bt_from on."""
         return [f._replace(active=False) for f in bt] if fs >= self.no_bt_from else bt
 
+    def _loudness(self, s, out, fs):
+        """Loudness as the device runs it at this sample rate and the output's volume: not in the preset being edited,
+        and not at all from no_bt_from on."""
+        if not self.loudness or fs >= self.no_bt_from:
+            return []
+        shelves = F.loudness_filters(s, out)
+        return [f._replace(active=False) for f in shelves] if self.session.bypassed() else shelves
+
+    def _owners(self, side):
+        """The keys a band of this side belongs to: its channel and its section; Bass/Treble belongs to every
+        channel."""
+        return (*self._channels, "BT") if side is None else (CHANNEL_KEY[side], SECTION[side])
+
+    def _section_curve(self, key, filters, run, color, bypassed, channels):
+        """What one section (an EQ, Bass/Treble, Loudness) adds: while it is pointed at, and with Sections on for
+        those in the sums whose channel is shown. filters as set, run as the device runs them. Off, or out of the path
+        at this rate: grey, showing what it would add; bypassed: faded."""
+        item = self.section_items[key]
+        pinned = self.visible["sections"] and key != "LD" and any(self.visible[c] for c in channels)
+        if not filters or not (self.emphasis == key or pinned):
+            item.setVisible(False)
+            return
+        dimmed = self.emphasis != key and self._dimmed(key, "sections", *channels)
+        if not all(f.active for f in filters) or not bypassed and not any(f.active for f in run):
+            color = theme.OFF
+        elif bypassed:
+            color = theme.faded(color)
+        item.setData(self.x, F.total_db([f._replace(active=True) for f in filters], self.freqs, self.fs))
+        item.setPen(_pen(color, SECTION_W, DIMMED if dimmed else 1.0))
+        item.setZValue(4.5)                      # over the compared sums, under the own
+        item.setVisible(True)
+
     def _lit(self, *keys):
         return self.emphasis is not None and self.emphasis in keys
 
@@ -612,46 +670,61 @@ class ResponseGraph(pg.PlotWidget):
         bypassed = ready and self.session.bypassed()
         bt = [f._replace(active=False) for f in bt] if bypassed else bt
         bands_bypassed = bypassed or ready and self.session.eq_bypassed(out)
+        loudness = self._loudness(s, out, self.fs) if ready and sides else []
+        with_loudness = loudness if self.emphasis == "LD" else []       # in the sums only while pointed at
         shown = set()
         self.points = []
+        self._channels = tuple(CHANNEL_KEY[side] for side, _ in sides)
+        bt_shown = any(self.visible[c] for c in self._channels)
+        if sides:
+            self._section_curve("BT", F.bt_filters(s, left), bt, theme.BT, bypassed, self._channels)
+            self._section_curve("LD", F.loudness_filters(s, out) if self.loudness else [], loudness, theme.LOUDNESS,
+                              bypassed, self._channels)
         for side, address in sides:
-            bands = F.band_filters(s, address, left)
+            as_set = bands = F.band_filters(s, address, left)
             if not bands:
                 continue
             self._off |= {(side, f.name) for f in bands if not f.active}
             bands = [f._replace(active=False) for f in bands] if bands_bypassed else bands
             ch = CHANNEL_KEY[side]
             color = side_color(side, dual)
+            self._section_curve(SECTION[side], as_set, bands, color, bands_bypassed, (ch,))
             for flt in bands:
                 if self.visible[ch] and self.visible["bands"]:
                     self._band_curve((side, flt.name), flt, color, (address, flt.name) == self.current,
-                                     (ch, "bands"))
+                                     ("bands", *self._owners(side)))
                     shown.add((side, flt.name))
                 if self.visible[ch]:
                     self.points.append(Point(flt, side, math.log10(flt.freq), self._point_y(flt)))
             item = self.sum_items[side]
-            item.setData(self.x, F.total_db(bands + bt, self.freqs, self.fs))
-            item.setPen(_pen(color, SUM_W, DIMMED if self._dimmed(ch, "sum") else 1.0))
+            item.setData(self.x, F.total_db(bands + bt + with_loudness, self.freqs, self.fs))
+            item.setPen(_pen(color, SUM_W, DIMMED if self._dimmed(ch, "sum", "LD") else 1.0))
             item.setVisible(self.visible[ch] and self.visible["sum"])
             item.setZValue(5)
             cmp = self.compare_items[side]
             if self.fs_compare is not None:
                 bt2 = self._bt_at(F.bt_filters(s, left), self.fs_compare)
-                cmp.setData(self.x, F.total_db(bands + bt2, self.freqs, self.fs_compare))
-                cmp.setPen(_pen(color, COMPARE_W, DIMMED if self._dimmed(ch, "compare") else 0.9, Qt.DashLine))
+                ld2 = self._loudness(s, out, self.fs_compare) if with_loudness else []    # as its sum
+                cmp.setData(self.x, F.total_db(bands + bt2 + ld2, self.freqs, self.fs_compare))
+                pen = _pen(color, SUM_W, DIMMED if self._dimmed(ch, "compare", "LD") else 1.0)
+                cmp.setPen(round_dots(pen, COMPARE_DOTS))
             cmp.setVisible(self.fs_compare is not None and self.visible[ch] and self.visible["compare"])
-            cmp.setZValue(4)
+            cmp.setZValue(4.8)                   # a sum: over the sections, under the own
         for flt in bt if sides else []:
-            if self.visible["BT"] and self.visible["bands"]:
+            if bt_shown and self.visible["bands"]:
                 self._band_curve((None, flt.name), flt, theme.BT, (left, flt.name) == self.current,
-                                 ("BT", "bands"))
+                                 ("bands", *self._owners(None)))
                 shown.add((None, flt.name))
-            if self.visible["BT"]:
+            if bt_shown:
                 self.points.append(Point(flt, None, math.log10(flt.freq), self._point_y(flt)))
         for side in (0, 1):
             if not any(sd == side for sd, _ in sides):
                 self.sum_items[side].setVisible(False)
                 self.compare_items[side].setVisible(False)
+                self.section_items[SECTION[side]].setVisible(False)
+        if not sides:
+            self.section_items["BT"].setVisible(False)
+            self.section_items["LD"].setVisible(False)
         for key, item in self.band_items.items():
             if key not in shown:
                 item.setVisible(False)
@@ -676,7 +749,7 @@ class ResponseGraph(pg.PlotWidget):
         color = self._color(key, flt, color)
         band = (flt.address, flt.name)
         dimmed = self._dimmed(*keys, band=band)
-        alpha = DIMMED if dimmed else 1.0 if current or band == self._attention() or self._lit(*keys) else BAND_ALPHA
+        alpha = self._band_alpha(band, current, dimmed, self._lit("bands"))
         item.setPen(_fading_pen(color, CHOSEN_W if current else BAND_W, alpha, self.x, y))
         if current:
             fill = QColor(color)
@@ -689,6 +762,12 @@ class ResponseGraph(pg.PlotWidget):
         item.setZValue(3 if current else 1)
         item.setVisible(True)
 
+    def _band_alpha(self, band, current, dimmed, lit):
+        """The opacity of each of a band's marks (its curve, its ring, its label): full when chosen, when it has the
+        attention, or when the layer it is drawn in is pointed at (lit); stepping back: DIMMED; else BAND_ALPHA.
+        Pointing at a section leaves its bands as they are: the section's own curve is what it shows."""
+        return DIMMED if dimmed else 1.0 if current or band == self._attention() or lit else BAND_ALPHA
+
     @staticmethod
     def _point_y(flt):
         """At the gain. A High Pass or High Cut has no gain: its point sits on the 0 dB line, independent of Q."""
@@ -696,14 +775,14 @@ class ResponseGraph(pg.PlotWidget):
 
     def _draw_points(self):
         """A ring per point, open so the curve shows through; its number in the label lane below, at f0.
-        Pointing at Handles in the legend lights them all: thicker rings, labels at full colour."""
+        Pointing at Handles in the legend lights them all: rings and labels at full colour."""
         rings, dots = [], []
         all_lit = self._lit("handles")
         for pt in self.points if self.visible["handles"] else []:
             c = QColor(self._color((pt.side, pt.flt.name), pt.flt, side_color(pt.side, self.dual)))
-            if self._dimmed("handles", CHANNEL_KEY[pt.side], band=pt.key):
-                c.setAlphaF(DIMMED)
             chosen, hovered = pt.key == self.current, pt.key == self.hovered
+            c.setAlphaF(self._band_alpha(pt.key, chosen, self._dimmed("handles", *self._owners(pt.side), band=pt.key),
+                                         all_lit))
             rings.append({"pos": (pt.x, pt.y), "size": RING + 2 if hovered else RING, "brush": QColor(0, 0, 0, 0),
                           "pen": _pen(c, 2.0 if chosen else 1.5, c.alphaF())})
             if chosen and abs(F.response_db(pt.flt, [pt.flt.freq], self.fs)[0] - pt.y) > OFF_CURVE_DB:
@@ -715,10 +794,8 @@ class ResponseGraph(pg.PlotWidget):
                 pt = self.points[i]
                 lit = pt.key in (self.current, self.hovered)
                 c = QColor(self._color((pt.side, pt.flt.name), pt.flt, side_color(pt.side, self.dual)))
-                if self._dimmed("handles", CHANNEL_KEY[pt.side], band=pt.key):
-                    c.setAlphaF(DIMMED)
-                elif not lit and not all_lit:
-                    c.setAlphaF(0.75)
+                c.setAlphaF(self._band_alpha(pt.key, pt.key == self.current,
+                                             self._dimmed("handles", *self._owners(pt.side), band=pt.key), all_lit))
                 t.setText(pt.flt.name)
                 t.setColor(c)
                 t.setFont(self._label_font_lit if lit else self._label_font)

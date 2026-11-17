@@ -1,7 +1,9 @@
-"""The graph's legend, which is also how one chooses what it shows: two groups, the channels (EQ Left, EQ Right,
-Bass/Treble), each a line in its colour, and the layers (Sum, Bands, Handles, and the sums at the rate the device runs
-at when that is another than the chosen one), each as it looks in the graph. Each group is one control, its items
-side by side as the segments of a Segmented: a shown item's segment has a face and a lighter outline.
+"""The graph's legend, which is also how one chooses what it shows: two groups, the channels (Left and Right, or
+Left = Right with one EQ for both), each a line in its colour, and the layers, each as it looks in the graph: Sum,
+what the device does to the channel; Sections, what each EQ and Bass/Treble adds; Bands; Handles; and the sums at the
+rate the device runs at when that is another than the chosen one. Bass/Treble belongs to every channel. Each group is
+one control, its items side by side as the segments of a Segmented: a shown item's segment has a face and a lighter
+outline.
 
     click           shows or hides the item
     double-click    shows only this item of its group; again: the whole group
@@ -15,10 +17,10 @@ from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QBoxLayout, QHBoxLayout, QLabel, QWidget
 
 from . import theme
-from .graph import (BAND_W, COMPARE_W, DEVIATION_FILL, DEVIATION_W, INPUT_ALPHA, INPUT_W, SUM_W,
-                    side_color)
+from .graph import (BAND_W, COMPARE_DOTS, DEVIATION_FILL, DEVIATION_W, INPUT_ALPHA, INPUT_W, SECTION_W, SUM_W,
+                    round_dots, side_color)
 
-GROUPS = [["L", "R", "BT"], ["sum", "bands", "handles", "compare"]]
+GROUPS = [["L", "R"], ["sum", "sections", "bands", "handles", "compare"]]
 GROUP_GAP = 28                                   # pixels between the two groups side by side
 ROW_GAP = 4                                      # ... and one under the other
 ITEM_PAD = 10                                    # px: room in a segment beside its mark and name
@@ -30,15 +32,15 @@ OUTLINE_OFF = theme.GRID                         # ... that is hidden
 FACE = theme.BACKGROUND                          # the face of a segment whose item is shown, or pointed at; a hidden
                                                  # one has none: the graph's zone shows through
 MARK_W, MARK_H = 12, 10                          # px: every mark as wide, shown or hidden, so nothing moves
-MARKS = {"L": "line", "R": "line", "BT": "line", "sum": "thick", "bands": "thin", "handles": "ring",
-         "compare": "dashed"}
+MARKS = {"L": "thick", "R": "thick",                                  # a channel: its sum, in its colour
+         "sum": "thick", "sections": "medium", "bands": "thin", "handles": "ring", "compare": "dots"}
 
 
 def mark_pixmap(kind, color):
     """The mark of an item, drawn: a line in a channel's colour, or a layer as it looks in the graph: a thick line
-    for Sum, a thin one for Bands, a ring for the handles, dashed for the compared sums. Also the Loudness graph's:
-    a small curve for Loudness, high at both ends as its boost, and dotted for the current volume. And Import's
-    deviation: a wave about 0 with the area between filled."""
+    for Sum, a medium one for Sections, a thin one for Bands, a ring for the handles, round dots for the compared
+    sums. Also the Loudness graph's: a small curve for Loudness, high at both ends as its boost, and dotted for the
+    current volume. And Import's deviation: a wave about 0 with the area between filled."""
     scale = 4                                    # drawn large, shown small: sharp at any display scaling
     pm = QPixmap(MARK_W * scale, MARK_H * scale)
     pm.setDevicePixelRatio(scale)
@@ -76,20 +78,23 @@ def mark_pixmap(kind, color):
         path.lineTo(QPointF(MARK_W, top))
         p.drawPath(path)
     else:
-        width = {"line": 2.0, "thick": SUM_W, "thin": BAND_W, "dashed": COMPARE_W, "dotted": 1.0,
+        width = {"line": 2.0, "thick": SUM_W, "medium": SECTION_W, "thin": BAND_W, "dots": SUM_W, "dotted": 1.0,
                  "wide": INPUT_W}[kind]
         if kind == "wide":                       # as see-through as an input. A band's mark is as bright as the
             color = QColor(color)                # others: faint, it would read as hidden
             color.setAlphaF(color.alphaF() * INPUT_ALPHA)
         pen = QPen(color, width)
         pen.setCapStyle(Qt.FlatCap)
-        if kind == "dashed":
-            pen.setDashPattern([2, 1])                                     # 4 px on, 2 off
+        x0, x1 = 1, MARK_W - 1
+        if kind == "dots":                       # as in the graph: as many as fit, in the middle
+            round_dots(pen, COMPARE_DOTS)
+            span = (MARK_W - width) // COMPARE_DOTS * COMPARE_DOTS
+            x0, x1 = (MARK_W - span) / 2, (MARK_W + span) / 2 + 0.01
         elif kind == "dotted":
             pen.setDashPattern([1, 3])                                     # as the Loudness graph's family
         p.setPen(pen)
         y = cy + 0.5 if width == 1 else cy       # 1 px on one row of pixels: thinner than Sum at any scaling
-        p.drawLine(QPointF(1, y), QPointF(MARK_W - 1, y))
+        p.drawLine(QPointF(x0, y), QPointF(x1, y))
     p.end()
     return pm
 
@@ -281,10 +286,11 @@ class Legend(QWidget):
 
     def refresh(self):
         dual, compare = self.graph.dual, self.graph.fs_compare
-        names = {"L": "EQ Left" if dual else "EQ (shared)", "R": "EQ Right", "BT": "Bass/Treble",
-                 "sum": "Sum", "bands": "Bands", "handles": "Handles",
+        names = {"L": "Left" if dual else "Left = Right", "R": "Right",
+                 "sum": "Sum", "sections": "Sections", "bands": "Bands", "handles": "Handles",
                  "compare": "<i>f</i><sub>s</sub> %g kHz" % (compare / 1000) if compare else ""}
-        colors = {"L": side_color(0, dual), "R": side_color(1, dual), "BT": side_color(None, dual)}
+        colors = {"L": side_color(0, dual), "R": side_color(1, dual)}
+        bt = self.graph.has_bt
         for k, item in self.items.items():
             on = self.graph.visible[k]
             item.show_mark(MARKS[k], colors.get(k, theme.TEXT) if on else theme.OFF)
@@ -294,12 +300,17 @@ class Legend(QWidget):
                 item.updateGeometry()                # its new width counts now, not after the next event loop pass
             item.name.setStyleSheet("color: %s;" % (NAME_ON if on else NAME_OFF).name())
             group = ("channel", "channels") if k in GROUPS[0] else ("layer", "layers")
-            note = {"compare": "The sums at the rate the device runs at\n",
-                    "bands": "Includes Bass and Treble\n" if self.graph.has_bt else "",
+            note = {"L": "" if dual else "Dual EQ off: the same for both channels\n",
+                    "sum": "What the device does to the channel: EQ and Bass/Treble together\n" if bt else
+                           "What the device does to the channel: its EQ\n",
+                    "compare": "The sums at the rate the device runs at\n",
+                    "sections": "What each EQ and Bass/Treble adds\n" if bt else "What the EQ adds\n",
+                    "bands": "Includes Bass and Treble\n" if bt else "",
                     "handles": "The points: drag, wheel and click\n"
                                "Off: the band labels stay, but only inform.\n"}.get(k, "")
             item.setToolTip(note +
                             "Click: show or hide · Double-click: only this %s; again: all %s" % group)
         self.items["R"].setVisible(dual)
-        self.items["BT"].setVisible(self.graph.has_bt)
         self.items["compare"].setVisible(compare is not None)
+        for group in self.groups:                    # the items placed now, also when the legend keeps its width:
+            group.layout().activate()                # Left = Right is about as wide as Left and Right

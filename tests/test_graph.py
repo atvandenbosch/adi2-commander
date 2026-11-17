@@ -43,7 +43,7 @@ class Graph(WindowTest):
         self.assertFalse(self.graph.sum_items[1].isVisible())
         np.testing.assert_allclose(self.sum_curve(0), F.total_db(right, self.graph.freqs))   # the right set, for both
         self.assertEqual(self.graph.sum_items[0].opts["pen"].color().rgb(), theme.SHARED.rgb())
-        self.assertEqual(self.win.legend.items["L"].name.text(), "EQ (shared)")
+        self.assertEqual(self.win.legend.items["L"].name.text(), "Left = Right")
         self.assertEqual(self.win.legend.items["L"].color.rgb(), theme.SHARED.rgb())
         self.assertFalse(self.win.legend.items["R"].isVisible())
         self.settle()
@@ -331,13 +331,17 @@ class Graph(WindowTest):
         legend = self.win.legend
         QTest.mouseDClick(legend.items["R"], Qt.LeftButton)
         v = self.graph.visible
-        self.assertEqual((v["L"], v["R"], v["BT"], v["sum"], v["bands"]), (False, True, False, True, True))
-        self.assertEqual({side for side, _ in self.shown()[2]}, {1})
-        QTest.mouseDClick(legend.items["R"], Qt.LeftButton)                      # again: the whole group
-        self.assertEqual((v["L"], v["R"], v["BT"]), (True, True, True))
+        self.assertEqual((v["L"], v["R"], v["sum"], v["bands"]), (False, True, True, True))
+        self.assertEqual({side for side, _ in self.shown()[2]}, {1, 9})        # Bass/Treble belongs to both
+        legend.items["R"].clicked.emit()                                        # no channel: no Bass/Treble either
+        self.assertEqual(self.shown()[2], [])
+        legend.items["R"].clicked.emit()                                        # only Right again
+        legend.items["R"].clicked.emit()                                        # a double-click: the whole group
+        legend.items["R"].double_clicked.emit()
+        self.assertEqual((v["L"], v["R"]), (True, True))
         QTest.mouseDClick(legend.items["sum"], Qt.LeftButton)
-        self.assertEqual((v["sum"], v["bands"]), (True, False))
-        self.assertEqual((v["L"], v["R"], v["BT"]), (True, True, True))          # the other group stays
+        self.assertEqual((v["sum"], v["sections"], v["bands"]), (True, False, False))
+        self.assertEqual((v["L"], v["R"]), (True, True))                        # the other group stays
 
     def test_legend_handles_off_keeps_the_labels_but_not_the_mouse(self):
         g = self.graph
@@ -367,6 +371,9 @@ class Graph(WindowTest):
         self.assertEqual(items["bands"].toolTip().split("\n"),
                          ["Includes Bass and Treble",
                           "Click: show or hide · Double-click: only this layer; again: all layers"])
+        self.assertEqual(items["sum"].toolTip().split("\n")[0],
+                         "What the device does to the channel: EQ and Bass/Treble together")
+        self.assertEqual(items["sections"].toolTip().split("\n")[0], "What each EQ and Bass/Treble adds")
 
     def test_the_head_gives_way_in_three_steps(self):
         head, legend, controls = self.win.graph_head, self.win.legend, self.win.graph_head.controls
@@ -390,19 +397,18 @@ class Graph(WindowTest):
         item = self.win.legend.items["L"]
         self.win.resize(1600, 900)                                              # room for the whole legend
         self.spin(50)
-        QTest.mouseClick(self.win.dual_actions[0], Qt.LeftButton)               # EQ Left -> EQ (shared)
-        self.assertEqual(item.name.text(), "EQ (shared)")
+        QTest.mouseClick(self.win.dual_actions[0], Qt.LeftButton)               # Left -> Left = Right
+        self.assertEqual(item.name.text(), "Left = Right")
         self.assertEqual(item.width(), item.sizeHint().width())                 # not cut off until a next refresh
         self.settle()
 
     def test_legend_with_dual_eq_off(self):
         self.session.set_dual(3, False)
         self.spin(100)
-        QTest.mouseDClick(self.win.legend.items["L"], Qt.LeftButton)            # RIGHT is not there to count
-        v = self.graph.visible
-        self.assertEqual((v["L"], v["BT"]), (True, False))
-        QTest.mouseDClick(self.win.legend.items["L"], Qt.LeftButton)
-        self.assertEqual((v["L"], v["BT"]), (True, True))
+        QTest.mouseDClick(self.win.legend.items["L"], Qt.LeftButton)            # Right is not there to count: Left =
+        v = self.graph.visible                                                  # Right is all of the group already
+        self.assertEqual((v["L"], v["R"]), (True, True))
+        self.assertEqual(self.win.legend.items["L"].toolTip().split("\n")[0], "Dual EQ off: the same for both channels")
         self.settle()
 
     def test_pointing_at_a_legend_item_sets_the_rest_back(self):
@@ -421,6 +427,64 @@ class Graph(WindowTest):
         self.assertTrue(all(a == 1 for a in rings()))
         self.assertEqual(alphas(sums), [G.DIMMED, G.DIMMED])
         self.win.legend.point("handles", False)
+
+    def band_alpha(self, key):
+        """The opacity of a band's curve where it is fullest."""
+        return round(max(c.alphaF() for _, c in self.graph.band_items[key].opts["pen"].brush().gradient().stops()), 2)
+
+    def test_sections_show_what_each_section_adds(self):
+        g, items = self.graph, self.graph.section_items
+        shown = lambda: [k for k, i in items.items() if i.isVisible()]          # noqa: E731
+        self.assertEqual(shown(), [])                                           # off at first
+        QTest.mouseClick(self.win.legend.items["sections"], Qt.LeftButton)
+        self.assertEqual(shown(), ["eqL", "eqR", "BT"])                         # Loudness is in no sum
+        np.testing.assert_allclose(items["eqR"].getData()[1],
+                                   F.total_db(F.band_filters(self.session.state, 5, 4), g.freqs))
+        self.assertEqual(items["eqL"].opts["pen"].widthF(), G.SECTION_W)
+        self.assertEqual(items["BT"].opts["pen"].color().rgb(), theme.OFF.rgb())   # off: grey, what it would add
+        QTest.mouseClick(self.win.legend.items["L"], Qt.LeftButton)             # with its channel
+        self.assertEqual(shown(), ["eqR", "BT"])
+
+    def test_pointing_at_a_section_switch_shows_what_it_adds(self):
+        g, switch, eq = self.graph, self.win.eq_switches[1], self.graph.section_items["eqR"]
+        alpha = lambda item: round(item.opts["pen"].color().alphaF(), 2)        # noqa: E731
+        self.assertEqual(switch.toolTip().split("\n")[-1], "Pointed at: what it adds, in the graph")
+        switch.pointed.emit(True)
+        self.assertTrue(eq.isVisible() and alpha(eq) == 1.0)
+        self.assertEqual([alpha(i) for i in g.sum_items], [G.DIMMED, G.DIMMED])   # a section is a part of a sum
+        # its own bands as they are, the other channel's step back
+        self.assertEqual((self.band_alpha((1, "2")), self.band_alpha((0, "2"))), (G.BAND_ALPHA, G.DIMMED))
+        switch.pointed.emit(False)
+        self.assertFalse(eq.isVisible())
+        self.assertEqual([alpha(i) for i in g.sum_items], [1.0, 1.0])
+
+    def test_loudness_only_while_its_switch_is_pointed_at(self):
+        g, win, s = self.graph, self.win, self.session.state
+        win.toggle_loudness()
+        self.settle()
+        bands, loudness = F.band_filters(s, 4, 4), F.loudness_filters(s, win.output[1])
+        self.assertIs(win.stage.currentWidget(), g)                             # turned on: the stage stays
+        np.testing.assert_allclose(self.sum_curve(0), F.total_db(bands, g.freqs))   # in no sum
+        win.loudness_switch.pointed.emit(True)
+        np.testing.assert_allclose(self.sum_curve(0), F.total_db(bands + loudness, g.freqs))   # at the volume
+        self.assertGreater(np.abs(self.sum_curve(0) - F.total_db(bands, g.freqs)).max(), 1)
+        np.testing.assert_allclose(g.section_items["LD"].getData()[1], F.total_db(loudness, g.freqs))
+        self.assertEqual(round(g.sum_items[0].opts["pen"].color().alphaF(), 2), 1.0)   # what it changes: lit
+        win.loudness_switch.pointed.emit(False)
+        np.testing.assert_allclose(self.sum_curve(0), F.total_db(bands, g.freqs))
+        self.assertFalse(g.section_items["LD"].isVisible())
+
+    def test_a_bands_marks_share_one_opacity(self):
+        g = self.graph
+        i = next(n for n, p in enumerate(g.points) if p.key == (4, "2"))
+        ring, label = g.scatter.points()[i], g.labels[i]
+        self.assertEqual((self.band_alpha((0, "2")), round(ring.pen().color().alphaF(), 2),
+                          round(label.color.alphaF(), 2)), (G.BAND_ALPHA,) * 3)
+        g.current = (4, "2")                                                    # chosen: full, a fill, as thin
+        g.redraw()
+        item = g.band_items[(0, "2")]
+        self.assertEqual((self.band_alpha((0, "2")), item.opts["pen"].widthF()), (1.0, G.BAND_W))
+        self.assertIsNotNone(item.opts["fillLevel"])
 
     def test_chosen_and_attention_are_two_marks(self):
         g, vp = self.graph, self.graph.viewport()
@@ -618,7 +682,7 @@ class Graph(WindowTest):
         self.sim.front_panel([(4, 18, 12000)])               # band 5 left in the high, where fs matters
         self.spin(300)
         left = F.band_filters(self.session.state, 4, 4)
-        cmp, item = self.graph.compare_items[0], self.win.legend.items["compare"]     # the dashed sums, their item
+        cmp, item = self.graph.compare_items[0], self.win.legend.items["compare"]     # the dotted sums, their item
         self.assertFalse(cmp.isVisible() or item.isVisible())                 # the device runs at the chosen 48
         self.win.fs_box.setCurrentIndex(G.SAMPLE_RATES.index(44100))
         np.testing.assert_allclose(self.sum_curve(0), F.total_db(left, self.graph.freqs, 44100))
@@ -626,7 +690,9 @@ class Graph(WindowTest):
         self.assertFalse(cmp.isVisible())                                     # off at first
         QTest.mouseClick(item, Qt.LeftButton)
         self.assertTrue(cmp.isVisible())
-        self.assertEqual(cmp.opts["pen"].style(), Qt.DashLine)
+        pen = cmp.opts["pen"]                                                 # a sum: as thick, round dots
+        self.assertEqual((pen.widthF(), pen.capStyle(), pen.color().alphaF()), (G.SUM_W, Qt.RoundCap, 1.0))
+        self.assertAlmostEqual(sum(pen.dashPattern()) * G.SUM_W, G.COMPARE_DOTS)
         np.testing.assert_allclose(cmp.getData()[1], F.total_db(left, self.graph.freqs, 48000))
         self.assertGreater(np.abs(cmp.getData()[1] - self.sum_curve(0)).max(), 0.01)
         QTest.mouseClick(self.win.legend.items["sum"], Qt.LeftButton)        # a layer of its own

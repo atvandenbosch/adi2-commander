@@ -318,7 +318,7 @@ class Window(WindowTest):
         self.assertEqual([v.chosen for v in win.band_views + [win.bt_view, view]], [True, False, False, False])
         self.assertEqual(len({focused, chosen, fill()}), 3)                # focus, fainter, none
 
-    def test_a_switch_turned_on_takes_its_table_and_stage_turned_off_nothing(self):
+    def test_a_switch_turned_on_takes_its_table_turned_off_nothing(self):
         win, stage = self.win, self.win.stage
         left, right = win.band_views
         right.setFocus()
@@ -326,25 +326,26 @@ class Window(WindowTest):
         left.setFocus()
         left.setCurrentIndex(left.model().index(2, 2))
         self.spin(50)
-        QTest.mouseClick(win.loudness_switch, Qt.LeftButton)                # on: its table, where Tab enters it
-        view = win.loudness_view
-        self.assertEqual((view.hasFocus(), view.currentIndex().row(), view.currentIndex().column()), (True, 0, 1))
-        self.assertIs(stage.currentWidget(), win.loudness_graph)
+        QTest.mouseClick(win.bt_switch, Qt.LeftButton)                      # on: its table, where Tab enters it
+        view = win.bt_view
+        self.assertTrue(view.hasFocus() and view.currentIndex().isValid())
         QTest.mouseClick(win.eq_switches[1], Qt.LeftButton)                 # off: the focus stays
         self.assertTrue(view.hasFocus() and view.chosen)
-        self.assertIs(stage.currentWidget(), win.loudness_graph)
+        QTest.mouseClick(win.loudness_switch, Qt.LeftButton)                # on: the focus and the stage stay, the
+        self.assertTrue(view.hasFocus())                                    # response graph shows it when pointed at
+        self.assertIs(stage.currentWidget(), win.graph)
         left.setFocus()
         QTest.keyClick(left, Qt.Key_Return)                                 # in an editor
-        QTest.mouseClick(win.loudness_switch, Qt.LeftButton)                # off: back to its table
+        QTest.mouseClick(win.bt_switch, Qt.LeftButton)                      # off: back to its table
         self.assertTrue(left.hasFocus())
-        self.assertIs(stage.currentWidget(), win.graph)
         QTest.mouseClick(win.eq_switches[1], Qt.LeftButton)                 # on: its current cell
         self.assertEqual((right.hasFocus(), right.currentIndex().row()), (True, 3))
         self.settle()
-        self.assertEqual([self.sim.state[(3, P.LOUDNESS_ENABLE)], self.sim.state[(4, P.EQ_ENABLE)]], [0, 1])
+        self.assertEqual([self.sim.state[(3, P.LOUDNESS_ENABLE)], self.sim.state[(4, P.BT_ENABLE)],
+                          self.sim.state[(4, P.EQ_ENABLE)]], [1, 0, 1])
         win.tabs.setFocus()
         QTest.keyClick(win.tabs, Qt.Key_Backtab)                            # no switch in the Tab order
-        self.assertIn(QApplication.focusWidget(), win.band_views + [win.bt_view, view])
+        self.assertIn(QApplication.focusWidget(), win.band_views + [win.bt_view, win.loudness_view])
 
     def test_the_loudness_shelves_have_points_to_choose_and_drag(self):
         g, view = self.win.loudness_graph, self.win.loudness_view
@@ -1046,7 +1047,7 @@ class AnalogIn(WindowTest):
                          ("Analog In", 0, "ANALOG IN"))
         self.assertTrue(win.band_views[0].isVisible())
         self.assertFalse(win.bt_view.isVisible() or win.loudness_view.isVisible() or win.load_bt.isVisible())
-        self.assertFalse(win.legend.items["BT"].isVisible())
+        self.assertEqual(win.legend.items["sections"].toolTip().split("\n")[0], "What the EQ adds")
         self.assertFalse(win.output_tab.isEnabled() or win.output_area.isVisible())
         self.assertEqual(win.output_tab.toolTip(), "The settings of Analog In are in the input panel.")
         win.tabs.setCurrentIndex(tab(3))
