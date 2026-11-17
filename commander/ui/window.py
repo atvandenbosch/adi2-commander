@@ -191,7 +191,7 @@ class GraphHead(QWidget):
                      max([l.size_for(False).height() for l in self.legends] + [c.height()]))
 
     def minimumSizeHint(self):
-        """Not the legend's width: it changes with what the graph shows (EQ Right only with Dual EQ), and the
+        """Not the legend's width: it changes with what the graph shows (Right only with Dual EQ), and the
         window would grow while one works in it. The graph's own minimum is wider than the legend."""
         c = self.controls.sizeHint()
         return QSize(c.width(), max([l.size_for(False).height() for l in self.legends] + [c.height()]))

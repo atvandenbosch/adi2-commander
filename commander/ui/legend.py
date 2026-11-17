@@ -255,7 +255,7 @@ class Legend(QWidget):
         return next(g for g in GROUPS if key in g)
 
     def _shown(self, group):
-        """The items of a group that are on screen now: EQ Right is not, with Dual EQ off."""
+        """The items of a group that are on screen now: Right is not, with Dual EQ off."""
         return [k for k in group if self.items[k].isVisibleTo(self)]
 
     def toggle(self, key):
