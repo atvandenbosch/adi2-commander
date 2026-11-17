@@ -1,6 +1,6 @@
 """Import by Fit: OK waits for the fit, Cancel and Stop while it runs, Restart (one button with Stop, as wide as
-either), the sum as the device makes it with the input moved onto it, garbage collection while it runs, a curve, and a
-fixed level."""
+either), the sum as the device makes it with the input moved onto it, garbage collection while it runs, a curve, a
+fixed level, and left and right of their own."""
 
 import gc
 import time
@@ -22,6 +22,21 @@ from tests.test_importexport import OUT, THREE, ImportTest, wait_for_fit
 
 FREQS = F.FREQS
 PEAK = X.response([X.Setting("3", "PK", 1000, 4.0, 0.7)], 48000.0)    # one the device makes: a quick fit
+LEFT_RIGHT = """Channel: L
+Filter: ON LSC Fc 90 Hz Gain 5.0 dB Q 0.70
+Filter: ON PK Fc 220 Hz Gain -2.5 dB Q 1.20
+Filter: ON PK Fc 2900 Hz Gain 3.0 dB Q 2.00
+Filter: ON PK Fc 5200 Hz Gain -4.0 dB Q 4.00
+Filter: ON PK Fc 11000 Hz Gain -3.0 dB Q 2.50
+Filter: ON HSC Fc 12000 Hz Gain -2.0 dB Q 0.70
+Channel: R
+Filter: ON LSC Fc 120 Hz Gain 3.0 dB Q 0.70
+Filter: ON PK Fc 450 Hz Gain -3.0 dB Q 1.40
+Filter: ON PK Fc 3600 Hz Gain 4.5 dB Q 2.20
+Filter: ON PK Fc 6400 Hz Gain -5.0 dB Q 5.00
+Filter: ON PK Fc 9000 Hz Gain 3.5 dB Q 2.00
+Filter: ON HSC Fc 10000 Hz Gain 1.5 dB Q 0.70
+"""                                              # each channel more filters than bands: a fit
 
 
 def past_guard():
@@ -193,6 +208,15 @@ class ImportFit(ImportTest):
         np.testing.assert_allclose(total, sum(bands + dialog.graph.bt))
         np.testing.assert_allclose(shown, given + level)
         self.assertEqual(dialog.legend.items["input"].name.text(), D._adjusted({key: level})[0])
+
+    def test_left_and_right_of_their_own_each_fit_to_its_own(self):
+        dialog = self.open(self.file("lr.txt", LEFT_RIGHT))
+        self.assertEqual(dialog.mode, D.FIT)
+        self.assertEqual([blocks for blocks, _, _ in dialog.jobs()], [("L",), ("R",)])
+        (_, _, left, left_sum, _, _), (_, _, right, right_sum, _, _) = dialog.graph.channels
+        self.assertGreater(np.abs(left - right).max(), 3.0)                  # two curves
+        for given, total in ((left, left_sum), (right, right_sum)):
+            self.assertLess(np.sqrt(np.mean((total - given) ** 2)), 0.5)       # each sum on its own input
 
     def test_a_fixed_level_centres_a_curve_and_stays_for_the_next(self):
         self.addCleanup(setattr, D.ImportDialog, "fixed_level", False)
