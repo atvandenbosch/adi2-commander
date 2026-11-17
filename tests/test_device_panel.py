@@ -13,6 +13,8 @@ from tests.gui import WindowTest, tab
 class DevicePanel(WindowTest):
     """An ADI-2 DAC FS with an ESS D/A converter: no DSD Direct."""
 
+    factory = (10, 13, 19, 20)                   # the keys as from the factory: Mono, Loudness, AutoDark, Dim
+
     def setUp(self):
         super().setUp()
         self.panel = self.win.device_panel
@@ -113,6 +115,24 @@ class DevicePanel(WindowTest):
                                     "Remap Keys."])
         self.assertEqual((note(27), note(29)), ([], []))                        # I/O, SETUP
 
+    def test_keys_back_as_from_the_factory(self):
+        self.assertEqual(self.session.model.keys.factory, self.factory)
+        button = self.panel.factory
+        self.session.set((12, P.REMAP_KEYS), 0)
+        self.session.set((12, 26), 0)
+        self.settle()
+        self.assertTrue(button.isEnabled())
+        self.assertEqual(button.toolTip().splitlines()[:3], ["Sets Remap Keys and the keys as from the factory:",
+                                                             "Remap Keys: Remote", "VOL (1): %s"
+                                                             % self.session.key_names()[self.factory[0]]])
+        QTest.mouseClick(button, Qt.LeftButton)
+        self.settle()
+        self.assertEqual([self.sim.state[(12, i)] for i in (P.REMAP_KEYS,) + P.KEYS[:len(self.factory)]],
+                         [P.REMAP_REMOTE, *self.factory])
+        self.assertFalse(button.isEnabled())
+        self.assertEqual(button.toolTip(), "Sets Remap Keys and the keys as from the factory.\n"
+                                           "They are already set this way.")
+
     def test_a_change_on_the_device_is_shown(self):
         self.sim.front_panel([(12, P.LOCK_UI, 3)])
         self.spin(1500)
@@ -121,6 +141,7 @@ class DevicePanel(WindowTest):
 
 class DevicePanelPro(DevicePanel):
     model = PRO
+    factory = (50, 47, 52, 41, 48, 49, 51)       # Source Analog, AES, AutoDark, DIM, Source SPDIF coax, Optical, USB
 
     def test_its_rows(self):
         self.assertEqual([g for g, _ in self.rows()],
@@ -164,6 +185,7 @@ class DevicePanelPro(DevicePanel):
 
 class DevicePanel24(DevicePanel):
     model = PRO_24
+    factory = (51, 48, 53, 42, 49, 50, 52)       # as the ADI-2 Pro's: its third DA filter moves values 40 and up by one
 
     def test_its_rows(self):
         self.assertEqual(self.rows()[0][1], ["Basic Mode", "Dig. Out Source"])

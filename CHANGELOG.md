@@ -14,6 +14,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 - The graphs show their aspect ratio in dB per decade, in the corner where the axes meet: the response graph, the
   Loudness graph and Import's. In the response graph a click on it sets 10, 25 or 50 dB per decade (IEC 60263), in
   turn with the ratio it had.
+- Under DEVICE, Factory Settings sets Remap Keys and the keys as from the factory.
 
 ### Changed
 

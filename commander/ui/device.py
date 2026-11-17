@@ -8,7 +8,8 @@ power, the display and the keys of the device. The page chosen stays while Comma
 
 Mute v. Ph 1/2 can be set with Dual Phones on only, SPDIF In outside Basic Mode DAC, where Source chooses the SPDIF
 input. DSD Filter, on a device with DSD Direct, is faded while DSD Direct is off; the keys while Remap Keys is off,
-and a key whose function takes effect in Basic Mode DAC only, outside it. The clock is in the input panel.
+and a key whose function takes effect in Basic Mode DAC only, outside it. The clock is in the input panel. Under the
+keys, Factory Settings sets Remap Keys and the keys as from the factory (Keys.factory).
 """
 
 from PySide6.QtCore import Signal
@@ -18,8 +19,8 @@ from ..device import models
 from ..device import params as P
 from .inputs import NOT_IN_DAC_MODE
 from .output import LABEL_WIDTH, NAME_INDENT, VALUE_WIDTH, _label, _row
-from .widgets import (ATTACHED_GAP, GROUP_STYLE, INNER_GAP, TITLE_STYLE, GroupedChoice, Option, Segmented, Stepper,
-                      head)
+from .widgets import (ATTACHED_GAP, GROUP_STYLE, INNER_GAP, TITLE_STYLE, Action, GroupedChoice, Option, Segmented,
+                      Stepper, head)
 
 # what each setting chooses; below it, briefly, a value whose name does not say it all
 TIPS = {
@@ -79,6 +80,10 @@ REMOTE_KEY_TIPS = {True: "The function of key %(n)d on the remote control",
                    None: "Remap Keys is off, so key %(n)d on the remote control does nothing."}
 # the keys on the device whose names a fixed key on the remote control has too
 SAME_NAME = "Note: the %s key on the remote control is a separate key, not affected by Remap Keys."
+# a button under the keys: Remap Keys and every key as from the factory
+FACTORY = "Factory Settings"
+FACTORY_TIP = "Sets Remap Keys and the keys as from the factory:\n%s"
+AT_FACTORY = "Sets Remap Keys and the keys as from the factory.\nThey are already set this way."
 EXTRA = {(models.PRO.id, P.BAL_PHONES): "Line Out is then muted.",
          (models.PRO_24.id, P.BAL_PHONES): "The Pentaconn jack is always balanced."}
 NEEDS_DUAL_PHONES = "Can be set with Dual Phones on"
@@ -118,6 +123,7 @@ class DevicePanel(QWidget):
         self.session, self.marks, self.model = session, marks, None
         self.built = None                                # the groups and settings the rows are for
         self.steppers, self.options = {}, {}
+        self.factory = None                              # the button under the keys, with the group KEYS
         self.page, self.pages = 0, []                    # the page shown; the widget of each
         title = QLabel("DEVICE")
         title.setStyleSheet(TITLE_STYLE)
@@ -144,7 +150,7 @@ class DevicePanel(QWidget):
         if groups == self.built:
             return
         self.built = groups
-        self.steppers, self.options = {}, {}
+        self.steppers, self.options, self.factory = {}, {}, None
         body = QWidget()
         outer = QVBoxLayout(body)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -166,6 +172,11 @@ class DevicePanel(QWidget):
             lay.addSpacing(ATTACHED_GAP)
             for x in xs:
                 lay.addWidget(self._control(x))
+            if g == "KEYS":
+                self.factory = Action(compact=True)
+                self.factory.setText(FACTORY)
+                self.factory.clicked.connect(self.to_factory)
+                lay.addWidget(_row(_label(""), self.factory))
         self.lay.replaceWidget(self.body, body)
         self.body.setParent(None)
         self.body.deleteLater()
@@ -200,6 +211,17 @@ class DevicePanel(QWidget):
         if self.session.writable(key):
             self.edited.emit(key, 1 - self.session.state[key], False)
 
+    def factory_values(self):
+        """{key: value} of Remap Keys and each key the device reports, as from the factory."""
+        values = {P.REMAP_KEYS: P.REMAP_REMOTE, **dict(zip(P.KEYS, self.model.keys.factory))}
+        return {(P.DEVICE_ADDRESS, i): v for i, v in values.items() if i in self.steppers}
+
+    def to_factory(self):
+        s = self.session
+        for key, v in self.factory_values().items():
+            if s.state.get(key) != v and s.writable(key):
+                self.edited.emit(key, v, False)
+
     def refresh(self):
         session, ready = self.session, self.session.ready()
         if ready:
@@ -226,6 +248,14 @@ class DevicePanel(QWidget):
             if key in self.marks.mismatch:
                 lines.append("Sent %s, the device has %s." % tuple(stepper.text(n) for n in self.marks.mismatch[key]))
             stepper.show_state(v, session.writable(key), "\n".join(lines), faded, key in self.marks.mismatch)
+        if self.factory is not None:
+            values = self.factory_values()
+            names = session.key_names() if ready else self.model.keys.names
+            lines = ["%s: %s" % (self.steppers[i][0].name, names[v] if i in P.KEYS else "Remote")
+                     for (_, i), v in values.items()]
+            changes = ready and any(s.get(k) != v and session.writable(k) for k, v in values.items())
+            self.factory.setEnabled(changes)
+            self.factory.setToolTip(FACTORY_TIP % "\n".join(lines) if changes or not ready else AT_FACTORY)
         for i, (x, option) in self.options.items():
             key, on = (P.DEVICE_ADDRESS, i), value(i) == 1
             lines = ["%s: %s" % (x.name, "on" if on else "off"), tip(self.model, x)]
