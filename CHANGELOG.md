@@ -35,9 +35,11 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 - The letters of the outputs a preset is selected on follow its name; a name cut short fades out before them.
 - The response graph shows what each section adds: point at the switch of an EQ, Bass/Treble or Loudness, or turn
   on Sections in the legend. The legend names the channels Left and Right.
+- Import's legend names the channels Left and Right too; Bass/Treble shows with them.
 
 ### Fixed
 
+- Import: with Dual EQ, Bass and Treble are drawn once, as bright as the other bands.
 - Setup asks to close Commander while it runs, also in another account or Windows session, before it changes
   anything; a cancelled update could leave a Commander that did not start. The uninstaller asks as well.
 

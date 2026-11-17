@@ -52,7 +52,8 @@ from . import theme
 from .graph import (BAND_ALPHA, BAND_W, DEVIATION_FILL, DEVIATION_W, DIMMED, INPUT_ALPHA, INPUT_W,
                     LEGEND_GAP, MIN_POINTS, POINTS_PER_PIXEL, SUM_W, TITLE_ROOM, X_HI, X_LO, X_PAD, Y_HI, Y_LO, ZONE_INK,
                     RatioCorner, _fading_pen, _ticks, side_color, title_axes)
-from .legend import GROUP_GAP, NAME_OFF, NAME_ON, Group as LegendGroup, _Item as LegendItem
+from .legend import (CHANNEL_NAMES, GROUP_GAP, NAME_OFF, NAME_ON, SHARED_NAME, Group as LegendGroup,
+                     _Item as LegendItem)
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, CellDelegate, Marks, ParamModel, ParamView,
                      band_rows, bt_rows)
 from .widgets import (ATTACHED_GAP, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE, Action, Choice, Segmented,
@@ -281,12 +282,15 @@ class TwoScales(pg.AxisItem):
 
 class CurveGraph(pg.PlotWidget):
     """Per channel the input, the sum and its bands on the main window's scale and at its resolution (freqs: two points
-    per pixel); below it the deviation. What the legend hides is not drawn; what it points at stays bright, the rest
-    steps back. resolution_changed: the width asks for other frequencies; the curves are to be computed again."""
+    per pixel); below it the deviation. Bass/Treble belongs to every channel: its bands are drawn once, while a channel
+    is shown. What the legend hides is not drawn; what it points at stays bright, the rest steps back, as in the main
+    window. resolution_changed: the width asks for other frequencies; the curves are to be computed again."""
 
     resolution_changed = Signal()
 
     LAYERS = ("input", "sum", "bands", "deviation", "candidate")
+    Z = {"input": 0, "bands": 1, "candidate": 2, "sum": 3, "deviation": 3}   # each layer over the one before, in
+                                                                             # both channels
 
     def __init__(self):
         self.axis = TwoScales([("Gain (dB)", 0.0), ("Deviation (dB)", DIFF_MID)])
@@ -321,19 +325,27 @@ class CurveGraph(pg.PlotWidget):
         self.setYRange(Y_LO - DIFF_ROOM, Y_HI, padding=0)
         self.points = MIN_POINTS
         self.x = np.linspace(X_LO, X_HI, self.points)
-        self.visible = {k: True for k in ("L", "R", "BT") + self.LAYERS}
+        self.visible = {k: True for k in ("L", "R") + self.LAYERS}
         self.drawn = {}                                  # {item: (curve, look)} as it is on screen
         self.emphasis = None                             # a legend item pointed at
         self.channels = []
+        self.bt = []                                     # the curves of Bass and Treble, for all channels
         # a fixed set of items, updated in place: per channel (left last, on top) the input under the rest, its
-        # bands, what the fit tries now, the sum and the deviation
+        # bands, what the fit tries now, the sum and the deviation; Bass and Treble once
         self.items = []
         for _ in (0, 1):
             self.items.append({"input": self.plot(connect="finite"),
-                               "bands": [self.plot(connect="finite") for _ in range(7)],
+                               "bands": [self.plot(connect="finite") for _ in range(5)],
                                "candidate": self.plot(connect="finite"), "sum": self.plot(connect="finite"),
                                "deviation": self.plot(connect="finite", fillLevel=DIFF_MID)})
         self.items.reverse()
+        self.bt_items = [self.plot(connect="finite") for _ in range(2)]
+        for items in self.items:
+            for layer, z in self.Z.items():
+                for item in items[layer] if layer == "bands" else [items[layer]]:
+                    item.setZValue(z)
+        for item in self.bt_items:
+            item.setZValue(self.Z["bands"])
         self.ratio = RatioCorner(self, db_title=self.axis.titles[0][0])     # the dB titles are TwoScales' own
 
     def fit_x(self):
@@ -352,16 +364,24 @@ class CurveGraph(pg.PlotWidget):
             self.points = points
             self.resolution_changed.emit()
 
-    def draw(self, channels):
-        """channels: per channel (key 'L' or 'R', colour, input, sum or None, [(band curve, colour, key)], what the fit
-        tries now or None), at freqs(); the input and what is tried moved to the sum's level already."""
-        self.channels = channels
+    def draw(self, channels, bt=()):
+        """channels: per channel (key 'L' or 'R', colour, input, sum or None, [band curve], what the fit tries now or
+        None), at freqs(); the input and what is tried moved to the sum's level already. bt: the curves of Bass and
+        Treble, in every sum."""
+        self.channels, self.bt = channels, list(bt)
         self.x = np.linspace(X_LO, X_HI, len(channels[0][2])) if channels else self.x
         self.redraw()
 
     def redraw(self):
         """Only what changed is drawn again: with a fit running, most curves stay as they are from one drawing to the
         next."""
+        keys = [c[0] for c in self.channels]
+        shown = self.visible["bands"] and any(self.visible[k] for k in keys)
+        for item, y in itertools.zip_longest(self.bt_items, self.bt if shown else []):
+            if y is None:
+                self._clear(item)
+            else:
+                self._band(item, y, theme.BT, (*keys, "bands"))
         for k, items in enumerate(self.items):
             everything = items["bands"] + [items["candidate"], items["sum"], items["deviation"], items["input"]]
             if k >= len(self.channels) or not self.visible[self.channels[k][0]]:
@@ -374,13 +394,11 @@ class CurveGraph(pg.PlotWidget):
             else:
                 self._show(items["candidate"], "candidate", tried, color, CANDIDATE_W, CANDIDATE_ALPHA,
                            (key, "candidate"), style=Qt.DotLine)
-            for item, band in itertools.zip_longest(items["bands"], bands):
-                if band is None or not self.visible["bands"] or not self.visible[band[2]]:
+            for item, y in itertools.zip_longest(items["bands"], bands):
+                if y is None or not self.visible["bands"]:
                     self._clear(item)
-                else:                                    # fading in its tails, as in the main window
-                    alpha = BAND_ALPHA * self._dim((band[2], "bands"))
-                    self._put(item, band[0], ("band", QColor(band[1]).rgba(), alpha),
-                              lambda band=band, alpha=alpha: _fading_pen(band[1], BAND_W, alpha, self.x, band[0]))
+                else:
+                    self._band(item, y, color, (key, "bands"))
             first = self.channels[0]
             as_left = k and self.visible[first[0]] and np.array_equal(given, first[2])
             if total is None:
@@ -401,6 +419,12 @@ class CurveGraph(pg.PlotWidget):
 
     def _dim(self, keys):
         return DIMMED if self.emphasis is not None and self.emphasis not in keys else 1.0
+
+    def _band(self, item, y, color, keys):
+        """A band as in the main window: fading in its tails; full while Bands is pointed at, DIMMED while another
+        item is that it does not belong to (keys), else BAND_ALPHA."""
+        alpha = 1.0 if self.emphasis == "bands" else DIMMED if self._dim(keys) < 1 else BAND_ALPHA
+        self._put(item, y, ("band", QColor(color).rgba(), alpha), lambda: _fading_pen(color, BAND_W, alpha, self.x, y))
 
     def _show(self, item, layer, y, color, width, alpha, keys, clip=True, style=Qt.SolidLine, fill=None):
         """fill: the alpha of the area between the curve and its fillLevel, relative to the line's."""
@@ -442,26 +466,31 @@ class CurveGraph(pg.PlotWidget):
 
 
 class CurveLegend(QWidget):
-    """As the main window's legend: the channels, then the layers. A click shows or hides an item, a double-click
-    shows only this item of its group (again: the whole group), pointing at it lights its curves."""
+    """As the main window's legend: the channels (Left and Right, or Left = Right), then the layers. Bass/Treble belongs
+    to every channel. A click shows or hides an item, a double-click shows only this item of its group (again: the
+    whole group), pointing at it lights its curves."""
 
+    CHANNELS = ("L", "R")
     # the curves of the graph, then the deviation below it
     LAYERS = [("input", "wide", "Input"), ("sum", "thick", "Sum"), ("bands", "thin", "Bands"),
               ("candidate", "dotted", "Candidate"), ("deviation", "area", "Deviation")]
-    TIPS = {"bands": "Includes Bass and Treble\n", "deviation": "How far the sum is off the input, below\n",
+    TIPS = {"deviation": "How far the sum is off the input, below\n",
             "candidate": "What the fit is trying now, better or not; while it fits\n"}
+    SHARED_TIP = "Dual EQ off: the same for both channels\n"
+    BT_TIP = "Includes Bass and Treble\n"
 
     def __init__(self, graph):
         super().__init__()
         self.graph = graph
         self.channels = {}                               # {key: (name, colour)} of the channels there are
+        self.bt = False                                  # Bass/Treble in the result
         self.fitting = False                             # what the fit tries now is shown only while it fits
         self.input_name, self.input_tip = "Input", ""    # "Input (adj.)" when a fit moved it
-        self.items = {k: LegendItem() for k in ("L", "R", "BT") + tuple(k for k, _, _ in self.LAYERS)}
+        self.items = {k: LegendItem() for k in self.CHANNELS + tuple(k for k, _, _ in self.LAYERS)}
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(GROUP_GAP)
-        for keys in (("L", "R", "BT"), tuple(k for k, _, _ in self.LAYERS)):
+        for keys in (self.CHANNELS, tuple(k for k, _, _ in self.LAYERS)):
             for k in keys:
                 item = self.items[k]
                 item.clicked.connect(lambda k=k: self.toggle(k))
@@ -471,13 +500,14 @@ class CurveLegend(QWidget):
         self._before = None                              # the group's state before the first click of a double-click
         self.refresh()
 
-    def set_channels(self, channels):
-        self.channels = channels
+    def set_channels(self, channels, bt=False):
+        """channels: {key: (name, colour)}; bt: Bass/Treble in the result."""
+        self.channels, self.bt = channels, bt
         self.refresh()
 
     def _group(self, key):
-        if key in ("L", "R", "BT"):
-            return [k for k in ("L", "R", "BT") if k in self.channels]
+        if key in self.CHANNELS:
+            return [k for k in self.CHANNELS if k in self.channels]
         return [k for k, _, _ in self.LAYERS]
 
     def toggle(self, key):
@@ -513,10 +543,11 @@ class CurveLegend(QWidget):
             item.set_on(on)
             item.name.setText(name)
             item.name.setStyleSheet("color: %s;" % (NAME_ON if on else NAME_OFF).name())
-            group = ("channel", "channels") if k in ("L", "R", "BT") else ("layer", "layers")
-            tip = self.input_tip if k == "input" else self.TIPS.get(k, "")
+            group = ("channel", "channels") if k in self.CHANNELS else ("layer", "layers")
+            tip = {"input": self.input_tip, "bands": self.BT_TIP if self.bt else "",
+                   "L": self.SHARED_TIP if name == SHARED_NAME else ""}.get(k, self.TIPS.get(k, ""))
             item.setToolTip(tip + "Click: show or hide · Double-click: only this %s; again: all %s" % group)
-        for k in ("L", "R", "BT"):
+        for k in self.CHANNELS:
             self.items[k].setVisible(k in self.channels)
         self.items["candidate"].setVisible(self.fitting)
 
@@ -531,9 +562,8 @@ class CurveLegend(QWidget):
             self.refresh()
 
     def marks(self):
-        out = {k: ("line", name, color) for k, (name, color) in self.channels.items()}
-        out.update({k: (kind, self.input_name if k == "input" else name, theme.SECONDARY)
-                    for k, kind, name in self.LAYERS})
+        out = {k: ("thick", name, color) for k, (name, color) in self.channels.items()}   # a channel: its sum
+        out.update({k: (kind, self.input_name if k == "input" else name, theme.TEXT) for k, kind, name in self.LAYERS})
         return out
 
 
@@ -673,7 +703,7 @@ class ImportDialog(QDialog):
         self.values, self.unchanged = {}, False
         self.refit = QTimer(self, singleShot=True, timeout=self.start_fit)
         self.repaint_soon = QTimer(self, singleShot=True, interval=PROGRESS_MS, timeout=self.show_result)
-        self.names = None                                   # the channels the legend shows
+        self.names = None                                   # the channels the legend shows, and Bass/Treble
         self.results, self.job_curves = {}, {}              # the fit's best so far, and what each job fits
         self.tried = {}                                     # {blocks: eqfit.Result} the fit tries now
         self.curves = {}                                    # see curve()
@@ -1386,7 +1416,7 @@ class ImportDialog(QDialog):
         """The conversion's result, and only that: what it does not set is flat. Which blocks go to the device, and
         what the device has now, do not count here."""
         freqs = self.graph.freqs()
-        channels, names, shifts, self.deviation = [], {}, {}, []
+        channels, names, shifts, self.deviation, bt = [], {}, {}, [], []
         sides = [(0, "L"), (1, "R")] if self.dual else [(0, "all")]
         for side, block in sides:
             # drawn at the graph's resolution; how far off, at the frequencies where curves are compared
@@ -1400,8 +1430,8 @@ class ImportDialog(QDialog):
             level = self.levels.get(block, 0.0)
             shifts[key] = level - (C.level(self.cf, self.column) if self.centring() else 0.0)
             color = side_color(side, self.dual)
-            shown_bands = [(self.curve(p, freqs), theme.BT if p.target in I.TONE else color,
-                            "BT" if p.target in I.TONE else key) for p in placed]
+            bands = [self.curve(p, freqs) for p in placed if p.target not in I.TONE]
+            bt = [self.curve(p, freqs) for p in placed if p.target in I.TONE]     # the same in every channel
             tried = None
             if self.fitting:
                 r = next((r for blocks, r in self.tried.items() if block in blocks), None)
@@ -1409,18 +1439,17 @@ class ImportDialog(QDialog):
                     tried = self.summed(list(I.from_fit(r).values()), freqs) - r.level + level
             total = None
             if self.outcome:
-                total = sum((c for c, _, _ in shown_bands), np.zeros(len(freqs)))
+                total = sum(bands + bt, np.zeros(len(freqs)))
                 self.deviation.append((self.summed(placed, F.FREQS) - level, self.given(block, F.FREQS)))
-            channels.append((key, color, given + level, total, shown_bands, tried))
-            names[key] = (("EQ Left", "EQ Right")[side] if self.dual else "EQ (shared)", color)
-        if self.outcome.get("BT"):
-            names["BT"] = ("Bass/Treble", theme.BT)
+            channels.append((key, color, given + level, total, bands, tried))
+            names[key] = (CHANNEL_NAMES[side] if self.dual else SHARED_NAME, color)
         self.legend.set_input(*_adjusted(shifts, self.centring()))
         self.legend.set_fitting(self.fitting)
-        self.graph.draw(channels)
-        if names != self.names:
-            self.names = names
-            self.legend.set_channels(names)
+        self.graph.draw(channels, bt)
+        shown = names, bool(self.outcome.get("BT"))
+        if shown != self.names:
+            self.names = shown
+            self.legend.set_channels(*shown)
 
     def show_status(self, on, limited):
         parts = []                                       # (text, amber)

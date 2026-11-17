@@ -190,7 +190,7 @@ class ImportFit(ImportTest):
         block = dialog.eq_blocks()[0]
         level = dialog.levels[block]
         given = dialog.summed(dialog.groups[block] + I.tone_items(dialog.chosen), dialog.graph.freqs())
-        np.testing.assert_allclose(total, sum(b[0] for b in bands))
+        np.testing.assert_allclose(total, sum(bands + dialog.graph.bt))
         np.testing.assert_allclose(shown, given + level)
         self.assertEqual(dialog.legend.items["input"].name.text(), D._adjusted({key: level})[0])
 

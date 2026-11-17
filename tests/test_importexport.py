@@ -315,7 +315,42 @@ class ImportExport(ImportTest):
         self.assertEqual((visible["L"], visible["R"]), (True, False))
         dialog.legend.items["L"].double_clicked.emit()            # again: both
         self.assertEqual((visible["L"], visible["R"]), (True, True))
-        self.assertFalse(dialog.legend.items["BT"].isVisibleTo(dialog))   # no Bass/Treble in the outcome
+        self.assertEqual([dialog.legend.items[k].name.text() for k in ("L", "R")], ["Left", "Right"])
+        self.assertNotIn("BT", dialog.legend.items)               # Bass/Treble is no channel
+
+    def test_bass_and_treble_drawn_once_for_both_channels(self):
+        self.session.set((LEFT, P.BASS[0]), 6)
+        self.settle()
+        path = os.path.join(self.dir.name, "line out.txt")
+        self.win.export_file(path)                               # Dual EQ, with Bass/Treble
+        dialog = self.open(path)
+        graph = dialog.graph
+        drawn = lambda items: [i for i in items if i.yData is not None and len(i.yData) > 0]   # noqa: E731
+        self.assertEqual(len(drawn(graph.bt_items)), 2)
+        self.assertEqual([len(drawn(items["bands"])) for items in graph.items], [5, 5])   # the EQ only
+        self.assertTrue(dialog.legend.items["bands"].toolTip().startswith("Includes Bass and Treble"))
+        stops = lambda item: item.opts["pen"].brush().gradient().stops()                     # noqa: E731
+        alpha = lambda item: round(max(c.alphaF() for _, c in stops(item)), 2)               # noqa: E731
+        dialog.legend.point("L", True)                           # of every channel: they stay
+        self.assertEqual(alpha(graph.bt_items[0]), D.BAND_ALPHA)
+        self.assertEqual(alpha(graph.items[1]["bands"][0]), D.DIMMED)   # the right's step back
+        dialog.legend.point("L", False)
+        dialog.legend.point("bands", True)                       # the layer: full
+        self.assertEqual(alpha(graph.bt_items[0]), 1.0)
+        dialog.legend.point("bands", False)
+        dialog.legend.items["L"].clicked.emit()
+        dialog.legend.items["R"].clicked.emit()                  # no channel: no Bass/Treble either
+        self.assertEqual(drawn(graph.bt_items), [])
+
+    def test_one_eq_for_both_channels_is_left_equals_right(self):
+        self.session.set_dual(OUT, False, keep="left")
+        self.settle()
+        dialog = self.open(self.file("three.txt", THREE))
+        item = dialog.legend.items["L"]
+        self.assertEqual(item.name.text(), "Left = Right")
+        self.assertEqual(item.color.rgb(), theme.SHARED.rgb())
+        self.assertTrue(item.toolTip().startswith("Dual EQ off: the same for both channels"))
+        self.assertFalse(dialog.legend.items["R"].isVisibleTo(dialog))
 
     def test_the_deviation_an_area_once_for_both_channels(self):
         dialog = self.open(self.file("three.txt", THREE))       # the same EQ left and right

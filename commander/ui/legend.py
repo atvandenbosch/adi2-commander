@@ -21,6 +21,8 @@ from .graph import (BAND_W, COMPARE_DOTS, DEVIATION_FILL, DEVIATION_W, INPUT_ALP
                     round_dots, side_color)
 
 GROUPS = [["L", "R"], ["sum", "sections", "bands", "handles", "compare"]]
+CHANNEL_NAMES = "Left", "Right"
+SHARED_NAME = "Left = Right"                     # the one EQ for both channels
 GROUP_GAP = 28                                   # pixels between the two groups side by side
 ROW_GAP = 4                                      # ... and one under the other
 ITEM_PAD = 10                                    # px: room in a segment beside its mark and name
@@ -286,7 +288,7 @@ class Legend(QWidget):
 
     def refresh(self):
         dual, compare = self.graph.dual, self.graph.fs_compare
-        names = {"L": "Left" if dual else "Left = Right", "R": "Right",
+        names = {"L": CHANNEL_NAMES[0] if dual else SHARED_NAME, "R": CHANNEL_NAMES[1],
                  "sum": "Sum", "sections": "Sections", "bands": "Bands", "handles": "Handles",
                  "compare": "<i>f</i><sub>s</sub> %g kHz" % (compare / 1000) if compare else ""}
         colors = {"L": side_color(0, dual), "R": side_color(1, dual)}
