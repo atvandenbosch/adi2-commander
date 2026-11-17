@@ -209,6 +209,15 @@ class ImportExport(ImportTest):
             self.assertTrue(os.path.exists(os.path.join(self.dir.name, exported)), exported)
             self.assertEqual(dialog.call_args[0][3], "Equalizer APO (*.txt);;ADI-2 Remote preset (*.adieqpr)")
 
+    def test_the_name_offered_when_saving(self):
+        for serial, start in ((None, "ADI-2 DAC FS %s " % self.win.output_name()),
+                              ("12345678", "ADI-2 DAC FS 12345678 %s " % self.win.output_name())):
+            self.session.port.serial = serial
+            with mock.patch.object(W.QFileDialog, "getSaveFileName", return_value=("", "")) as dialog:
+                self.win.export_dialog()
+            name = os.path.basename(dialog.call_args[0][2])
+            self.assertTrue(name.startswith(start), name)
+
     def test_already_on_the_device(self):
         path = os.path.join(self.dir.name, "same.txt")
         self.win.export_file(path)

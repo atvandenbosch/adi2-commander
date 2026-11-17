@@ -950,8 +950,10 @@ class MainWindow(QMainWindow):
 
     def export_dialog(self):
         what = "Preset %d" % self.draft.slot if self.draft is not None else self.output_name()
-        name = "%s %s %s.txt" % (self.model.name.replace("/", "-"), what.replace("·", "-").replace("/", "-"),
-                                 datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+        serial = getattr(self.session.port, "serial", None)
+        name = "%s %s%s %s.txt" % (self.model.name.replace("/", "-"), serial + " " if serial else "",
+                                   what.replace("·", "-").replace("/", "-"),
+                                   datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
         path, kind = QFileDialog.getSaveFileName(self, "Export EQ - %s" % what, os.path.join(self.folder, name),
                                                  ";;".join((APO_FILES, REMOTE_FILES)))
         if path and kind == REMOTE_FILES and not path.lower().endswith(REMOTE_SUFFIX):
