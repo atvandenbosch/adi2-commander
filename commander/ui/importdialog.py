@@ -11,8 +11,8 @@ Cancel writes nothing. The conversion itself is eqimport's; this is what the use
                 per channel the input (wide and see-through), the sum of the result and its bands, on the main
                 window's scale; below it, on the same scale, how far the sum is off the input. The sum and its
                 bands as the device makes them; a fit's free level moves the input onto them, a fixed level centres
-                a curve on 0 dB ("Input (adj.)"). Only the result counts here, not the device. Its legend works as
-                the main window's.
+                a curve on 0 dB ("Input (adj.)"). While a fit runs, what it tries now: white dots, as thick as the
+                sum. Only the result counts here, not the device. Its legend works as the main window's.
     Output      the result in the tables of the main window, read only; what the input does not set is '—', and
                 goes to the device at its factory default. A check box per block says whether OK writes it; a
                 block the input does not set at all starts unchecked. OK and Cancel.
@@ -51,7 +51,7 @@ from ..device import params as P
 from . import theme
 from .graph import (BAND_ALPHA, BAND_W, DEVIATION_FILL, DEVIATION_W, DIMMED, INPUT_ALPHA, INPUT_W,
                     LEGEND_GAP, MIN_POINTS, POINTS_PER_PIXEL, SUM_W, TITLE_ROOM, X_HI, X_LO, X_PAD, Y_HI, Y_LO, ZONE_INK,
-                    RatioCorner, _fading_pen, _ticks, side_color, title_axes)
+                    COMPARE_DOTS, RatioCorner, _fading_pen, _ticks, round_dots, side_color, title_axes)
 from .legend import (CHANNEL_NAMES, GROUP_GAP, NAME_OFF, NAME_ON, SHARED_NAME, Group as LegendGroup,
                      _Item as LegendItem)
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, CellDelegate, Marks, ParamModel, ParamView,
@@ -63,8 +63,6 @@ MAP, FIT = 0, 1
 DIFF_ROOM = 8.0                                  # dB below the main window's scale, for the deviation
 DIFF_MID = Y_LO - DIFF_ROOM / 2
 REFIT_MS = 500                                   # after the last click on a line, the fit starts again
-CANDIDATE_W = 1.5                                # what the fit tries now: thinner than the sum
-CANDIDATE_ALPHA = 0.85                           # ... and a little faint
 CURVES_KEPT = 4000                               # curves kept for drawing again, before they are let go
 PROGRESS_MS = 100                                # a fit's best so far is shown at most this often
 GUARD_MS = 400                                   # a click this soon after the convert button changed is not taken:
@@ -289,8 +287,9 @@ class CurveGraph(pg.PlotWidget):
     resolution_changed = Signal()
 
     LAYERS = ("input", "sum", "bands", "deviation", "candidate")
-    Z = {"input": 0, "bands": 1, "candidate": 2, "sum": 3, "deviation": 3}   # each layer over the one before, in
-                                                                             # both channels
+    Z = {"input": 0, "bands": 1, "sum": 2, "deviation": 2, "candidate": 3}   # each layer over the one before, in
+                                                                             # both channels; what the fit tries over
+                                                                             # the sum, which shows between its dots
 
     def __init__(self):
         self.axis = TwoScales([("Gain (dB)", 0.0), ("Deviation (dB)", DIFF_MID)])
@@ -330,8 +329,8 @@ class CurveGraph(pg.PlotWidget):
         self.emphasis = None                             # a legend item pointed at
         self.channels = []
         self.bt = []                                     # the curves of Bass and Treble, for all channels
-        # a fixed set of items, updated in place: per channel (left last, on top) the input under the rest, its
-        # bands, what the fit tries now, the sum and the deviation; Bass and Treble once
+        # a fixed set of items, updated in place: per channel (left last, on top) the input, its bands, what the fit
+        # tries now, the sum and the deviation; Bass and Treble once
         self.items = []
         for _ in (0, 1):
             self.items.append({"input": self.plot(connect="finite"),
@@ -392,8 +391,8 @@ class CurveGraph(pg.PlotWidget):
             if tried is None:
                 self._clear(items["candidate"])
             else:
-                self._show(items["candidate"], "candidate", tried, color, CANDIDATE_W, CANDIDATE_ALPHA,
-                           (key, "candidate"), style=Qt.DotLine)
+                self._show(items["candidate"], "candidate", tried, theme.TEXT, SUM_W, 1.0, (key, "candidate"),
+                           dots=COMPARE_DOTS)
             for item, y in itertools.zip_longest(items["bands"], bands):
                 if y is None or not self.visible["bands"]:
                     self._clear(item)
@@ -426,8 +425,9 @@ class CurveGraph(pg.PlotWidget):
         alpha = 1.0 if self.emphasis == "bands" else DIMMED if self._dim(keys) < 1 else BAND_ALPHA
         self._put(item, y, ("band", QColor(color).rgba(), alpha), lambda: _fading_pen(color, BAND_W, alpha, self.x, y))
 
-    def _show(self, item, layer, y, color, width, alpha, keys, clip=True, style=Qt.SolidLine, fill=None):
-        """fill: the alpha of the area between the curve and its fillLevel, relative to the line's."""
+    def _show(self, item, layer, y, color, width, alpha, keys, clip=True, fill=None, dots=None):
+        """fill: the alpha of the area between the curve and its fillLevel, relative to the line's; dots: round dots
+        this many px apart."""
         if not self.visible[layer]:
             self._clear(item)
             return
@@ -437,15 +437,14 @@ class CurveGraph(pg.PlotWidget):
         def pen():
             p = QPen(c, width)
             p.setCosmetic(True)
-            p.setStyle(style)
-            return p
+            return round_dots(p, dots) if dots else p
 
         brush = None
         if fill is not None:
             area = QColor(c)
             area.setAlphaF(c.alphaF() * fill)
             brush = lambda: QBrush(area)
-        self._put(item, y, (c.rgba(), width, style, fill), pen, clip, brush)
+        self._put(item, y, (c.rgba(), width, fill, dots), pen, clip, brush)
 
     def _put(self, item, y, look, pen, clip=True, brush=None):
         """y with the pen pen() makes and the area brush() fills, unless the item shows that already (look: what
@@ -473,7 +472,7 @@ class CurveLegend(QWidget):
     CHANNELS = ("L", "R")
     # the curves of the graph, then the deviation below it
     LAYERS = [("input", "wide", "Input"), ("sum", "thick", "Sum"), ("bands", "thin", "Bands"),
-              ("candidate", "dotted", "Candidate"), ("deviation", "area", "Deviation")]
+              ("candidate", "dots", "Candidate"), ("deviation", "area", "Deviation")]
     TIPS = {"deviation": "How far the sum is off the input, below\n",
             "candidate": "What the fit is trying now, better or not; while it fits\n"}
     SHARED_TIP = "Dual EQ off: the same for both channels\n"

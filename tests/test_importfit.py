@@ -1,6 +1,6 @@
 """Import by Fit: OK waits for the fit, Cancel and Stop while it runs, Restart (one button with Stop, as wide as
-either), the sum as the device makes it with the input moved onto it, garbage collection while it runs, a curve, a
-fixed level, and left and right of their own."""
+either), what it tries, the sum as the device makes it with the input moved onto it, garbage collection while it runs,
+a curve, a fixed level, and left and right of their own."""
 
 import gc
 import time
@@ -88,6 +88,22 @@ class ImportFit(ImportTest):
         self.assertEqual(dialog.threads, [])
         self.spin(300)
         self.assertEqual(self.sim.state, before)
+
+    def test_what_a_fit_tries_white_dots_over_its_sum(self):
+        path = self.file("ten.txt", TEN_FILTERS)
+        dialog = D.ImportDialog(E.load(path), path, self.session, OUT, None, 48000.0, self.win)
+        self.addCleanup(dialog.done, 0)
+        items = dialog.graph.items[0]
+        drawn = lambda: items["candidate"].yData is not None and len(items["candidate"].yData) > 0   # noqa: E731
+        t0 = time.monotonic()
+        while dialog.fitting and not drawn() and time.monotonic() - t0 < 60:
+            time.sleep(0.02)
+            QApplication.processEvents()
+        self.assertTrue(drawn())
+        pen = items["candidate"].opts["pen"]
+        self.assertEqual((pen.color().rgba(), pen.widthF(), pen.capStyle()), (theme.TEXT.rgba(), D.SUM_W, Qt.RoundCap))
+        self.assertGreater(items["candidate"].zValue(), items["sum"].zValue())
+        self.assertEqual(dialog.legend.marks()["candidate"][0], "dots")      # as in the graph
 
     def test_good_enough_takes_the_best_so_far_on_the_grid(self):
         path = self.file("ten.txt", TEN_FILTERS)
