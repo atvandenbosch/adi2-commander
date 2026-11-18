@@ -173,10 +173,10 @@ class DevicePanel(QWidget):
             for x in xs:
                 lay.addWidget(self._control(x))
             if g == "KEYS":
-                self.factory = Action(compact=True)
+                self.factory = Action()
                 self.factory.setText(FACTORY)
                 self.factory.clicked.connect(self.to_factory)
-                lay.addWidget(_row(_label(""), self.factory))
+                lay.addWidget(_row(self.factory))
         self.lay.replaceWidget(self.body, body)
         self.body.setParent(None)
         self.body.deleteLater()
