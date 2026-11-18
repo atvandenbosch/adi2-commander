@@ -76,6 +76,13 @@ class Window(WindowTest):
                              [SIDE] * 3)
             self.assertEqual(edges(self.win.sound)[1], 0)              # its scroll bar against the edge
 
+    def test_at_its_size_hint_the_column_shows_all(self):
+        hint = self.win.sizeHint()
+        for height in (hint.height(), hint.height() - 20):
+            self.win.resize(hint.width(), height)
+            self.spin(100)
+            self.assertEqual(self.win.sound.verticalScrollBar().isVisible(), height < hint.height())
+
     def test_about_opens_the_license(self):
         shown = []
         dialog = about.AboutDialog(self.win)

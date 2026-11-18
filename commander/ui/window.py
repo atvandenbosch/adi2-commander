@@ -120,6 +120,13 @@ class Lamp(QWidget):
         p.drawEllipse(QRectF((self.width() - DOT) / 2, (self.height() - DOT) / 2, DOT, DOT))   # as every dot
 
 
+class Column(QScrollArea):
+    """Asks for the whole height of what it holds, so a window at its size hint shows it all; scrolls with less."""
+
+    def sizeHint(self):
+        return QSize(super().sizeHint().width(), self.widget().sizeHint().height())
+
+
 class GraphHead(QWidget):
     """The line above the graph: the legend of the graph shown in the middle, the sample rates on the right. When
     both do not fit on one line, the legend's groups go one under the other, the sample rates beside the first; when
@@ -414,7 +421,7 @@ class MainWindow(QMainWindow):
         sound.addStretch(1)
         sound_widget = QWidget()
         sound_widget.setLayout(sound)
-        self.sound = QScrollArea()
+        self.sound = Column()
         self.sound.setWidget(sound_widget)
         self.sound.setWidgetResizable(True)
         self.sound.setFrameShape(QFrame.NoFrame)

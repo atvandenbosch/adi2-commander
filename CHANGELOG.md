@@ -44,6 +44,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 - Import: while a fit works on one channel of two, the other steps back.
 - The tooltips of the keys under DEVICE say what each key does with Remap Keys as it is set.
 - The dots of More options are as heavy as the text of the tabs.
+- The first time, the window opens tall enough to show EQ, Bass/Treble and Loudness without scrolling.
 
 ### Fixed
 
