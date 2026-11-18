@@ -61,8 +61,10 @@ from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, LOUDNESS_
                      ParamModel, ParamView, band_address, band_rows, bt_rows, loudness_rows)
 from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, DSD_BYPASS, FRAME, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE,
                       Action, MoreButton, Option, Switch, Choice, dot_icon, dot_pixmap, dropped_file, head,
-                      input_eq_bypass, label_color, pulse, switch_tip)
+                      input_eq_bypass, label_color, pulse, show_on_screen, switch_tip)
 
+GEOMETRY = "window/geometry"                    # the setting: where the window was when it closed, and how large
+MAXIMIZED = "window/maximized"                  # and whether it was maximized
 FS_TIP = "Sample rate the curves are computed at"
 ACTIVE_TIP = "Active on the device: its display and volume knob are on this output."
 ACTIVE = "Active on the device"                 # the ADI-2 Pro and ADI-2/4 Pro
@@ -584,7 +586,21 @@ class MainWindow(QMainWindow):
             e.ignore()                                   # back to the preset being edited
             return
         self.timer.stop()                                # a closed window no longer talks to the device
+        self.settings.setValue(GEOMETRY, self.saveGeometry())
+        self.settings.setValue(MAXIMIZED, self.isMaximized())
         super().closeEvent(e)
+
+    def show_as_before(self, screen):
+        """Show the window where it was when it last closed, as large, maximized if it was. The first time, and where
+        Qt cannot restore it (a screen of another width): on screen, maximized if it was, else as show_on_screen."""
+        geometry = self.settings.value(GEOMETRY)
+        if geometry is not None and self.restoreGeometry(geometry):
+            self.show()
+        elif self.settings.value(MAXIMIZED, False, type=bool):
+            self.move(screen.availableGeometry().topLeft())
+            self.showMaximized()
+        else:
+            show_on_screen(self, self.sizeHint(), screen)
 
     def discard_ok(self):
         """Closing while a changed preset is open: whether its changes may go."""

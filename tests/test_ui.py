@@ -30,7 +30,7 @@ from commander.ui import simulated, theme
 from commander.ui.tables import FLASH_TIME, KEY_ROLE
 from commander.ui.output import PHONES_REF
 from commander.ui.untested import UntestedBox
-from commander.ui.window import PHONES_1_2, MainWindow
+from commander.ui.window import GEOMETRY, MAXIMIZED, PHONES_1_2, MainWindow
 from commander.ui.widgets import FRAME, SIDE, label_color, placement
 from tests.gui import OUTPUT_TABS, Clock, WindowTest, assert_ratio_corner, hover, tab, tooltip_color
 from tests.support import DUMP, PRESETS
@@ -1135,6 +1135,73 @@ class Placement(unittest.TestCase):
     def test_maximized_where_it_does_not_fit(self):
         self.assertIsNone(placement(QSize(1199, 594), QRect(0, 0, 1024, 720)))          # too wide
         self.assertIsNone(placement(QSize(1000, 700), QRect(0, 0, 1280, 720)))          # too high with its frame
+
+
+class AsBefore(unittest.TestCase):
+    """The window opens where it was when it last closed, as large, maximized if it was; the first time in the middle
+    of the screen."""
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.settings = QSettings(os.path.join(folder.name, "settings.ini"), QSettings.IniFormat)
+        self.screen = QApplication.primaryScreen()
+
+    def window(self):
+        clock = Clock()
+        sim = SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=clock)
+        session = Session(lambda: SimPort(sim), clock=clock)
+        win = MainWindow(session, settings=self.settings)
+        win.timer.setInterval(24 * 3600 * 1000)
+        self.addCleanup(session.close)
+        self.addCleanup(win.close)
+        return win
+
+    def closed(self, maximized):
+        """A window shown, then closed normal or maximized: what it left in the settings."""
+        win = self.window()
+        win.show_as_before(self.screen)
+        win.showMaximized() if maximized else win.showNormal()
+        QApplication.processEvents()
+        geometry = win.saveGeometry()
+        win.close()
+        self.assertEqual(self.settings.value(GEOMETRY), geometry)
+        self.assertEqual(self.settings.value(MAXIMIZED, type=bool), maximized)
+        return geometry
+
+    def test_the_first_time_in_the_middle_of_the_screen(self):
+        win = self.window()
+        with mock.patch("commander.ui.window.show_on_screen") as show:
+            win.show_as_before(self.screen)
+        show.assert_called_once_with(win, win.sizeHint(), self.screen)
+
+    def test_where_it_was_and_as_large(self):
+        geometry = self.closed(maximized=False)
+        win = self.window()
+        with mock.patch.object(win, "restoreGeometry", wraps=win.restoreGeometry) as restore:
+            win.show_as_before(self.screen)
+        restore.assert_called_once_with(geometry)
+        self.assertTrue(win.isVisible())
+        self.assertFalse(win.isMaximized())
+
+    def test_maximized_if_it_was(self):
+        self.closed(maximized=True)
+        win = self.window()
+        win.show_as_before(self.screen)
+        QApplication.processEvents()
+        self.assertTrue(win.isMaximized())
+
+    def test_where_qt_cannot_restore_it_maximized_if_it_was(self):
+        for maximized in (True, False):
+            with self.subTest(maximized=maximized):
+                self.closed(maximized)
+                win = self.window()
+                with mock.patch.object(win, "restoreGeometry", return_value=False), \
+                        mock.patch("commander.ui.window.show_on_screen") as show:
+                    win.show_as_before(self.screen)
+                QApplication.processEvents()
+                self.assertEqual(win.isMaximized(), maximized)
+                self.assertEqual(show.call_count, 0 if maximized else 1)
 
 
 class SimulatedModel(unittest.TestCase):

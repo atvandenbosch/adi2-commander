@@ -24,7 +24,6 @@ from .device.connection import WinmmPort, warm_up
 from .device.simulator import DEMO_DUMP, DEMO_PRESETS, SimPort, SimulatedAdi2
 from .session import Session
 from .ui import collector, simulated, theme, untested
-from .ui.widgets import show_on_screen
 from .ui.window import MainWindow
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -107,7 +106,7 @@ def main(argv=None):
         simulation = Simulation(args.simulate or None, model)
     session = Session(WinmmPort if simulation is None else simulation.open_port)
     win = MainWindow(session, simulation=simulation, backups=backup.folder())
-    show_on_screen(win, win.sizeHint(), app.primaryScreen())
+    win.show_as_before(app.primaryScreen())
     code = app.exec()
     session.close()
     return code

@@ -15,6 +15,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
   Loudness graph and Import's. In the response graph a click on it sets 10, 25 or 50 dB per decade (IEC 60263), in
   turn with the ratio it had.
 - Under DEVICE, Factory Settings sets Remap Keys and the keys as from the factory.
+- The window opens where it was when it last closed, as large, and maximized if it was.
 
 ### Changed
 
