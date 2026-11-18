@@ -98,7 +98,7 @@ class MoreButton(QPushButton):
     """Three dots one above the other: the menu of the app's own commands. Neutral grey as the status bar, lighter
     under the mouse. Drawn, as the dots on the tabs are. Sized and placed by the font of the tab bar beside it: Windows
     pairs 9 pt text with 16 px icons, and draws its signs within 14 of them; the dots are centred on the tabs'
-    capitals, as an icon beside text is."""
+    capitals, as an icon beside text is. Each dot on whole pixels, as heavy as the tabs' text: 3 px, 5 apart."""
 
     def __init__(self, tabs):
         super().__init__()
@@ -119,11 +119,15 @@ class MoreButton(QPushButton):
         c = theme.TEXT if self.underMouse() else theme.SECONDARY
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        d = self.box
+        size, step = round(self.box * 0.2), round(self.box * 0.33)     # 3 and 5 in a box of 14
+        half = size % 2 / 2                              # an odd dot is centred on a pixel, an even one between two
+        x = math.floor(self.width() / 2) + half
+        y = round(self.middle - half) + half
+        r = size / 2 + 0.1                               # a touch over half: the pixels at its edges fill
         p.setPen(Qt.NoPen)
         p.setBrush(c)
         for k in (-1, 0, 1):
-            p.drawEllipse(QPointF(self.width() / 2, self.middle + k * d * 0.33), d * 0.09, d * 0.09)
+            p.drawEllipse(QPointF(x, y + k * step), r, r)
         p.end()
 
 
