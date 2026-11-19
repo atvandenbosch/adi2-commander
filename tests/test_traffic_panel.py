@@ -190,3 +190,11 @@ class Panel(WindowTest):
         again = MainWindow(self.session, settings=self.settings)
         self.addCleanup(again.close)
         self.assertEqual(again.traffic_panel.width(), narrow + 150)
+
+    def test_as_wide_as_the_screen_allows_and_wider_on_a_larger_one(self):
+        self.settings.setValue(TRAFFIC_WIDTH, 5000)                     # made on a larger screen
+        self.open()
+        self.spin(20)
+        self.assertLess(self.panel.width(), 5000)
+        self.assertLessEqual(self.win.least_width(), self.room.width())
+        self.assertEqual(int(self.settings.value(TRAFFIC_WIDTH)), 5000)

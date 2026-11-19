@@ -1468,14 +1468,22 @@ class MainWindow(QMainWindow):
                  else self.areas[tab].maximumWidth())
         return width + gap + line
 
+    def traffic_width(self, width):
+        """width for the MIDI traffic, shown: no narrower than the other panels, no wider than the screen allows."""
+        room = self.room().width() - (self.least_width() - self.traffic_panel.width())
+        return max(self.PRESETS_WIDTH, min(width, room))
+
     def widen_traffic(self, width):
-        """The MIDI traffic as wide as dragged: no narrower than the other panels, no wider than the screen allows."""
-        now = self.traffic_panel.width()
-        room = self.room().width() - (self.least_width() - now)
-        width = max(self.PRESETS_WIDTH, min(width, room))
-        if width != now:
+        """The MIDI traffic as wide as dragged, and as wide the next time."""
+        width = self.traffic_width(width)
+        if width != self.traffic_panel.width():
             self.traffic_panel.setFixedWidth(width)
             self.settings.setValue(TRAFFIC_WIDTH, width)
+
+    def fit_traffic(self):
+        """The MIDI traffic as wide as it was made, as far as this screen allows; on a larger one it is again."""
+        made = max(self.PRESETS_WIDTH, int(self.settings.value(TRAFFIC_WIDTH, 0)))
+        self.traffic_panel.setFixedWidth(self.traffic_width(made))
 
     def room(self):
         """The part of the window's screen without the taskbar."""
@@ -1503,6 +1511,8 @@ class MainWindow(QMainWindow):
             self.traffic_tab.show()
         if self.traffic_tab.open != on:
             self.traffic_tab.set_open(on)
+        if on:
+            QTimer.singleShot(0, self.fit_traffic)       # once it is laid out
 
     def show_panel_lines(self):
         """A line before each open panel that has an open panel before it."""
