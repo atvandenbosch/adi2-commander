@@ -29,13 +29,13 @@ class Irregular(unittest.TestCase):
         self.assertEqual(irregular(bytes([0xF0, 0xF7])), [])
 
     def test_more_than_one(self):
-        self.assertEqual(irregular(A + B), ["2 messages"])
+        self.assertEqual(irregular(A + B), ["2 × f0"])
 
     def test_pieces(self):
-        self.assertEqual(irregular(B[3:]), ["7 bytes without F0 at 0"])
-        self.assertEqual(irregular(A[:5]), ["F0 at 0 without F7"])
-        self.assertEqual(irregular(B[:-1] + A), ["F0 at 0 without F7", "2 messages"])
-        self.assertEqual(irregular(A + B[:4]), ["F0 at 8 without F7", "2 messages"])
+        self.assertEqual(irregular(B[3:]), ["7 bytes without f0 at 0"])
+        self.assertEqual(irregular(A[:5]), ["f0 at 0 without f7"])
+        self.assertEqual(irregular(B[:-1] + A), ["f0 at 0 without f7", "2 × f0"])
+        self.assertEqual(irregular(A + B[:4]), ["f0 at 8 without f7", "2 × f0"])
 
     def test_a_byte_that_is_no_data_byte(self):
         self.assertEqual(irregular(A[:6] + bytes([0xF8]) + A[6:]), ["byte f8 at 6"])

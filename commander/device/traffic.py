@@ -117,18 +117,18 @@ def split(data):
 def irregular(data):
     """Where a buffer departs from one message framed as SysEx, each as a short text with the place (counted from
     0); [] for one such message."""
-    out, at, messages = [], 0, 0
+    out, at, starts = [], 0, 0
     for m in split(data):
         if m[0] != 0xF0:
-            out.append("%d bytes without F0 at %d" % (len(m), at))
+            out.append("%d bytes without f0 at %d" % (len(m), at))
         else:
-            messages += 1
+            starts += 1
             if m[-1] != 0xF7:
-                out.append("F0 at %d without F7" % at)
+                out.append("f0 at %d without f7" % at)
         at += len(m)
     out += ["byte %02x at %d" % (b, i) for i, b in enumerate(data) if b >= 0x80 and b not in (0xF0, 0xF7)]
-    if messages > 1:
-        out.append("%d messages" % messages)
+    if starts > 1:
+        out.append("%d × f0" % starts)
     if not data:
         out.append("empty")
     return out
