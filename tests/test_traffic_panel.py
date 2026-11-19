@@ -17,6 +17,15 @@ A = bytes([0xF0, 0x00, 0x20, 0x0D, 0x71, 0x05, 0x01, 0x41, 0x00, 0xF7])
 MERGED = A + A[:6]                                           # one message and the start of the next
 
 
+def left(widget):
+    return widget.mapToGlobal(QPoint(0, 0)).x()
+
+
+def right(widget):
+    """Where the widget ends: the first pixel after it."""
+    return left(widget) + widget.width()
+
+
 class Panel(WindowTest):
     def setUp(self):
         super().setUp()
@@ -34,21 +43,34 @@ class Panel(WindowTest):
         self.win.presets_tab.set_open(True)
         QTest.mouseClick(self.win.lamp, Qt.LeftButton)
         self.spin(20)
-        self.assertTrue(self.win.traffic_tab.isHidden() and self.panel.isHidden())
+        self.assertTrue(self.win.traffic_tab.isHidden() and self.win.traffic_area.isHidden())
         self.open()
-        self.assertFalse(self.win.traffic_tab.isHidden() or self.panel.isHidden())
-        self.assertLess(self.panel.x(), self.win.presets_area.x())
+        self.assertFalse(self.win.traffic_tab.isHidden() or self.win.traffic_area.isHidden())
+        self.assertLess(left(self.panel), left(self.win.presets_area))
+
+    def test_the_first_open_panel_as_far_from_the_tabs_with_it_or_without(self):
+        gap = self.win.side_row.spacing()
+        tabs = self.win.input_tab
+        self.win.input_tab.set_open(True)
+        self.spin(20)
+        self.assertEqual(left(self.win.input_area) - right(tabs), gap)
+        self.open()
+        self.assertEqual(left(self.panel) - right(tabs), gap)
+        self.assertEqual(left(self.win.traffic_grip), right(self.panel))           # the grip against its edge
+        QTest.mouseClick(self.win.traffic_tab, Qt.LeftButton)
+        self.spin(20)
+        self.assertEqual(left(self.win.input_area) - right(tabs), gap)
 
     def test_closing_hides_its_tab(self):
         self.open()
         QTest.mouseClick(self.win.traffic_tab, Qt.LeftButton)
-        self.assertTrue(self.win.traffic_tab.isHidden() and self.panel.isHidden())
+        self.assertTrue(self.win.traffic_tab.isHidden() and self.win.traffic_area.isHidden())
 
     def test_ctrl_shift_m_opens_and_closes(self):
         QTest.keyClick(self.win, Qt.Key_M, Qt.ControlModifier | Qt.ShiftModifier)
-        self.assertFalse(self.panel.isHidden())
+        self.assertFalse(self.win.traffic_area.isHidden())
         QTest.keyClick(self.win, Qt.Key_M, Qt.ControlModifier | Qt.ShiftModifier)
-        self.assertTrue(self.win.traffic_tab.isHidden() and self.panel.isHidden())
+        self.assertTrue(self.win.traffic_tab.isHidden() and self.win.traffic_area.isHidden())
 
     def test_everything_recorded_also_before_it_opened(self):
         self.open()

@@ -506,19 +506,24 @@ class MainWindow(QMainWindow):
         self.device_area.setFixedWidth(self.PRESETS_WIDTH)
         self.device_area.hide()
         self.device_tab = SideTab("DEVICE")
-        # the MIDI traffic: its tab under the others, shown only while it is open; its panel always the first
+        # the MIDI traffic: its tab under the others, shown only while it is open; its panel always the first, with
+        # the grip against its right edge
         self.traffic_panel = TrafficPanel(session.traffic, self.note, lambda: self.folder)
         self.traffic_panel.setFixedWidth(max(self.PRESETS_WIDTH, int(self.settings.value(TRAFFIC_WIDTH, 0))))
-        self.traffic_panel.hide()
         self.traffic_grip = Grip(self.traffic_panel)
-        self.traffic_grip.hide()
         self.traffic_grip.dragged.connect(self.widen_traffic)
         self.traffic_grip.released.connect(self.keep_on_screen)
+        self.traffic_area = QWidget()
+        traffic_row = QHBoxLayout(self.traffic_area)
+        traffic_row.setContentsMargins(0, 0, 0, 0)
+        traffic_row.setSpacing(0)
+        traffic_row.addWidget(self.traffic_panel)
+        traffic_row.addWidget(self.traffic_grip)
+        self.traffic_area.hide()
         self.traffic_tab = SideTab("MIDI")
         self.traffic_tab.setToolTip("Hide the MIDI traffic.")
         self.traffic_tab.hide()
         self.traffic_tab.toggled.connect(self.traffic_tab.setVisible)
-        self.traffic_tab.toggled.connect(self.traffic_grip.setVisible)
         self.lamp.ctrl_clicked.connect(lambda: self.show_traffic(True))
         QShortcut(QKeySequence("Ctrl+Shift+M"), self, lambda: self.show_traffic(not self.traffic_tab.open))
         # a line between two open panels: they stand on the same ground
@@ -532,7 +537,7 @@ class MainWindow(QMainWindow):
         self.opened = []                                 # the open panels' tabs, the one opened last at the end
         self.areas = {self.input_tab: self.input_area, self.output_tab: self.output_area,
                       self.presets_tab: self.presets_area, self.device_tab: self.device_area,
-                      self.traffic_tab: self.traffic_panel}
+                      self.traffic_tab: self.traffic_area}
         for tab in self.areas:
             tab.toggled.connect(lambda on, tab=tab: self.panel_toggled(tab, on))
             tab.toggled.connect(self.show_panel_lines)
@@ -559,9 +564,7 @@ class MainWindow(QMainWindow):
         left.setContentsMargins(0, below_tabs, 0, above_status)
         left.setSpacing(16)
         left.addLayout(strip)
-        left.addWidget(self.traffic_panel)
-        left.addSpacing(-left.spacing())                 # the grip against the panel's edge
-        left.addWidget(self.traffic_grip)
+        left.addWidget(self.traffic_area)
         left.addWidget(self.panel_lines[0])
         left.addWidget(self.input_area)
         left.addWidget(self.panel_lines[1])
@@ -1434,8 +1437,9 @@ class MainWindow(QMainWindow):
         one is open."""
         gap = self.side_row.spacing()
         line = 1 + gap if any(not a.isHidden() for a in self.areas.values()) else 0
-        grip = Grip.WIDTH if tab is self.traffic_tab else 0
-        return self.areas[tab].maximumWidth() + grip + gap + line
+        width = (self.traffic_panel.maximumWidth() + Grip.WIDTH if tab is self.traffic_tab
+                 else self.areas[tab].maximumWidth())
+        return width + gap + line
 
     def widen_traffic(self, width):
         """The MIDI traffic as wide as dragged: no narrower than the other panels, no wider than the screen allows."""
@@ -1475,7 +1479,7 @@ class MainWindow(QMainWindow):
 
     def show_panel_lines(self):
         """A line before each open panel that has an open panel before it."""
-        areas = (self.traffic_panel, self.input_area, self.output_area, self.presets_area, self.device_area)
+        areas = (self.traffic_area, self.input_area, self.output_area, self.presets_area, self.device_area)
         for n, line in enumerate(self.panel_lines):
             line.setVisible(not areas[n + 1].isHidden() and any(not a.isHidden() for a in areas[:n + 1]))
 
