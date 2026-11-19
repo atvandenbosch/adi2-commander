@@ -22,6 +22,7 @@ Opened by Ctrl+click on the connection light or Ctrl+Shift+M (the window); closi
 import datetime
 import platform
 import re
+import time
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QIcon, QPainter, QPalette, QPen, QPixmap
@@ -43,6 +44,8 @@ SHOWN = (("All", "", None), ("Sent", "Messages Commander sent", "out"),
          ("Irregular", "Not exactly one SysEx message, f0 to f7", "irregular"))
 PAUSE_TIP, RESUME_TIP = "Holds the list; recording goes on", "Follows the recording again"
 FLUSH = 100                                      # ms between bringing new rows into the list
+TYPED = 250                                      # ms after the last key before the filter applies: a full
+                                                 # recording takes a moment to go through
 PER_LINE = (16, 8)                               # bytes on a line of the selected row: the most that fit
 FONT = 8.5
 # a serial number in a port name: letters and digits, at least one digit, in parentheses at the end of a name
@@ -50,7 +53,9 @@ SERIAL = re.compile(r"\((?=[0-9A-Za-z]*\d)([0-9A-Za-z]{4,})\)")
 
 
 def clock(t):
-    return datetime.datetime.fromtimestamp(t).strftime("%H:%M:%S.%f")[:-3]
+    """The time of day of t, to the millisecond. Formatted by hand: the filter does this for every row."""
+    s = time.localtime(t)
+    return "%02d:%02d:%02d.%03d" % (s.tm_hour, s.tm_min, s.tm_sec, int(t % 1 * 1000))
 
 
 def cross_icon(ratio, size=16, arm=3.5):
@@ -82,12 +87,15 @@ class Serials:
 
 
 def hex_bytes(data):
-    return " ".join("%02x" % b for b in data)
+    return bytes(data).hex(" ")
+
+
+NO_CHARACTER = {b: "·" for b in range(256) if not 0x20 <= b < 0x7F}
 
 
 def ascii_bytes(data):
     """Each byte as its ASCII character, · where it has none that prints: so . is always 2e."""
-    return "".join(chr(b) if 0x20 <= b < 0x7F else "·" for b in data)
+    return bytes(data).decode("latin-1").translate(NO_CHARACTER)
 
 
 class TrafficModel(QAbstractTableModel):
@@ -97,6 +105,7 @@ class TrafficModel(QAbstractTableModel):
         self.rows = []                           # the entries shown
         self.shown, self.paused = None, False
         self.terms, self.hide = [], False        # the filter's terms, lower case; whether it hides what they find
+        self.times = False                       # whether a term can be part of a time
         self.waiting = []                        # entries recorded since the last flush
         traffic.on_entry.append(self._recorded)
 
@@ -118,14 +127,17 @@ class TrafficModel(QAbstractTableModel):
             return False
         if not self.terms:
             return True
-        reads = " ".join((clock(entry.t), ARROWS[entry.kind], self.text(entry)))
+        reads = [ARROWS[entry.kind], self.text(entry)]
+        if self.times:                               # the time only where a term can be part of one
+            reads.append(clock(entry.t))
         if entry.kind != "port":
-            reads += " " + ascii_bytes(entry.data)
-        reads = reads.lower()
+            reads.append(ascii_bytes(entry.data))
+        reads = " ".join(reads).lower()
         return any(t in reads for t in self.terms) != self.hide
 
     def set_filter(self, text, hide):
         self.terms = [t.strip().lower() for t in text.split(",") if t.strip()]
+        self.times = any(re.fullmatch(r"[\d:.]+", t) for t in self.terms)
         self.hide = hide
 
     def refilter(self):
@@ -267,7 +279,8 @@ class TrafficPanel(QWidget):
         self.empty.setVisible(False)
         self.empty.triggered.connect(self.filter.clear)
         self.filter.textChanged.connect(lambda text: self.empty.setVisible(bool(text)))
-        self.filter.textChanged.connect(lambda _: self.set_filter())
+        self.typed = QTimer(self, singleShot=True, interval=TYPED, timeout=self.set_filter)
+        self.filter.textChanged.connect(self.typed.start)
         self.pause, self.clear, self.copy, self.save = (Action(compact=True) for _ in range(4))
         for action, text, tip, slot in ((self.pause, "Pause", PAUSE_TIP, self.toggle_pause),
                                         (self.clear, "Clear", "Deletes what was recorded", self.clear_rows),

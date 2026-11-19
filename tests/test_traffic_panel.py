@@ -35,6 +35,12 @@ class Panel(WindowTest):
         QTest.mouseClick(self.win.lamp, Qt.LeftButton, Qt.ControlModifier)
         self.spin(20)
 
+    def type_filter(self, text):
+        """Type text into the filter and let it apply, a moment after the last key."""
+        self.panel.filter.setText(text)
+        while self.panel.typed.isActive():
+            QTest.qWait(20)
+
     def rows(self):
         self.panel.model.flush()
         return list(self.panel.model.rows)
@@ -91,7 +97,7 @@ class Panel(WindowTest):
 
     def test_filter_shows_or_hides_rows_with_any_of_its_terms(self):
         self.open()
-        self.panel.filter.setText("71 07, opened")
+        self.type_filter("71 07, opened")
         self.assertTrue(self.rows())
         self.assertTrue(all(b"\x71\x07" in e.data if e.kind != "port" else "opened" in e.data for e in self.rows()))
         self.panel.way._clicked(1)
@@ -102,9 +108,9 @@ class Panel(WindowTest):
     def test_filter_finds_the_time_and_the_bytes_as_ascii(self):
         self.session.traffic.add("in", A)
         self.open()
-        self.panel.filter.setText("·q··A")                             # 05 01 41: · is a byte without a character
+        self.type_filter("·q··A")                             # 05 01 41: · is a byte without a character
         self.assertEqual([e.data for e in self.rows()], [A])
-        self.panel.filter.setText(T.clock(self.rows()[0].t))
+        self.type_filter(T.clock(self.rows()[0].t))
         self.assertIn(A, [e.data for e in self.rows()])
 
     def test_pause_holds_the_list_and_resume_follows_again(self):
@@ -137,7 +143,7 @@ class Panel(WindowTest):
 
     def test_save_writes_a_head_and_a_line_per_row(self):
         self.open()
-        self.panel.filter.setText("opened")
+        self.type_filter("opened")
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
         path = os.path.join(folder.name, "midi.txt")
