@@ -217,10 +217,12 @@ class WinmmPort:
             _check(_mm.midiOutOpen(C.byref(self.h_out), oo[0], 0, 0, 0), "midiOutOpen")
             self.bufs = [C.create_string_buffer(self.BUFLEN) for _ in range(self.NBUF)]
             self.hdrs = []
+            self.queued = 0                              # buffers handed to winmm so far, which fills them in turn
             for b in self.bufs:
                 h = MIDIHDR()
                 h.lpData = C.cast(b, C.c_void_p)
                 h.dwBufferLength = self.BUFLEN
+                h.dwUser, self.queued = self.queued, self.queued + 1
                 _check(_mm.midiInPrepareHeader(self.h_in, C.byref(h), C.sizeof(h)), "midiInPrepareHeader")
                 _check(_mm.midiInAddBuffer(self.h_in, C.byref(h), C.sizeof(h)), "midiInAddBuffer")
                 self.hdrs.append(h)
@@ -265,16 +267,15 @@ class WinmmPort:
         return self.names[0] in ins and self.names[1] in outs
 
     def receive(self):
-        """Every message that has come in since the last call, status messages included. Each buffer
-        goes straight back into the pool, so that the status stream cannot exhaust it."""
+        """Every message that has come in since the last call, status messages included, in the order they came.
+        Each buffer goes straight back into the pool, so that the status stream cannot exhaust it."""
         out = []
-        for h in self.hdrs:
-            if not (h.dwFlags & MHDR_DONE):
-                continue
+        for h in sorted((h for h in self.hdrs if h.dwFlags & MHDR_DONE), key=lambda h: h.dwUser):
             n = h.dwBytesRecorded
             if n:
                 out.append(list(C.string_at(h.lpData, n)))
             h.dwBytesRecorded = 0
             h.dwFlags = MHDR_PREPARED
+            h.dwUser, self.queued = self.queued, self.queued + 1
             _mm.midiInAddBuffer(self.h_in, C.byref(h), C.sizeof(h))
         return out
