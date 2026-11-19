@@ -133,8 +133,9 @@ class Traffic(Harness):
     def test_records_what_goes_out_and_comes_in_in_order(self):
         self.connect()
         entries = list(self.session.traffic.entries)
-        self.assertEqual(entries[0].kind, "out")
-        self.assertEqual(list(entries[0].data), codec.header(DAC.id) + [0x03, 0x09, 0xF7])   # the first dump request
+        self.assertEqual(entries[0][1:], ("port", 'opened  in "%s"  out "%s"' % self.session.port.names))
+        self.assertEqual(entries[1].kind, "out")
+        self.assertEqual(list(entries[1].data), codec.header(DAC.id) + [0x03, 0x09, 0xF7])   # the first dump request
         sent = [list(e.data) for e in entries if e.kind == "out"]
         self.assertEqual(sent, self.sim.received)
         self.assertIn("in", {e.kind for e in entries})
@@ -149,6 +150,9 @@ class Traffic(Harness):
         self.run_for(3.0)
         self.assertEqual(self.session.status, "ready")
         self.assertGreater(len(self.session.traffic.entries), before)
+        port = [e.data for e in self.session.traffic.entries if e.kind == "port"]
+        self.assertEqual(port[1:3], ["no longer listed", "closed"])
+        self.assertEqual(port[0], port[-1])                              # opened again
 
 
 class Recognition(Harness):

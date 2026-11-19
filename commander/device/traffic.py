@@ -1,5 +1,14 @@
 """What goes between Commander and the device, as it goes: every message sent, every buffer received as the port
-delivers it, in order, with the time. The last ENTRIES entries are kept, shown or not.
+delivers it, and what happens to the port itself, in order, with the time. The last ENTRIES entries are kept, shown
+or not.
+
+What happens to the port, as entries of kind 'port':
+    opened  in "<name>"  out "<name>"     Commander opened the ports with these names
+    not opened: <why>                   opening failed, as the port says why; once until that reads otherwise
+    send failed: <why>                  a message did not go out, as the port says why
+    receive failed: <why>
+    no longer listed                    the port names are gone from the list of ports
+    closed                              Commander closed the ports
 
 split() and irregular() read a buffer from its bytes alone, by the framing of MIDI SysEx: a message runs from F0
 to F7, with data bytes below 0x80 in between.
@@ -13,8 +22,8 @@ from collections import deque, namedtuple
 
 ENTRIES = 100000               # an idle connection: ~1500 a minute, so about an hour
 
-# t: when Commander sent it, or collected it from the port, as time.time(); kind: 'out' (sent) or 'in'
-# (received); data: the bytes, as they went
+# t: when Commander sent it, collected it from the port, or the port changed, as time.time(); kind: 'out' (sent),
+# 'in' (received) or 'port'; data: the bytes, as they went, or for 'port' the text
 Entry = namedtuple("Entry", "t kind data")
 
 
@@ -23,12 +32,27 @@ class Traffic:
         self.clock = clock
         self.entries = deque(maxlen=size)
         self.on_entry = []
+        self._not_opened = None
 
     def add(self, kind, data):
-        e = Entry(self.clock(), kind, bytes(data))
+        e = Entry(self.clock(), kind, data if kind == "port" else bytes(data))
         self.entries.append(e)
         for f in self.on_entry:
             f(e)
+
+    def open(self, open_port):
+        """open_port() as a RecordedPort, its opening recorded; what it raises, recorded and raised."""
+        try:
+            port = open_port()
+        except Exception as e:
+            text = "not opened: %s" % e
+            if text != self._not_opened:
+                self._not_opened = text
+                self.add("port", text)
+            raise
+        self._not_opened = None
+        self.add("port", 'opened  in "%s"  out "%s"' % tuple(port.names))
+        return RecordedPort(port, self)
 
 
 class RecordedPort:
@@ -37,19 +61,41 @@ class RecordedPort:
 
     def __init__(self, port, traffic):
         self._port, self.traffic = port, traffic
+        self._listed, self._open = True, True
 
     def __getattr__(self, name):
         return getattr(self._port, name)
 
     def send(self, msg):
         self.traffic.add("out", msg)
-        self._port.send(msg)
+        try:
+            self._port.send(msg)
+        except Exception as e:
+            self.traffic.add("port", "send failed: %s" % e)
+            raise
 
     def receive(self):
-        out = self._port.receive()
+        try:
+            out = self._port.receive()
+        except Exception as e:
+            self.traffic.add("port", "receive failed: %s" % e)
+            raise
         for m in out:
             self.traffic.add("in", m)
         return out
+
+    def present(self):
+        listed = self._port.present()
+        if self._listed and not listed:
+            self.traffic.add("port", "no longer listed")
+        self._listed = listed
+        return listed
+
+    def close(self):
+        self._port.close()
+        if self._open:
+            self._open = False
+            self.traffic.add("port", "closed")
 
 
 def split(data):
