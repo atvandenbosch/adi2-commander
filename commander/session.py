@@ -544,9 +544,12 @@ class Session:
         self._dump = {"purpose": purpose, "since": now, "tries": tries, "end": False}
         self.port.send(codec.header(self.model.id) + [0x03, 0x09, 0xF7])
 
-    def _request_slot(self, now, n, tries=0):
-        self._slot = {"n": n, "since": now, "tries": tries, "name": None, "vals": {}}
-        self.port.send(codec.header(self.model.id) + [0x03, 0x09 + n, 0xF7])
+    def _request_slot(self, now, n):
+        self._slot = {"n": n, "since": now, "tries": 0, "name": None, "vals": {}}
+        self._ask_slot()
+
+    def _ask_slot(self):
+        self.port.send(codec.header(self.model.id) + [0x03, 0x09 + self._slot["n"], 0xF7])
 
     def _receive(self, now):
         changed = []
@@ -649,7 +652,8 @@ class Session:
         if now - s["since"] > SLOT_TIMEOUT:
             if s["tries"] >= 2:
                 raise OSError("no complete answer for preset slot %d after 3 requests" % s["n"])
-            self._request_slot(now, s["n"], s["tries"] + 1)
+            s["since"], s["tries"] = now, s["tries"] + 1    # what came in stays: a slower answer completes
+            self._ask_slot()
 
     def _judge(self):
         """Compare each output with the preset it has as source, once the state has settled: nothing queued, sent

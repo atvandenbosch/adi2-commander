@@ -526,6 +526,28 @@ class Slots(Harness):
         self.assertEqual(self.asked()[:5], [0, 1, 2, 3, 3])
         self.assertEqual(sorted(self.session.slots), list(range(1, 21)))
 
+    def test_an_answer_slower_than_the_timeout_completes_over_the_requests(self):
+        answer, asked = self.sim._answer_preset, []
+
+        def slow_for_slot_3(slot):
+            if slot != 3:
+                return answer(slot)
+            if asked:                                               # only the first request is answered
+                return
+            asked.append(slot)
+            before = len(self.sim.outbox)
+            answer(slot)
+            (name_due, name), *values = self.sim.outbox[before:]
+            self.sim.outbox[before:] = [(name_due + 0.3, name)] + [(due + 1.2, m) for due, m in values]
+
+        self.sim._answer_preset = slow_for_slot_3
+        self.connect()
+        self.run_for(4.0)
+        self.assertEqual(self.asked()[:6], [0, 1, 2, 3, 3, 4])
+        self.assertEqual(self.session.status, "ready")
+        self.assertEqual((self.session.slots[3]["dual"], self.session.slots[3]["vals"]),
+                         (self.sim.slots[3]["dual"], self.sim.slots[3]["vals"]))
+
     def test_device_gone_forgets_the_slots(self):
         self.connect()
         self.run_for(3.0)
