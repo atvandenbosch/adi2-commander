@@ -1006,7 +1006,7 @@ class SimPort:
         if not present or not device.powered:
             raise DeviceNotFound("no ADI-2 MIDI port found (simulated: device off)")
         if busy:
-            raise PortBusy("midiInOpen: the ADI-2 MIDI port is in use by another program (simulated)")
+            raise PortBusy("midiInOpen failed (winmm 4, simulated)")
         self.device = device
         self.names = ("%s Midi Port 1 (simulated)" % device.model.port,) * 2
         self.serial = device.serial

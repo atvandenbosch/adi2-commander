@@ -7,7 +7,7 @@ from unittest import mock
 
 from commander.device import codec, models, simulator
 from commander.device import params as P
-from commander.device.connection import PortBusy
+from commander.device.connection import NotDelivered, NotStarted, PortBusy
 from commander.device.models import DAC, PRO, PRO_24
 from commander.session import Session, loaded
 from commander.device.simulator import SimPort, SimulatedAdi2
@@ -153,6 +153,47 @@ class Traffic(Harness):
         port = [e.data for e in self.session.traffic.entries if e.kind == "port"]
         self.assertEqual(port[1:3], ["no longer listed", "closed"])
         self.assertEqual(port[0], port[-1])                              # opened again
+
+
+class PortFailures(Harness):
+    """The log has what happened to the port; the connection's detail says what it means."""
+
+    def setUp(self):
+        super().setUp()
+        self.details = []
+        self.session.on_connection.append(lambda s, d: self.details.append((s, d)))
+
+    def logged(self):
+        return [e.data for e in self.session.traffic.entries if e.kind == "port"]
+
+    def failing(self, error):
+        def open_port():
+            raise error
+        self.session.open_port = open_port
+
+    def test_busy(self):
+        self.failing(PortBusy("midiInOpen failed (winmm 4)"))
+        self.run_for(0.1)
+        self.assertEqual(self.details, [("busy", "the ADI-2 MIDI port is in use by another program")])
+        self.assertEqual(self.logged(), ["not opened: midiInOpen failed (winmm 4)"])
+
+    def test_not_started(self):
+        self.failing(NotStarted("the first winmm call has not returned"))
+        self.run_for(0.1)
+        self.assertEqual(self.details, [("searching", "Windows is starting its MIDI service")])
+        self.assertEqual(self.logged(), ["not opened: the first winmm call has not returned"])
+
+    def test_not_delivered(self):
+        self.connect()
+        self.details.clear()
+
+        def send(msg):
+            raise NotDelivered("not done after 3 s; midiOutReset")
+        self.session.port._port.send = send
+        self.session.set((4, 4), -12)
+        self.run_for(0.5)
+        self.assertEqual(self.details, [("searching", "device lost (SysEx not delivered)")])
+        self.assertEqual(self.logged()[1:], ["send failed: not done after 3 s; midiOutReset", "closed"])
 
 
 class Recognition(Harness):

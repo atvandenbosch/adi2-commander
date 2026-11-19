@@ -179,21 +179,34 @@ def warm_up():
 
 
 MMSYSERR_ALLOCATED = 4
+SEND_TIMEOUT = 3               # seconds for winmm to report a SysEx message as done
+
+# What goes wrong with the port, each said as winmm reports it or as Commander did it; what it means for the user
+# is the session's to say.
 
 
 class DeviceNotFound(RuntimeError):
     """No ADI-2 MIDI port: the device is off, in standby or not connected."""
 
 
+class NotStarted(DeviceNotFound):
+    """The first winmm call has not returned: Windows is starting its MIDI service (warm_up)."""
+
+
 class PortBusy(OSError):
-    """The ADI-2 MIDI port is held by another program."""
+    """winmm has the ADI-2 MIDI port allocated: another program holds it."""
+
+
+class NotDelivered(TimeoutError):
+    """winmm did not report a SysEx message as done within SEND_TIMEOUT."""
 
 
 def _check(result, what):
+    if result == 0:
+        return
     if result == MMSYSERR_ALLOCATED and what in ("midiInOpen", "midiOutOpen"):
-        raise PortBusy("%s: the ADI-2 MIDI port is in use by another program" % what)
-    if result != 0:
-        raise OSError("%s failed (winmm %d)" % (what, result))
+        raise PortBusy("%s failed (winmm %d)" % (what, result))
+    raise OSError("%s failed (winmm %d)" % (what, result))
 
 
 class WinmmPort:
@@ -203,7 +216,7 @@ class WinmmPort:
 
     def __init__(self):
         if not _started.is_set():
-            raise DeviceNotFound("Windows is starting its MIDI service")
+            raise NotStarted("the first winmm call has not returned")
         ins, outs = list_ports()
         ii = [i for i, n in enumerate(ins) if "ADI-2" in n]
         oo = [i for i, n in enumerate(outs) if "ADI-2" in n]
@@ -254,9 +267,9 @@ class WinmmPort:
         _check(_mm.midiOutLongMsg(self.h_out, C.byref(h), C.sizeof(h)), "midiOutLongMsg")
         t0 = time.time()
         while not (h.dwFlags & MHDR_DONE):
-            if time.time() - t0 > 3:
+            if time.time() - t0 > SEND_TIMEOUT:
                 _mm.midiOutReset(self.h_out)
-                raise TimeoutError("SysEx not delivered")
+                raise NotDelivered("not done after %d s; midiOutReset" % SEND_TIMEOUT)
             time.sleep(0.005)
         _mm.midiOutUnprepareHeader(self.h_out, C.byref(h), C.sizeof(h))
 

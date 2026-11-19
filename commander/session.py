@@ -39,7 +39,7 @@ from .device import codec
 from .device import models
 from .device import params as P
 from .device import status as S
-from .device.connection import REQUIRED, DeviceNotFound, PortBusy, build_messages
+from .device.connection import REQUIRED, DeviceNotFound, NotDelivered, NotStarted, PortBusy, build_messages
 from .device.traffic import Traffic
 
 SEARCH_INTERVAL = 2.0          # seconds between attempts to find the port
@@ -474,6 +474,8 @@ class Session:
             if self.port is not None:
                 self._write(now)
                 self._watch(now)
+        except NotDelivered:
+            self._drop("device lost (SysEx not delivered)")
         except OSError as e:
             self._drop("device lost (%s)" % e)
 
@@ -481,8 +483,11 @@ class Session:
         self._next_search = now + SEARCH_INTERVAL
         try:
             self.port = self.traffic.open(self.open_port)
-        except PortBusy as e:
-            self._set_status("busy", str(e))
+        except PortBusy:
+            self._set_status("busy", "the ADI-2 MIDI port is in use by another program")
+            return
+        except NotStarted:
+            self._set_status("searching", "Windows is starting its MIDI service")
             return
         except DeviceNotFound as e:
             self._set_status("searching", str(e))

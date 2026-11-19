@@ -75,11 +75,11 @@ class MidiWarmUp(unittest.TestCase):
             return [], []
         with mock.patch.object(connection, "list_ports", slow_list_ports):
             connection.warm_up()
-            with self.assertRaisesRegex(connection.DeviceNotFound, "MIDI service"):
+            with self.assertRaises(connection.NotStarted):
                 connection.WinmmPort()
             release.set()
             self.assertTrue(connection._started.wait(5))
-            with self.assertRaisesRegex(connection.DeviceNotFound, "no ADI-2 MIDI port"):
+            with self.assertRaisesRegex(connection.DeviceNotFound, "^no ADI-2 MIDI port"):
                 connection.WinmmPort()                   # now it looks for the device
         self.assertIsNot(calls[0], threading.current_thread())
 
