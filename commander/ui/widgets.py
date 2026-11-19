@@ -319,12 +319,13 @@ class Option(QWidget):
 class Segmented(QWidget):
     """A choice between ways of doing one thing, side by side as one control: the chosen one raised and lit, the
     others flat. Neutral grey, as an Option: it is no part of the sound. A click on another emits changed with its
-    index; set_current does not."""
+    index; set_current does not. padding: of each name, as in a style sheet."""
 
     changed = Signal(int)
 
-    def __init__(self, names):
+    def __init__(self, names, padding="2px 14px"):
         super().__init__()
+        self.padding = padding
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
@@ -364,12 +365,12 @@ class Segmented(QWidget):
             right = "3px" if i == last else "0"
             color = theme.TEXT if on else theme.SECONDARY if b.isEnabled() else theme.DISABLED
             b.setStyleSheet(
-                "QPushButton { color: %s; background: %s; border: 1px solid %s; padding: 2px 14px; font-size: 9pt;"
+                "QPushButton { color: %s; background: %s; border: 1px solid %s; padding: %s; font-size: 9pt;"
                 " border-top-left-radius: %s; border-bottom-left-radius: %s; border-top-right-radius: %s;"
                 " border-bottom-right-radius: %s; %s }"
                 " QPushButton:hover { background: %s; }"
                 % (color.name(), (theme.RAISED if on else theme.PANEL).name(),
-                   (theme.ACCENT if on else theme.BORDER).name(), left, left, right, right,
+                   (theme.ACCENT if on else theme.BORDER).name(), self.padding, left, left, right, right,
                    "font-weight: bold;" if on else "", theme.RAISED.name()))
 
 

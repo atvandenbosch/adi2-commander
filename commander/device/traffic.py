@@ -34,6 +34,9 @@ class Traffic:
         self.on_entry = []
         self._not_opened = None
 
+    def clear(self):
+        self.entries.clear()
+
     def add(self, kind, data):
         e = Entry(self.clock(), kind, data if kind == "port" else bytes(data))
         self.entries.append(e)

@@ -16,6 +16,8 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
   turn with the ratio it had.
 - Under DEVICE, Factory Settings sets Remap Keys and the keys as from the factory.
 - The window opens where it was when it last closed, as large, and maximized if it was.
+- The MIDI traffic with the device: every message Commander sends and every buffer it receives, with the time.
+  Ctrl+click the connection light, or press Ctrl+Shift+M. Copy and Save take the rows, to share them.
 
 ### Changed
 

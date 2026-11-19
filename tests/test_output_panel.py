@@ -65,22 +65,26 @@ class OutputSettings(WindowTest):
         self.assertEqual(style.styleHint(QStyle.SH_ToolTip_FallAsleepDelay), 0)
 
     def test_a_line_between_two_open_panels(self):
-        self.win.room = lambda: QRect(0, 0, 2560, 1400)                       # room for all four
+        self.win.room = lambda: QRect(0, 0, 2560, 1400)                       # room for all five
         lines = self.win.panel_lines
         shown = lambda: [line.isVisible() for line in lines]                    # noqa: E731
-        self.assertEqual(shown(), [False, False, False])                        # Output alone
+        self.assertEqual(shown(), [False, False, False, False])                 # Output alone
         QTest.mouseClick(self.win.presets_tab, Qt.LeftButton)
-        self.assertEqual(shown(), [False, True, False])
+        self.assertEqual(shown(), [False, False, True, False])
         QTest.mouseClick(self.win.input_tab, Qt.LeftButton)
-        self.assertEqual(shown(), [True, True, False])
+        self.assertEqual(shown(), [False, True, True, False])
         QTest.mouseClick(self.win.device_tab, Qt.LeftButton)
-        self.assertEqual(shown(), [True, True, True])
+        self.assertEqual(shown(), [False, True, True, True])
         QTest.mouseClick(self.win.output_tab, Qt.LeftButton)
-        self.assertEqual(shown(), [False, True, True])                          # Input, Presets, Device
+        self.assertEqual(shown(), [False, False, True, True])                   # Input, Presets, Device
         QTest.mouseClick(self.win.presets_tab, Qt.LeftButton)
-        self.assertEqual(shown(), [False, False, True])                         # Input, Device
+        self.assertEqual(shown(), [False, False, False, True])                  # Input, Device
         QTest.mouseClick(self.win.input_tab, Qt.LeftButton)
-        self.assertEqual(shown(), [False, False, False])
+        self.assertEqual(shown(), [False, False, False, False])                 # Device
+        self.win.show_traffic(True)
+        self.assertEqual(shown(), [False, False, False, True])                  # MIDI, Device
+        QTest.mouseClick(self.win.input_tab, Qt.LeftButton)
+        self.assertEqual(shown(), [True, False, False, True])                   # MIDI, Input, Device
 
     def volume_arrow(self, direction, modifier=Qt.NoModifier):
         v = self.panel.volume

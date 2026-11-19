@@ -27,7 +27,7 @@ import datetime
 import os
 
 from PySide6.QtCore import (QEvent, QModelIndex, QPoint, QRect, QRectF, QSettings, QSize, QStandardPaths, Qt,
-                            QTimer, QUrl)
+                            QTimer, QUrl, Signal)
 from PySide6.QtGui import (QColor, QCursor, QDesktopServices, QFont, QIcon, QKeySequence, QPainter, QPalette,
                            QShortcut)
 from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
@@ -55,6 +55,7 @@ from .output import OutputPanel, shared_tip
 from .presets import INPUT_TAG, ChosenRow, NameEditor, PresetPanel, SideTab, actions
 from .preview import PresetPreview
 from .scrim import Scrim
+from .traffic import Grip, TrafficPanel
 from . import simulated as simulated_choice
 from . import untested
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, LOUDNESS_COLUMNS, CellDelegate, Marks,
@@ -65,6 +66,7 @@ from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, DSD_BYPASS, FRAME, INNER_GAP, 
 
 GEOMETRY = "window/geometry"                    # the setting: where the window was when it closed, and how large
 MAXIMIZED = "window/maximized"                  # and whether it was maximized
+TRAFFIC_WIDTH = "traffic/width"                  # how wide the MIDI traffic was made
 FS_TIP = "Sample rate the curves are computed at"
 ACTIVE_TIP = "Active on the device: its display and volume knob are on this output."
 ACTIVE = "Active on the device"                 # the ADI-2 Pro and ADI-2/4 Pro
@@ -102,12 +104,19 @@ PREVIEW_INSET = 8                                # px in from the graph's zone: 
 
 
 class Lamp(QWidget):
-    """A coloured dot, the state of the connection; while writes are on their way it pulses in amber."""
+    """A coloured dot, the state of the connection; while writes are on their way it pulses in amber. Ctrl+click
+    opens the MIDI traffic."""
+
+    ctrl_clicked = Signal()
 
     def __init__(self):
         super().__init__()
         self.setFixedSize(14, 14)
         self.color, self.busy, self.phase = theme.SECONDARY, False, 0
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton and e.modifiers() & Qt.ControlModifier:
+            self.ctrl_clicked.emit()
 
     def paintEvent(self, e):
         p = QPainter(self)
@@ -497,9 +506,24 @@ class MainWindow(QMainWindow):
         self.device_area.setFixedWidth(self.PRESETS_WIDTH)
         self.device_area.hide()
         self.device_tab = SideTab("DEVICE")
+        # the MIDI traffic: its tab under the others, shown only while it is open; its panel always the first
+        self.traffic_panel = TrafficPanel(session.traffic, self.note, lambda: self.folder)
+        self.traffic_panel.setFixedWidth(max(self.PRESETS_WIDTH, int(self.settings.value(TRAFFIC_WIDTH, 0))))
+        self.traffic_panel.hide()
+        self.traffic_grip = Grip(self.traffic_panel)
+        self.traffic_grip.hide()
+        self.traffic_grip.dragged.connect(self.widen_traffic)
+        self.traffic_grip.released.connect(self.keep_on_screen)
+        self.traffic_tab = SideTab("MIDI")
+        self.traffic_tab.setToolTip("Hide the MIDI traffic.")
+        self.traffic_tab.hide()
+        self.traffic_tab.toggled.connect(self.traffic_tab.setVisible)
+        self.traffic_tab.toggled.connect(self.traffic_grip.setVisible)
+        self.lamp.ctrl_clicked.connect(lambda: self.show_traffic(True))
+        QShortcut(QKeySequence("Ctrl+Shift+M"), self, lambda: self.show_traffic(not self.traffic_tab.open))
         # a line between two open panels: they stand on the same ground
         self.panel_lines = []
-        for _ in range(3):
+        for _ in range(4):
             line = QFrame()
             line.setFixedWidth(1)
             line.setStyleSheet("background: %s;" % theme.GRID.name())
@@ -507,7 +531,8 @@ class MainWindow(QMainWindow):
             self.panel_lines.append(line)
         self.opened = []                                 # the open panels' tabs, the one opened last at the end
         self.areas = {self.input_tab: self.input_area, self.output_tab: self.output_area,
-                      self.presets_tab: self.presets_area, self.device_tab: self.device_area}
+                      self.presets_tab: self.presets_area, self.device_tab: self.device_area,
+                      self.traffic_tab: self.traffic_panel}
         for tab in self.areas:
             tab.toggled.connect(lambda on, tab=tab: self.panel_toggled(tab, on))
             tab.toggled.connect(self.show_panel_lines)
@@ -516,6 +541,7 @@ class MainWindow(QMainWindow):
         strip.addWidget(self.output_tab)
         strip.addWidget(self.presets_tab)
         strip.addWidget(self.device_tab)
+        strip.addWidget(self.traffic_tab)
         strip.addStretch()
 
         # the graph's zone, darker than the columns beside it, from the tabs down to the status bar; beside it
@@ -533,12 +559,16 @@ class MainWindow(QMainWindow):
         left.setContentsMargins(0, below_tabs, 0, above_status)
         left.setSpacing(16)
         left.addLayout(strip)
-        left.addWidget(self.input_area)
+        left.addWidget(self.traffic_panel)
+        left.addSpacing(-left.spacing())                 # the grip against the panel's edge
+        left.addWidget(self.traffic_grip)
         left.addWidget(self.panel_lines[0])
-        left.addWidget(self.output_area)
+        left.addWidget(self.input_area)
         left.addWidget(self.panel_lines[1])
-        left.addWidget(self.presets_area)
+        left.addWidget(self.output_area)
         left.addWidget(self.panel_lines[2])
+        left.addWidget(self.presets_area)
+        left.addWidget(self.panel_lines[3])
         left.addWidget(self.device_area)
         right = QVBoxLayout()
         right.setContentsMargins(0, below_tabs, 0, above_status)
@@ -1392,19 +1422,29 @@ class MainWindow(QMainWindow):
         if tab in self.opened:
             self.opened.remove(tab)
         if on:
-            while self.opened and self.least_width() + self.panel_width() > self.room().width():
+            while self.opened and self.least_width() + self.panel_width(tab) > self.room().width():
                 self.opened[0].set_open(False)
             self.opened.append(tab)
         self.areas[tab].setVisible(on)
         if on:
             QTimer.singleShot(0, self.keep_on_screen)
 
-    def panel_width(self):
-        """What one more open panel adds to the window's width: the panel, and the line before it when another one
-        is open."""
+    def panel_width(self, tab):
+        """What opening the panel of tab adds to the window's width: the panel, and the line before it when another
+        one is open."""
         gap = self.side_row.spacing()
         line = 1 + gap if any(not a.isHidden() for a in self.areas.values()) else 0
-        return self.PRESETS_WIDTH + gap + line
+        grip = Grip.WIDTH if tab is self.traffic_tab else 0
+        return self.areas[tab].maximumWidth() + grip + gap + line
+
+    def widen_traffic(self, width):
+        """The MIDI traffic as wide as dragged: no narrower than the other panels, no wider than the screen allows."""
+        now = self.traffic_panel.width()
+        room = self.room().width() - (self.least_width() - now)
+        width = max(self.PRESETS_WIDTH, min(width, room))
+        if width != now:
+            self.traffic_panel.setFixedWidth(width)
+            self.settings.setValue(TRAFFIC_WIDTH, width)
 
     def room(self):
         """The part of the window's screen without the taskbar."""
@@ -1426,9 +1466,16 @@ class MainWindow(QMainWindow):
         if frame.right() > room.right():
             self.move(max(room.left(), frame.left() - (frame.right() - room.right())), frame.top())
 
+    def show_traffic(self, on):
+        """Open the MIDI traffic, its tab with it, or close both."""
+        if on:
+            self.traffic_tab.show()
+        if self.traffic_tab.open != on:
+            self.traffic_tab.set_open(on)
+
     def show_panel_lines(self):
         """A line before each open panel that has an open panel before it."""
-        areas = (self.input_area, self.output_area, self.presets_area, self.device_area)
+        areas = (self.traffic_panel, self.input_area, self.output_area, self.presets_area, self.device_area)
         for n, line in enumerate(self.panel_lines):
             line.setVisible(not areas[n + 1].isHidden() and any(not a.isHidden() for a in areas[:n + 1]))
 

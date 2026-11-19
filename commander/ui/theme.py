@@ -30,6 +30,8 @@ LOUDNESS = QColor("#d9d1b4")      # ivory: Loudness, an effect apart with a grap
 WARN = QColor("#f0b21b")          # amber: busy, waiting, attention
 BAD = QColor("#e0503c")           # read-back differs from what was sent
 GOOD = QColor("#4cc46a")
+SENT = QColor("#b9a2f2")          # violet: a MIDI message Commander sent
+RECEIVED = QColor("#b5d67a")      # lime: a MIDI buffer Commander received
 HEADER_PADDING = 8                # px left and right of a column header's text
 TAB_LINE = 2                      # px: the line under the chosen tab
 
