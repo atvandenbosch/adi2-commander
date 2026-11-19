@@ -21,8 +21,8 @@ No Qt here; listeners are plain callables:
     on_connection(status, detail)   status: 'searching', 'busy', 'loading', 'ready', 'unsupported' (see model)
     on_changed(keys, origin)        origin: 'load', 'device' (front panel), 'write' (our own, optimistic)
     on_verified(results)            {(address, index): (sent, actual)} after a write was read back
-    on_slots(numbers)               preset slots that read differently than before, are gone, or came to be read
-                                    or not read (unread)
+    on_slots(numbers)               preset slots that read differently than before, are gone, became unread, or
+                                    were read again
     on_stale(outputs)               outputs, or the input, that came to differ from the preset they have as source,
                                     or no longer do
     on_operation(kind, slot, result)
@@ -156,7 +156,6 @@ class Session:
         self.slots = {}
         self.unread = {}                         # {n: why} the slots whose last answer was incomplete
         self.read_at = {}                        # {n: time.time()} when each slot was last read in full
-        self.wall_clock = time.time
         self._retry = {}                         # {n: clock time} when a slot not read is asked again
         self._stale = {}                         # {output: (source, differences)} as judged when last settled
         self.device_status = None                # what the device's status message says, a status.Status
@@ -677,7 +676,7 @@ class Session:
             slot = {"used": used, "dual": flag & 1 if used else None,
                     "name": bytes(s["name"]).split(b"\0")[0].decode("ascii", "replace"),
                     "vals": {k: v for k, v in s["vals"].items() if k in SLOT_KEYS} if used else {}}
-            self.read_at[s["n"]] = self.wall_clock()
+            self.read_at[s["n"]] = time.time()
             self._retry.pop(s["n"], None)
             was_unread = self.unread.pop(s["n"], None) is not None
             if self.slots.get(s["n"]) != slot:

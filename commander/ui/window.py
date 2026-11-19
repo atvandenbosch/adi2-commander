@@ -66,7 +66,7 @@ from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, DSD_BYPASS, FRAME, INNER_GAP, 
 
 GEOMETRY = "window/geometry"                    # the setting: where the window was when it closed, and how large
 MAXIMIZED = "window/maximized"                  # and whether it was maximized
-TRAFFIC_WIDTH = "traffic/width"                  # how wide the MIDI traffic was made
+TRAFFIC_WIDTH = "traffic/width"                 # how wide the MIDI traffic was made
 FS_TIP = "Sample rate the curves are computed at"
 ACTIVE_TIP = "Active on the device: its display and volume knob are on this output."
 ACTIVE = "Active on the device"                 # the ADI-2 Pro and ADI-2/4 Pro
