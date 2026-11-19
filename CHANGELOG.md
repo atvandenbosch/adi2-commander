@@ -53,6 +53,8 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 - Import: with Dual EQ, Bass and Treble are drawn once, as bright as the other bands.
 - Setup asks to close Commander while it runs, also in another account or Windows session, before it changes
   anything; a cancelled update could leave a Commander that did not start. The uninstaller asks as well.
+- The connection dropped when the device took longer than a second to send a preset; it now has up to three
+  seconds.
 
 ## [0.2.0] - 2026-11-14
 
