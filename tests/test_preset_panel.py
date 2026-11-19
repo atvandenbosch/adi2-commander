@@ -205,6 +205,45 @@ class PresetPanel(WindowTest):
         self.settle()
         self.assertEqual(self.row(MANUAL).tags.text(), "")                    # Manual is each output's own
 
+    def losing(self, slot, which):
+        """The answers for slot lose the messages which(message) picks, until which is None."""
+        answer = self.sim._answer_preset
+        self.lose = {slot: which}
+
+        def lossy(n):
+            before = len(self.sim.outbox)
+            answer(n)
+            if self.lose.get(n):
+                self.sim.outbox[before:] = [(t, m) for t, m in self.sim.outbox[before:] if not self.lose[n](m)]
+        self.sim._answer_preset = lossy
+
+    def test_a_slot_not_read_says_so_and_keeps_its_last_reading(self):
+        row = self.row(3)                                                     # Preset 2
+        self.losing(2, lambda m: m[5] == 0x05)                                # its name
+        self.wait(lambda: 2 in self.session.unread)
+        self.spin(20)
+        self.assertEqual((row.name.text(), row.mark.text()), ("EQ Preset 2", "not read"))
+        self.assertIn(theme.WARN.name(), row.mark.styleSheet())
+        tip = row.mark.toolTip().splitlines()
+        self.assertEqual(tip[0], "The device's reply was incomplete: no name")
+        self.assertRegex(tip[1], r"^Shown as read at \d\d:\d\d:\d\d$")
+        self.assertEqual(self.session.status, "ready")
+        self.lose = {}
+        self.wait(lambda: 2 not in self.session.unread, 70000)                # asked again after a minute
+        self.spin(20)
+        self.assertEqual(row.mark.text(), "")
+
+    def test_store_into_a_slot_that_cannot_be_read_is_not_done(self):
+        row = self.row(8)                                                     # Preset 7
+        self.losing(7, lambda m: True)
+        QTest.mouseClick(self.hovered(8).store, Qt.LeftButton)
+        self.wait(lambda: not self.session.operating(), 15000)
+        self.assertEqual(self.win.file_note.text(), "Not done: Preset 7 could not be read (see the preset)")
+        self.assertEqual(row.mark.text(), "not read")
+        tip = row.mark.toolTip().splitlines()
+        self.assertEqual(tip[0], "No reply from the device")
+        self.assertRegex(tip[1], r"^Shown as read at \d\d:\d\d:\d\d$")
+
 
 if __name__ == "__main__":
     unittest.main()

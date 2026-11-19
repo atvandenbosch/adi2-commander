@@ -870,6 +870,10 @@ class MainWindow(QMainWindow):
         done = {"store": "Stored in Preset %d", "write": "Stored Preset %d"}[kind] % slot
         if result is None:
             self.note("Not done: the device was disconnected (Preset %d)" % slot, theme.WARN)
+        elif "not read" in result:
+            self.note("Not done: Preset %d could not be read (see the preset)" % slot, theme.WARN)
+        elif "not read back" in result:
+            self.note("%s, but it could not be read back (see the preset)" % done, theme.WARN)
         elif result:
             self.slot_issues[slot] = result
             self.note("%s, but it reads back otherwise (see the preset)" % done, theme.BAD)
@@ -1503,7 +1507,8 @@ class MainWindow(QMainWindow):
         if self.model.input is not None:
             tags = {P.INPUT_ADDRESS: (INPUT_TAG, self.channel_name(P.INPUT_ADDRESS)), **tags}
         self.presets.refresh(s, (self.output_name(),) + self.output[1:], self.session.slots, ready,
-                             self.session.operation(), self.slot_issues, editing, tags)
+                             self.session.operation(), self.slot_issues, editing, tags, self.session.unread,
+                             self.session.read_at)
         self.source.copy(self.presets.rows.get(s.get((left, P.EQ_PRESET_SELECT))) if ready and not editing else None,
                          bool(self.session.stale(out)))
         self.refresh_hovered()

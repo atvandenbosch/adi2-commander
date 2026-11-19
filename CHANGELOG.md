@@ -55,6 +55,8 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
   anything; a cancelled update could leave a Commander that did not start. The uninstaller asks as well.
 - The connection dropped when the device took longer than a second to send a preset; it now has up to three
   seconds.
+- The connection dropped when the device's reply for a preset stayed incomplete. The connection now stays; the
+  preset says "not read", with what the reply lacked in its tooltip, and shows its last full reading, if any.
 
 ## [0.2.0] - 2026-11-14
 

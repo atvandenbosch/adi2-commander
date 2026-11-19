@@ -10,7 +10,8 @@ go at once, its port closed for other programs, and the session waits until it i
 
 The dump does not hold the twenty preset slots. After every dump they are read with 03 0A+n, one at a time:
 asked before the previous answer is complete, the device loses parameter messages. A write goes in between
-two slots.
+two slots. A slot whose answer is still incomplete after three requests is not read (unread): its last complete
+reading stays, and it is asked again after UNREAD_RETRY rather than in every round.
 
 Store and Write put a whole slot on the device: the name with 0x06, the left side on address 13, the right side
 on 14, then the flag word on 13/2, which commits it. Each is one operation, read back afterwards and written once
@@ -20,13 +21,16 @@ No Qt here; listeners are plain callables:
     on_connection(status, detail)   status: 'searching', 'busy', 'loading', 'ready', 'unsupported' (see model)
     on_changed(keys, origin)        origin: 'load', 'device' (front panel), 'write' (our own, optimistic)
     on_verified(results)            {(address, index): (sent, actual)} after a write was read back
-    on_slots(numbers)               preset slots that read differently than before, or are gone
+    on_slots(numbers)               preset slots that read differently than before, are gone, or came to be read
+                                    or not read (unread)
     on_stale(outputs)               outputs, or the input, that came to differ from the preset they have as source,
                                     or no longer do
     on_operation(kind, slot, result)
                                     kind: 'store' or 'write'; result: {} when the slot read back as sent, else
                                     {key: (sent, actual)} with key (13|14, index), 'name', 'dual', or the
-                                    source (left EQ address, 28) selected again afterwards; None when the device
+                                    source (left EQ address, 28) selected again afterwards; {'not read': why}
+                                    when the slot could not be read before writing, so nothing was written;
+                                    {'not read back': why} when it could not be read back; None when the device
                                     went away first
     on_device_status(status)        a status.Status from the device's status message, when it reads differently;
                                     None when the device went away
@@ -57,6 +61,8 @@ PRESENCE_INTERVAL = 0.5       # how often to check that the port still exists: i
 STATUS_TIMEOUT = 3.5           # the safety net: the device sends a status message every ~1 s (up to ~2 s
                                # just after power on); after ~3 missed ones it is gone
 SLOT_TIMEOUT = 1.0             # a slot answers within ~0.12 s
+UNREAD_RETRY = 60.0            # a slot not read is asked again after this long: a slot that never answers in full
+                               # would otherwise hold up every round
 SLOTS = range(1, 21)
 # a used slot: the left side on address 13 (bands and Bass/Treble), the right side on address 14 (bands);
 # the flag word comes back on 13/1: (slot - 1) << 4 | Dual EQ, the four low bits set when the slot is unused
@@ -116,6 +122,23 @@ def differences(live, preset, load_bt):
     return diff
 
 
+def incomplete(answer):
+    """What the answer for a slot lacked, said for the user: answer as Session._slot has it."""
+    n, vals, flag = answer["n"], answer["vals"], answer["vals"].get(SLOT_FLAG)
+    if flag is None and answer["name"] is None and not vals:
+        return "No reply from the device"
+    lacks = []
+    if flag is None:
+        lacks.append("no preset number")
+    elif (flag >> 4) + 1 != n:
+        lacks.append("the number of Preset %d" % ((flag >> 4) + 1))
+    if answer["name"] is None:
+        lacks.append("no name")
+    if flag is not None and (flag >> 4) + 1 == n and flag & 0x0F != 0x0F and SLOT_KEYS - set(vals):
+        lacks.append("%d of %d values missing" % (len(SLOT_KEYS - set(vals)), len(SLOT_KEYS)))
+    return "The device's reply was incomplete: " + ", ".join(lacks)
+
+
 class Session:
     def __init__(self, open_port, clock=time.monotonic):
         self.open_port = open_port               # () -> port; raises DeviceNotFound or PortBusy
@@ -131,6 +154,10 @@ class Session:
         # the preset slots as last read: {n: {'used', 'dual', 'name', 'vals' {(13|14, index): value}}};
         # an unused slot has no Dual EQ (None) and no values
         self.slots = {}
+        self.unread = {}                         # {n: why} the slots whose last answer was incomplete
+        self.read_at = {}                        # {n: time.time()} when each slot was last read in full
+        self.wall_clock = time.time
+        self._retry = {}                         # {n: clock time} when a slot not read is asked again
         self._stale = {}                         # {output: (source, differences)} as judged when last settled
         self.device_status = None                # what the device's status message says, a status.Status
         self._refresh_at = None
@@ -535,7 +562,8 @@ class Session:
         self.state = {}
         self.model, self._identified = None, False
         self._emit(self.on_changed, [], "load")
-        gone, self.slots, self._stale = list(self.slots), {}, {}
+        gone = sorted(set(self.slots) | set(self.unread))
+        self.slots, self.unread, self.read_at, self._retry, self._stale = {}, {}, {}, {}, {}
         if gone:
             self._emit(self.on_slots, gone)
         op, self._op = self._op, None
@@ -611,7 +639,7 @@ class Session:
             self._dump = None
             self._last_dump_done = now
             if not self._slots_due:
-                self._slots_due = list(SLOTS)
+                self._slots_due = [n for n in SLOTS if self._retry.get(n, now) <= now]
             if d["purpose"] == "load":
                 self._set_status("ready", "")
                 self._emit(self.on_changed, list(self.state), "load")
@@ -627,7 +655,7 @@ class Session:
         if not self._identified:
             if now - d["since"] > PROBE_TIMEOUT:
                 if not self._candidates:
-                    self._drop("no answer under any ADI-2 device ID")
+                    self._drop("no reply under any ADI-2 device ID")
                     return
                 self.model = self._candidates.pop(0)
                 self._request_dump(now, "load")
@@ -649,18 +677,32 @@ class Session:
             slot = {"used": used, "dual": flag & 1 if used else None,
                     "name": bytes(s["name"]).split(b"\0")[0].decode("ascii", "replace"),
                     "vals": {k: v for k, v in s["vals"].items() if k in SLOT_KEYS} if used else {}}
+            self.read_at[s["n"]] = self.wall_clock()
+            self._retry.pop(s["n"], None)
+            was_unread = self.unread.pop(s["n"], None) is not None
             if self.slots.get(s["n"]) != slot:
                 self.slots[s["n"]] = slot
                 self._emit(self.on_slots, [s["n"]])
                 self._judge()
+            elif was_unread:
+                self._emit(self.on_slots, [s["n"]])
             if self._op is not None and self._op["slot"] == s["n"] and self._op["step"] in ("reading", "verifying"):
                 self._operation_slot(now, slot)
             return
         if now - s["since"] > SLOT_TIMEOUT:
-            if s["tries"] >= 2:
-                raise OSError("no complete answer for preset slot %d after 3 requests" % s["n"])
-            s["since"], s["tries"] = now, s["tries"] + 1    # what came in stays: a slower answer completes
-            self._ask_slot()
+            if s["tries"] < 2:
+                s["since"], s["tries"] = now, s["tries"] + 1    # what came in stays: a slower answer completes
+                self._ask_slot()
+                return
+            n, why = s["n"], incomplete(s)
+            self._slot, self._retry[n] = None, now + UNREAD_RETRY
+            if self.unread.get(n) != why:
+                self.unread[n] = why
+                self._emit(self.on_slots, [n])
+            op = self._op
+            if op is not None and op["slot"] == n and op["step"] in ("reading", "verifying"):
+                op["result"] = {"not read" if op["step"] == "reading" else "not read back": why}
+                self._finish()
 
     def _judge(self):
         """Compare each output with the preset it has as source, once the state has settled: nothing queued, sent

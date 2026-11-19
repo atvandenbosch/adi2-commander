@@ -21,7 +21,9 @@ the EQ head of an output that has an earlier copy of its preset. When OK cannot 
 A row that is being written to the device says so after its name, 'storing…' in amber; that something is being
 written, the status bar's lamp says. The row shows its new name at once. A dot in a row only ever means: selected on
 this output. When the device reads back otherwise, the row shows what the device has and 'not as sent', with the
-difference in its tooltip, until the next action on that row.
+difference in its tooltip, until the next action on that row. When the last answer for a slot was incomplete, its
+row says 'not read' in amber, with what the answer lacked in its tooltip; a slot read in full before shows that
+reading, and when it was.
 
     (free)   the slot is unused: selecting it loads the factory state, as Clear
     (lin)    all band gains are 0 dB and no band is a High Pass or High Cut, as the device marks it
@@ -41,6 +43,8 @@ The row's actions:
 
 Manual, Temp, Clear and Rumble have Select only: they are no slots.
 """
+
+import time
 
 from PySide6.QtCore import QEvent, QRect, QSize, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QLinearGradient, QPainter, QValidator
@@ -68,6 +72,7 @@ OK_TIP = "Write this preset to the device as it is now."
 STALE_TIP = "This output has an earlier copy of this preset.\nSelect it again to load it as it is now."
 BUSY = {"store": "storing…", "write": "storing…"}
 NOT_AS_SENT = "not as sent"
+NOT_READ_MARK = "not read"
 DOUBLE_CLICK_TIP = "Double-click to select it."
 EDIT_TIP = "Edit this preset and its name; nothing goes to the device until OK."
 EDIT_FREE_TIP = "This preset is unused: it starts as the factory state."
@@ -362,19 +367,20 @@ class _Row(QWidget):
             self.panel.selected.emit(self.value)
 
     def set_state(self, name, named, mark, current, tags, enabled, busy="", issue="", edited=False, ok=False,
-                  warning="", ok_tip=""):
+                  warning="", ok_tip="", unread=""):
         """busy: the verb while this row is written to the device; issue: how it read back otherwise; edited: open
         in the edit stand, with name as it is being typed; ok: whether OK can write it now, else ok_tip says why;
-        warning: what OK changes beyond the preset."""
+        warning: what OK changes beyond the preset; unread: why its last answer was not read."""
         self.name.setText(name)
         self.name.setProperty("named", named)
         plain = theme.TEXT if named and (mark != "(free)" or edited) else theme.SPIN
         restyle(self.name, "color: %s;" % (theme.WARN if edited and warning else plain).name())
         self.label.setToolTip(warning if edited else "")   # not on the amber name: its tooltip would be amber too
         self.plain_mark = mark                   # (free) or (lin), without what is under way
-        self.mark.setText(busy or ("" if edited else NOT_AS_SENT if issue else mark))
-        restyle(self.mark, label_color(theme.WARN if busy else theme.BAD if issue and not edited else theme.SECONDARY))
-        self.mark.setToolTip("" if busy or edited else issue)
+        self.mark.setText(busy or ("" if edited else NOT_AS_SENT if issue else NOT_READ_MARK if unread else mark))
+        restyle(self.mark, label_color(theme.WARN if busy else theme.BAD if issue and not edited else
+                                       theme.WARN if unread and not edited else theme.SECONDARY))
+        self.mark.setToolTip("" if busy or edited else issue or unread)
         self.busy, self.edited = bool(busy), edited
         self.dot.set(theme.ACCENT) if current else self.dot.clear()
         self.current = current
@@ -443,8 +449,10 @@ class PresetPanel(QWidget):
         lay.addSpacing(ATTACHED_GAP)
         return title
 
-    def refresh(self, state, output, slots, ready, operation=None, issues=None, editing=None, tags=None):
-        """state: the session's; output: (name, address, left, right) of this tab; slots: as read; operation: the
+    def refresh(self, state, output, slots, ready, operation=None, issues=None, editing=None, tags=None, unread=None,
+                read_at=None):
+        """state: the session's; output: (name, address, left, right) of this tab; slots: as read; unread: {slot: why
+        its last answer was not read}; read_at: {slot: when it was last read in full, as time.time()}; operation: the
         Store or Write under way (Session.operation); issues: {slot: how it read back otherwise}; editing: the slot
         open in the edit stand, its name as typed, whether OK can write it now, what OK changes beyond the preset,
         and why OK cannot be clicked; or None; tags: {output address: (its mark, its name)} of the outputs a preset
@@ -455,7 +463,7 @@ class PresetPanel(QWidget):
         self.output_title.setText(name.upper())
         self.load_bt_row.setVisible(P.has_bt(out))             # the input has no Bass/Treble
         self.rows[CLEAR].set_tip(TIPS[CLEAR] if P.has_bt(out) else CLEAR_INPUT_TIP)
-        issues = issues or {}
+        issues, unread, read_at = issues or {}, unread or {}, read_at or {}
         enabled = ready and operation is None and editing is None
         chosen = {o: state.get((l, P.EQ_PRESET_SELECT)) for _, o, l, _ in P.CHANNELS if o in tags_of}
         for value, row in self.rows.items():
@@ -476,9 +484,12 @@ class PresetPanel(QWidget):
                 m = mark(s)
             shared = row.slot is not None or value in BUILT_IN
             tags = [tags_of[o] for o, v in chosen.items() if o != out and v == value] if shared else []
+            why = unread.get(row.slot, "") if row.slot is not None else ""
+            if why and row.slot in slots and row.slot in read_at:
+                why += "\nShown as read at %s" % time.strftime("%H:%M:%S", time.localtime(read_at[row.slot]))
             row.set_state(name, named and (ready or edited), m, ready and chosen.get(out) == value, tags, enabled,
                           busy, describe(issues[row.slot]) if row.slot in issues else "", edited,
-                          *(editing[2:] if edited else ()))
+                          *(editing[2:] if edited else (False, "", "")), unread=why)
 
 
 class ChosenRow(QWidget):
