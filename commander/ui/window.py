@@ -103,6 +103,15 @@ LOUDNESS_POINTED = "Pointed at: what it adds, in the graph, and the sums with it
 PREVIEW_INSET = 8                                # px in from the graph's zone: the preview's left edge, and no higher
 
 
+def presets_named(numbers):
+    """'Preset 1', 'Presets 1 and 4', 'Presets 1, 4 and 7'; more than three by their number: '5 presets'."""
+    if len(numbers) == 1:
+        return "Preset %d" % numbers[0]
+    if len(numbers) > 3:
+        return "%d presets" % len(numbers)
+    return "Presets %s and %d" % (", ".join(map(str, numbers[:-1])), numbers[-1])
+
+
 class Lamp(QWidget):
     """A coloured dot, the state of the connection; while writes are on their way it pulses in amber. Ctrl+click
     opens the MIDI traffic."""
@@ -250,6 +259,7 @@ class MainWindow(QMainWindow):
         self.simulated = simulated or simulation is not None
         self.backups = backups
         self.taken = None                            # the state as connected, (state, model, serial), until saved
+        self.backup_waits = None                     # the note that the backup waits for slots not read
         self.settings = settings if settings is not None else QSettings(untested.ORGANIZATION, untested.APPLICATION)
         self.warned = set()                          # the untested models the notice was shown for in this run
         self.marks = Marks()
@@ -683,6 +693,8 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self.warn_untested)    # after this event: the notice is modal
         else:
             self.taken = None
+            if self.file_note.text() == self.backup_waits:
+                self.note("")                            # no backup waits now
         color, text = LAMP[status]
         if status == "unsupported":
             text %= self.session.model.name
@@ -757,9 +769,20 @@ class MainWindow(QMainWindow):
         return self.tabs.isTabVisible(i) and self.tabs.isTabEnabled(i)
 
     def save_backup(self):
-        """The state as connected, with the preset slots once all are read, as a copy in the backups folder."""
-        if self.taken is None or any(n not in self.session.slots for n in setupfile.SLOTS):
+        """The state as connected, with the preset slots once all are read, as a copy in the backups folder. A copy
+        without a slot could put a wrong one back: while a slot that never came in full is missing, the status bar
+        says so, until the copy is saved after all."""
+        if self.taken is None:
             return
+        missing = [n for n in setupfile.SLOTS if n not in self.session.slots]
+        unread = [n for n in missing if n in self.session.unread]
+        if unread:
+            self.backup_waits = "Backup not saved: %s could not be read" % presets_named(unread)
+            self.note(self.backup_waits, theme.WARN)
+        if missing:
+            return
+        if self.file_note.text() == self.backup_waits:
+            self.note("")
         (state, model, serial), self.taken = self.taken, None
         try:
             text = setupfile.write(state, self.session.slots, model, self.session.revision())

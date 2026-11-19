@@ -1379,6 +1379,34 @@ class Backup(unittest.TestCase):
         self.run_for(win, 8)
         self.assertEqual(len(self.copies()), 1)
 
+    def test_not_saved_while_a_slot_is_not_read_and_said_so(self):
+        answer, lose = self.sim._answer_preset, {1, 4}
+
+        def lossy(slot):
+            if slot not in lose:
+                answer(slot)
+        self.sim._answer_preset = lossy
+        win, session = self.window(backups=self.folder)
+        self.run_for(win, 10)
+        self.assertEqual(self.copies(), [])
+        self.assertEqual(win.file_note.text(), "Backup not saved: Presets 1 and 4 could not be read")
+        self.assertIn(theme.WARN.name(), win.file_note.styleSheet())
+        lose.clear()
+        self.run_for(win, 70)                                               # asked again after a minute
+        self.assertEqual(len(self.copies()), 1)
+        self.assertEqual(win.file_note.text(), "")
+
+    def test_the_note_goes_with_the_device(self):
+        self.sim._answer_preset = lambda slot: None
+        win, session = self.window(backups=self.folder)
+        self.run_for(win, 20, lambda: len(session.unread) == 2)             # 3 s a slot
+        self.assertEqual(win.file_note.text(), "Backup not saved: Presets 1 and 2 could not be read")
+        self.run_for(win, 70, lambda: len(session.unread) == 20)
+        self.assertEqual(win.file_note.text(), "Backup not saved: 20 presets could not be read")
+        self.sim.power(False)
+        self.run_for(win, 2)
+        self.assertEqual(win.file_note.text(), "")
+
     def test_gone_before_the_slots_are_read(self):
         win, session = self.window(backups=self.folder)
         self.run_for(win, 5, session.ready)
