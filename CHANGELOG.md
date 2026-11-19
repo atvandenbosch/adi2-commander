@@ -49,6 +49,8 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 - The first time, the window opens tall enough to show EQ, Bass/Treble and Loudness without scrolling.
 - While a preset is not read, the backup of the connection waits, and the status bar says which preset it waits
   for.
+- A point taken in a graph frames in the tables what it changes, in its band's row, until one works in a table
+  again; Tab goes into that row.
 
 ### Fixed
 

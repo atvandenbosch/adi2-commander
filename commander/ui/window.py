@@ -366,6 +366,7 @@ class MainWindow(QMainWindow):
         self.loudness_graph = LoudnessGraph()
         self.loudness_graph.edited.connect(self.write)
         self.loudness_graph.picked.connect(self.select_cell)
+        self.loudness_graph.tabbed.connect(self.tab_from_graph)
         self.loudness_switch = Switch("LOUDNESS", theme.LOUDNESS)
         self.loudness_switch.clicked.connect(self.toggle_loudness)
         self.loudness_switch.pointed.connect(lambda on: self.point_section("LD", on))
@@ -376,6 +377,7 @@ class MainWindow(QMainWindow):
         self.graph.setMinimumSize(360, 300)
         self.graph.edited.connect(self.write)
         self.graph.picked.connect(self.select_cell)
+        self.graph.tabbed.connect(self.tab_from_graph)
         self.legend = Legend(self.graph)
         self.graph_note = QLabel()
         self.graph_note.setStyleSheet("color: %s;" % theme.SECONDARY.name())
@@ -388,6 +390,8 @@ class MainWindow(QMainWindow):
         self.fs_box.setToolTip(FS_TIP)
         self.live_shown = None                           # see show_live_rate
         self.before_switch = None                        # where the focus was before a switch took it: see on_focus
+        self.following = False                           # the tables follow a point taken in a graph: select_cell
+        self.handle_leads = False                        # a point taken in a graph leads until a table has the focus
         self.fs_label = QLabel("<i>f</i><sub>s</sub>")
         self.fs_label.setTextFormat(Qt.RichText)
         self.fs_label.setStyleSheet("color: %s;" % theme.LABEL.name())
@@ -958,6 +962,27 @@ class MainWindow(QMainWindow):
         v.setFocus()
         v.setCurrentIndex(v.model().index(nxt[1], nxt[2]))
 
+    def tab_from_graph(self, direction):
+        """Tab in a graph: into the table that frames what its handle changes, in the framed row, in the column the
+        table had (at first the first framed cell); with Dual EQ off Tab goes into the left table, Shift+Tab into
+        the right. With no frame on the tables, as into the tables at all: Tab the first, Shift+Tab the last."""
+        views = [v for v in self.band_views + [self.bt_view, self.loudness_view] if v.isVisible()]
+        framed = [v for v in views if v.handle_row is not None]
+        if not framed:
+            if views:
+                views[0 if direction > 0 else -1].take_focus()
+            return
+        v = framed[0 if direction > 0 else -1]
+        m, here, row = v.model(), v.currentIndex(), v.handle_row
+        column = here.column() if here.isValid() else next(
+            c for c in range(m.columnCount()) if v.model_.handled(m.cell(m.index(row, c))))
+        self.following = True                            # the row first: the focus then chooses that band
+        try:
+            v.setCurrentIndex(m.index(row, column))
+        finally:
+            self.following = False
+        v.setFocus()
+
     def walk_on(self, view, direction, column):
         """Alt+up/down past the first or last row: carry on in the table above or below, in the cell straight
         above or below; the top and bottom of the stack stop the cursor. The tables line up on the right (Bass/
@@ -1275,6 +1300,7 @@ class MainWindow(QMainWindow):
         self.draft.on_changed.append(lambda keys, origin: self.refresh())
         self.show_eq(self.draft, self.draft_marks)
         self.show_stage(loudness=False)
+        self.handle_leads = False
         for v in views:                                  # nothing chosen: no link with the work before
             v.setCurrentIndex(QModelIndex())
             v.chosen = False
@@ -1382,7 +1408,7 @@ class MainWindow(QMainWindow):
     def on_current(self, side, idx):
         """The table's current row is drawn highlighted in the graph; a left and a right point on the same
         spot go to the channel last worked on."""
-        if not idx.isValid():
+        if not idx.isValid() or self.following:
             return
         self.show_stage(loudness=False)
         if side is None:
@@ -1391,12 +1417,34 @@ class MainWindow(QMainWindow):
             self.graph.current = (band_address(self.output, side, self.eq()), str(idx.row() + 1))
             self.graph.prefer_side = side
         self.graph.update_from(self.output)
+        self.show_handles()
 
     def on_loudness_current(self, idx):
-        if idx.isValid():
+        if idx.isValid() and not self.following:
             self.show_stage(loudness=True)
             m = self.loudness_model
             self.loudness_graph.set_current(m.cell(m.index(idx.row(), 1)).key)   # the row's point, on any column
+            self.show_handles()
+
+    def handle_rows(self):
+        """Per table (left, right, Bass/Treble, Loudness) the row whose band's handle leads in the graph on the
+        stage, or None. With Dual EQ off a band is in both band tables."""
+        if not self.handle_leads:
+            return [None] * 4
+        if self.loudness_shown():
+            m, key = self.loudness_model, self.loudness_graph.current
+            return [None, None, None, next((r for r in range(m.rowCount()) if m.cell(m.index(r, 1)).key == key), None)]
+        key, eq = self.graph.current, self.eq()
+        bands = [next((r for r in range(len(P.BANDS)) if key == (band_address(self.output, side, eq), str(r + 1))),
+                      None) for side in (0, 1)]
+        return bands + [next((r for r in range(2) if key == (self.output[2], "BT"[r])), None), None]
+
+    def show_handles(self):
+        """While a handle leads, the tables frame what it changes (ParamView.paintEvent)."""
+        for v, row in zip(self.band_views + [self.bt_view, self.loudness_view], self.handle_rows()):
+            if (v.handle_row, v.handle_color) != (row, v.delegate.color.name()):
+                v.handle_row, v.handle_color = row, v.delegate.color.name()
+                v.viewport().update()
 
     def loudness_shown(self):
         return self.stage.currentWidget() is self.loudness_graph
@@ -1424,27 +1472,38 @@ class MainWindow(QMainWindow):
             self.before_switch = here and next((v for v in views + [self.loudness_view] if v.isAncestorOf(old)), old)
             return
         if new in views + [self.loudness_view]:
+            self.handle_leads = False                    # the table leads: its focused cell is the mark
             for v in views + [self.loudness_view]:      # the chosen row: shown in its table without focus too
                 v.chosen = v is new
                 v.viewport().update()
+            self.show_handles()
         if new in views:
             self.on_current((0, 1, None)[views.index(new)], new.currentIndex())
         elif new is self.loudness_view:
             self.on_loudness_current(new.currentIndex())
 
     def select_cell(self, key):
-        """A point in a graph was taken: its row in the table becomes current, on the frequency (a Loudness point:
-        on its gain). With Dual EQ off the point is in both tables: the one last worked on."""
-        first = self.graph.prefer_side
-        for v in [self.band_views[first], self.band_views[1 - first], self.bt_view, self.loudness_view]:
-            m = v.model()
-            for r in range(m.rowCount()):
-                for c in range(m.columnCount()):
-                    cell = m.cell(m.index(r, c))
-                    if cell.key == key and v.isVisible():
-                        v.setFocus()
-                        v.setCurrentIndex(m.index(r, c))
-                        return
+        """A point in a graph was taken: its handle leads, and the tables frame what it changes in its band's row
+        (show_handles). The graph takes the focus: a cell is coloured once one goes into a table. Each table's
+        current cell goes along to the row, in its column (at first the point's own: the frequency, a Loudness
+        point's gain). With Dual EQ off the point is in both band tables."""
+        views = self.band_views + [self.bt_view, self.loudness_view]
+        (self.loudness_graph if self.loudness_shown() else self.graph).setFocus()
+        self.handle_leads = True
+        self.following = True                            # the graph chose: the tables only follow
+        try:
+            for v in views:
+                v.chosen = False
+                m = v.model()
+                at = next((m.index(r, c) for r in range(m.rowCount()) for c in range(m.columnCount())
+                           if m.cell(m.index(r, c)).key == key), None)
+                if at is not None and v.isVisible():
+                    here = v.currentIndex()
+                    v.setCurrentIndex(m.index(at.row(), here.column() if here.isValid() else at.column()))
+                v.viewport().update()
+        finally:
+            self.following = False
+        self.show_handles()
 
     def panel_toggled(self, tab, on):
         """A panel opened or closed. Before one opens, the panels open longest close until the window fits on its
@@ -1635,6 +1694,7 @@ class MainWindow(QMainWindow):
         self.graph.update_from(self.output)
         self.loudness_graph.update_from(s if ready else {}, out, fs=self.graph.fs, bypassed=bypassed,
                                         draw=self.loudness_shown())     # drawn when it takes the stage
+        self.show_handles()
         self.legend.refresh()
         self.graph_head.legend.setVisible(ready)
         self.graph_note.setText("No %s at %g kHz" % ("Loudness" if self.loudness_shown() else "Bass/Treble",

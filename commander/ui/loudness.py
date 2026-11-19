@@ -41,7 +41,7 @@ from ..device import models
 from ..device import params as P
 from . import theme
 from .graph import (BAND_ALPHA, COMPARE_DOTS, DOT, DOT_PEN, GRAB, LANE_PX, OFF_CURVE_DB, RING, SECTION_W,
-                    RatioCorner, X_HI, X_LO, X_PAD, Y_HI, Y_LO, _pen, _ticks, round_dots, title_axes)
+                    RatioCorner, X_HI, X_LO, X_PAD, Y_HI, Y_LO, _pen, _ticks, round_dots, tab_direction, title_axes)
 from .legend import GROUP_GAP, ITEM_PAD, ITEM_VPAD, MARK_H, MARK_W, mark_pixmap
 
 FLAT_DB = 0.01                                   # dB: this close to its lowest, the full boost counts as flat
@@ -174,6 +174,14 @@ class _View(pg.ViewBox):
 class LoudnessGraph(pg.PlotWidget):
     edited = Signal(object, int, bool)           # key, value, rounded: as the response graph
     picked = Signal(object)                      # key of the point's gain: select it in the table
+    tabbed = Signal(int)                         # as the response graph
+
+    def event(self, e):
+        direction = tab_direction(e)
+        if direction:
+            self.tabbed.emit(direction)
+            return True
+        return super().event(e)
 
     def __init__(self):
         self.view = _View(self)

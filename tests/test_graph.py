@@ -5,8 +5,8 @@ import math
 import unittest
 
 import numpy as np
-from PySide6.QtCore import QAbstractAnimation, QEvent, QPoint, QPointF, Qt
-from PySide6.QtGui import QHelpEvent, QMouseEvent, QWheelEvent
+from PySide6.QtCore import QAbstractAnimation, QEvent, QPoint, QPointF, QRect, Qt
+from PySide6.QtGui import QColor, QHelpEvent, QMouseEvent, QWheelEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QToolTip
 from pyqtgraph.graphicsItems.ScatterPlotItem import renderSymbol
@@ -14,6 +14,7 @@ from pyqtgraph.graphicsItems.ScatterPlotItem import renderSymbol
 from commander.device import filters as F
 from commander.device import params as P
 from commander.ui import graph as G
+from commander.ui import tables as T
 from commander.ui import theme
 from tests.gui import WindowTest, app, assert_ratio_corner, tab
 
@@ -175,8 +176,8 @@ class Graph(WindowTest):
         right = self.win.band_views[1]
         right.setCurrentIndex(right.model().index(0, 1))
         self.assertEqual(self.graph.point_at(view, pos).side, 1)
-        self.graph.pick(self.graph.point_at(view, pos))      # and taking it selects its row in the table
-        self.assertTrue(right.hasFocus())
+        self.graph.pick(self.graph.point_at(view, pos))      # and taking it chooses its row in the table
+        self.assertEqual((right.handle_row, self.win.band_views[0].handle_row), (2, None))
         self.assertEqual((right.currentIndex().row(), right.currentIndex().column()), (2, 1))
 
     def test_with_dual_eq_off_a_point_belongs_to_both_tables(self):
@@ -189,12 +190,128 @@ class Graph(WindowTest):
         right.setCurrentIndex(right.model().index(1, 1))            # band 2 in the right table: its curve
         self.spin(50)
         self.assertEqual(filled(), [(0, "2")])
-        self.graph.pick(self.point("4", 0))                  # taken in the graph: in the table last worked on
-        self.assertEqual((right.hasFocus(), right.currentIndex().row()), (True, 3))
+        self.graph.pick(self.point("4", 0))                  # taken in the graph: its row in both tables
+        self.assertEqual([(v.handle_row, v.currentIndex().row()) for v in (left, right)], [(3, 3), (3, 3)])
         left.setFocus()
         left.setCurrentIndex(left.model().index(0, 1))
+        self.assertEqual((left.handle_row, right.handle_row), (None, None))         # the table leads
         self.graph.pick(self.point("4", 0))
-        self.assertEqual((left.hasFocus(), left.currentIndex().row()), (True, 3))
+        self.assertEqual([(v.handle_row, v.currentIndex().row()) for v in (left, right)], [(3, 3), (3, 3)])
+        self.settle()
+
+    def test_while_a_handle_leads_the_tables_frame_what_it_changes(self):
+        left = self.win.band_views[0]
+        left.setFocus()
+        left.setCurrentIndex(left.model().index(1, 2))       # band 2, dB: the table leads, its cell is the mark
+        self.spin(50)
+        self.assertEqual((left.chosen, left.handle_row), (True, None))
+        self.graph.pick(self.point("3", 0))                  # the handle leads
+        self.spin(50)
+        self.assertEqual((left.hasFocus(), left.chosen, left.handle_row), (False, False, 2))
+        self.assertEqual((left.currentIndex().row(), left.currentIndex().column()), (2, 2))    # in its column
+
+        def corners(row):                                    # a pixel on the top edge of each cell: framed or not
+            out = []
+            for c in range(4):
+                p = left.visualRect(left.model().index(row, c)).topLeft() + QPoint(3, 0)
+                out.append(left.viewport().grab(QRect(p, p)).toImage().pixelColor(0, 0).name())
+            return out
+        cell = theme.CELL.name()
+        framed = corners(2)
+        self.assertEqual((framed[0], framed[2:]), (theme.BACKGROUND.name(), [framed[1]] * 2))   # Hz, dB, Q; PK fixed
+        mixed = QColor(*[round(b + (c - b) * T.FRAME_ALPHA)                                   # the band's, softened
+                         for b, c in zip(theme.CELL.getRgb()[:3], left.delegate.color.getRgb()[:3])])
+        self.assertEqual(framed[1], mixed.name())
+        self.assertEqual(corners(1)[1:], [cell] * 3)
+        self.sim.front_panel([(4, 3, 2)])                    # band 1 left: High Pass, the handle has no gain
+        self.spin(300)
+        self.graph.pick(self.point("1", 0))
+        self.spin(50)
+        self.assertEqual(corners(0)[1:], [framed[1], cell, framed[1]])                         # two frames: Hz, Q
+        key = left.model().cell(left.model().index(0, 1)).key
+        self.win.marks.mismatch[key] = (30, 40)              # a read-back that differs, in a frame: red on top
+        left.viewport().update()
+        self.spin(50)
+        self.assertEqual(corners(0)[1], theme.BAD.name())
+        del self.win.marks.mismatch[key]
+        self.graph.pick(self.point("B", None))               # Bass: its own table
+        self.assertEqual((left.handle_row, self.win.bt_view.handle_row), (None, 0))
+        left.setFocus()                                      # into the table: it leads again
+        self.assertEqual(self.win.bt_view.handle_row, None)
+        self.settle()
+
+    def test_the_wheel_on_the_band_of_the_table_hands_the_lead_to_its_handle(self):
+        bt = self.win.bt_view
+        bt.setFocus()
+        bt.setCurrentIndex(bt.model().index(1, 1))           # Treble dB: the table leads, on the band of the point
+        self.spin(50)
+        self.assertEqual(self.graph.current, self.point("T", None).key)
+        pt = self.point("T", None)
+        vp = self.graph.viewport()
+        p = self.graph.mapFromScene(self.graph.view.mapToScene(self.graph.view.mapFromView(QPointF(pt.x, pt.y))))
+        app.sendEvent(vp, QWheelEvent(QPointF(p), QPointF(vp.mapToGlobal(p)), QPoint(0, 0), QPoint(0, 120),
+                                      Qt.NoButton, Qt.NoModifier, Qt.NoScrollPhase, False))
+        self.spin(50)
+        self.assertEqual((bt.hasFocus(), bt.chosen, bt.handle_row), (False, False, 1))   # the handle leads
+        self.assertTrue(self.graph.hasFocus())
+        self.settle()
+
+    def test_tab_goes_into_the_framed_row_after_dual_eq_off_or_another_output(self):
+        left, right = self.win.band_views
+        right.setFocus()
+        right.setCurrentIndex(right.model().index(0, 2))     # the right table elsewhere: band 1, dB
+        self.spin(50)
+        self.click(self.point("2", 0))                       # left band 2: no right point on it
+        self.session.set_dual(3, False)                      # the band now in both tables
+        self.spin(100)
+        self.assertEqual((left.handle_row, right.handle_row), (1, 1))
+        QTest.keyClick(self.graph, Qt.Key_Backtab)
+        self.assertEqual((right.hasFocus(), right.currentIndex().row(), right.currentIndex().column()), (True, 1, 2))
+        self.click(self.point("2", 0))
+        self.win.tabs.setCurrentIndex(tab(6))                # another output and back: the tables are rebuilt
+        self.spin(100)
+        self.win.tabs.setCurrentIndex(tab(3))
+        self.spin(100)
+        self.assertEqual(left.handle_row, 1)
+        QTest.keyClick(self.graph, Qt.Key_Tab)
+        self.assertEqual((left.hasFocus(), left.currentIndex().row(), left.currentIndex().column()), (True, 1, 1))
+        self.settle()
+
+    def test_the_edit_stand_ends_the_lead_of_a_handle(self):
+        views = self.win.band_views + [self.win.bt_view, self.win.loudness_view]
+        bt = self.win.bt_view
+        bt.setFocus()
+        bt.setCurrentIndex(bt.model().index(1, 1))
+        self.spin(50)
+        self.click(self.point("3", 0))
+        for _ in range(100):                                 # the preset read, and nothing else under way
+            if 2 in self.session.slots and not self.session.operating():
+                break
+            self.spin(100)
+        self.win.edit_preset(2)
+        self.spin(50)
+        self.assertIsNotNone(self.win.draft)
+        self.assertEqual([v.handle_row for v in views], [None] * 4)
+        QTest.mouseClick(self.win.presets.rows[3].cancel, Qt.LeftButton)
+        self.spin(50)
+        self.assertEqual([v.handle_row for v in views], [None] * 4)
+        self.assertIsNone(self.graph.current)
+
+    def test_tab_goes_from_a_taken_point_into_its_row(self):
+        left, right = self.win.band_views
+        self.click(self.point("3", 0))
+        self.assertTrue(self.graph.hasFocus())               # the graph has the keys, Tab included
+        QTest.keyClick(self.graph, Qt.Key_Tab)
+        self.assertEqual((left.hasFocus(), left.currentIndex().row(), left.currentIndex().column()), (True, 2, 1))
+        self.assertEqual(left.handle_row, None)              # the table leads: its cell is the mark
+        freq = self.session.state[left.model().cell(left.currentIndex()).key]
+        QTest.keyClick(left, Qt.Key_Up)                      # the arrows on the cell Tab went into
+        self.assertGreater(self.session.state[left.model().cell(left.currentIndex()).key], freq)
+        self.session.set_dual(3, False)
+        self.spin(100)
+        self.click(self.point("2", 0))
+        QTest.keyClick(self.graph, Qt.Key_Backtab)           # with Dual EQ off: Shift+Tab into the right table
+        self.assertEqual((right.hasFocus(), right.currentIndex().row()), (True, 1))
         self.settle()
 
     def click(self, pt):
@@ -213,7 +330,7 @@ class Graph(WindowTest):
         self.click(self.point("1", 1))                      # right band 1, 40 Hz: no left point on it
         self.assertEqual(filled(), [(1, "1")])
         right = self.win.band_views[1]
-        self.assertEqual((right.hasFocus(), right.currentIndex().row()), (True, 0))
+        self.assertEqual((right.handle_row, right.currentIndex().row()), (0, 0))
         self.click(self.point("T", None))
         self.assertEqual(filled(), [(None, "T")])
 

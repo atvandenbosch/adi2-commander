@@ -43,7 +43,7 @@ import math
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QPoint, QPointF, Qt, QTimer, QVariantAnimation, Signal
+from PySide6.QtCore import QEvent, QPoint, QPointF, Qt, QTimer, QVariantAnimation, Signal
 from PySide6.QtGui import QBrush, QColor, QCursor, QFontMetricsF, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QToolTip, QWidget
 
@@ -250,8 +250,7 @@ class _View(pg.ViewBox):
         ev.accept()
         mods = ev.modifiers()
         size = "large" if mods & Qt.ShiftModifier else "finest" if mods & Qt.ControlModifier else "small"
-        if pt.key != self.graph.current:
-            self.graph.pick(pt)                  # who edits, has chosen
+        self.graph.pick(pt)                      # who edits, has chosen: on each step, also on the current band
         self.graph.step_q(pt, 1 if ev.delta() > 0 else -1, size)
 
     def mouseClickEvent(self, ev):
@@ -477,9 +476,25 @@ class RatioCorner:
         icon.move(max(at.x(), -icon.PAD), min(at.y(), graph.height() - icon.height() + icon.PAD))
 
 
+def tab_direction(e):
+    """+1 for Tab, -1 for Shift+Tab, 0 for any other event, Ctrl+Tab included (it switches outputs)."""
+    if e.type() == QEvent.KeyPress and e.key() in (Qt.Key_Tab, Qt.Key_Backtab) \
+            and not e.modifiers() & Qt.ControlModifier:
+        return -1 if e.key() == Qt.Key_Backtab or e.modifiers() & Qt.ShiftModifier else 1
+    return 0
+
+
 class ResponseGraph(pg.PlotWidget):
     edited = Signal(object, int, bool)           # key, value, rounded: like the table delegates
     picked = Signal(object)                      # key of the point's frequency: select it in the table
+    tabbed = Signal(int)                         # Tab (+1) or Shift+Tab (-1): the window goes into a table
+
+    def event(self, e):
+        direction = tab_direction(e)
+        if direction:
+            self.tabbed.emit(direction)
+            return True
+        return super().event(e)
 
     def mouseReleaseEvent(self, ev):
         super().mouseReleaseEvent(ev)
@@ -874,10 +889,12 @@ class ResponseGraph(pg.PlotWidget):
                 self.pick(pt)
 
     def pick(self, pt):
+        before = (self.current, self.prefer_side)
         if pt.side is not None and self.dual:            # with Dual EQ off the point is of both channels
             self.prefer_side = pt.side
         self.current = pt.key
-        self.redraw()
+        if (self.current, self.prefer_side) != before:   # taken again (the wheel, each step): drawn as it is
+            self.redraw()
         self.picked.emit((pt.flt.address, pt.flt.indices[2]))
 
     def drag_to(self, pt, x, y):
