@@ -40,6 +40,7 @@ from .device import models
 from .device import params as P
 from .device import status as S
 from .device.connection import REQUIRED, DeviceNotFound, PortBusy, build_messages
+from .device.traffic import RecordedPort, Traffic
 
 SEARCH_INTERVAL = 2.0          # seconds between attempts to find the port
 SEND_INTERVAL = 1 / 6          # at most ~6 writes per second
@@ -120,6 +121,7 @@ class Session:
         self.open_port = open_port               # () -> port; raises DeviceNotFound or PortBusy
         self.clock = clock
         self.port = None
+        self.traffic = Traffic()                 # what goes to and from the port, kept across connections
         self.status = None
         self.model = None                        # the model messages go to, a models.Model; known once identified
         self._identified = False
@@ -478,7 +480,7 @@ class Session:
     def _connect(self, now):
         self._next_search = now + SEARCH_INTERVAL
         try:
-            self.port = self.open_port()
+            self.port = RecordedPort(self.open_port(), self.traffic)
         except PortBusy as e:
             self._set_status("busy", str(e))
             return

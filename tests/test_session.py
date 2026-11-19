@@ -129,6 +129,28 @@ class Connect(Harness):
         self.assertEqual(self.statuses(), ["searching"])
 
 
+class Traffic(Harness):
+    def test_records_what_goes_out_and_comes_in_in_order(self):
+        self.connect()
+        entries = list(self.session.traffic.entries)
+        self.assertEqual(entries[0].kind, "out")
+        self.assertEqual(list(entries[0].data), codec.header(DAC.id) + [0x03, 0x09, 0xF7])   # the first dump request
+        sent = [list(e.data) for e in entries if e.kind == "out"]
+        self.assertEqual(sent, self.sim.received)
+        self.assertIn("in", {e.kind for e in entries})
+        self.assertEqual([e.t for e in entries], sorted(e.t for e in entries))
+
+    def test_kept_across_connections(self):
+        self.connect()
+        before = len(self.session.traffic.entries)
+        self.sim.power(False)
+        self.run_for(1.0)
+        self.sim.power(True)
+        self.run_for(3.0)
+        self.assertEqual(self.session.status, "ready")
+        self.assertGreater(len(self.session.traffic.entries), before)
+
+
 class Recognition(Harness):
     """The model is the device ID that answers; the port name only says which to ask first."""
 
