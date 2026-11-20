@@ -11,8 +11,9 @@ drawn once.
     on an axis          the wheel and a drag zoom and pan that axis only
 
 In the corner where the axes meet, the aspect ratio of the view: how many dB of gain are as long as one decade of
-frequency (RatioCorner), about where the lines of the axis titles cross. A click on it sets 10, 25 or 50 dB per
-decade (IEC 60263) or the ratio the view had, in turn; the gain scales around 0 dB.
+frequency (RatioCorner), about where the lines of the axis titles cross. Under the mouse a flag in its place offers
+10, 25 and 50 dB per decade (IEC 60263) and the ratio the view had; one out of reach is grey, with the nearest in
+reach beside it. The gain scales around 0 dB.
 
 What is shown (commander.ui.legend): the channels, Left and Right (Left = Right with Dual EQ off), and the layers Sum,
 what the device does to the channel, its EQ and Bass/Treble together; Sections, what each EQ and Bass/Treble adds (off
@@ -43,8 +44,8 @@ import math
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QEvent, QPoint, QPointF, Qt, QTimer, QVariantAnimation, Signal
-from PySide6.QtGui import QBrush, QColor, QCursor, QFontMetricsF, QLinearGradient, QPainter, QPen
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, QTimer, QVariantAnimation, Signal
+from PySide6.QtGui import QBrush, QColor, QCursor, QFont, QFontMetricsF, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QToolTip, QWidget
 
 from ..device import filters as F
@@ -114,12 +115,17 @@ TITLE_INK = 1                                    # pixels: an axis title's ink b
                                                  # looks (descenders, brackets); the dB axis's, turned, right of it
 ICON_HEAD = 2                                    # pixels: its arrowheads, back and to the side
 ICON_REST = 0.55                                 # its opacity: in the background
-ICON_LIT = 0.85                                  # ... under the mouse, where a click sets the ratio
 ICON_PT = 7                                      # points: the ratio in it
+FLAG_HIGH = 16                                   # pixels: the flag in the icon's place
+FLAG_LIFT = 1                                    # pixels from the bottom of the icon's square to the flag's: with
+                                                 # the icon against the graph's edge, on the line of its ink
+FLAG_PT = 8                                      # points: the ratios in it, as the values along the axes
+FLAG_CELL = 6                                    # pixels left and right of a ratio in the flag
 RATIO_LOW, RATIO_HIGH = "<1", "∞"                # the aspect ratio rounded below 1, or above 99
 INFINITY = 9, 5                                  # pixels: RATIO_HIGH as the icon draws it, wide and high
-RATIOS = 10, 25, 50                              # dB per decade a click sets: those of IEC 60263
-RATIO_HINT = "Click for 10, 25 or 50 dB/dec (IEC 60263), around 0 dB"
+RATIOS = 10, 25, 50                              # dB per decade to choose: those of IEC 60263
+RATIO_UNIT = "dB/dec"
+RATIO_HINT = "10, 25 and 50 dB/dec as in IEC 60263, around 0 dB; grey: out of reach in this view"
 RATIO_CONFIRM = 3000                             # ms after the last click: the ratio set is the one to come back to;
                                                  # the icon flashes then
 FLASH_HOLD, FLASH_FADE = 100, 250                # ms: that flash, at once full, then back
@@ -295,19 +301,26 @@ def infinity(mid, steps=48):
 
 class RatioIcon(QWidget):
     """The aspect ratio of the view, small, as an icon of the axes: an arrow right and an arrow up from a corner, the
-    ratio between them (ratio_text); in the background. Its tooltip gives one decimal. With a hint it takes clicks:
-    it lights up under the mouse, and its tooltip adds the hint; it flashes in ACCENT when a ratio is confirmed."""
+    ratio between them (ratio_text); in the background. Its tooltip gives one decimal. With a hint one chooses a ratio
+    with it: under the mouse a flag takes its place with the ratios to choose (choices), the one in view bold, one
+    out of reach grey; a click on one in reach emits chosen with its dB range. Its tooltip adds the hint; it flashes
+    in ACCENT when a ratio is confirmed."""
 
     PAD = 2                                      # pixels around the icon where its tooltip shows as well
-    clicked = Signal()
+    SIDE = ICON + 2 * PAD                        # the widget without its flag
+    chosen = Signal(object)
 
     def __init__(self, parent, hint=None):
         super().__init__(parent)
-        self.setFixedSize(ICON + 2 * self.PAD, ICON + 2 * self.PAD)
+        self.setFixedSize(self.SIDE, self.SIDE)
         self.ratio = None
         self.hint = hint
+        self.choices = lambda: []                # (ratio, its dB range or None out of reach, in view) each
+        self.cells = []                          # the open flag: (box, ratio, dB range or None, in view) each
+        self.flag = None                         # ... and its outline
+        self._hover = None                       # the index of the cell under the mouse
         if hint:
-            self.setCursor(Qt.PointingHandCursor)
+            self.setMouseTracking(True)
         self.glow = 0.0                          # 0 .. 1: how far it flashes from its own colour to ACCENT
         self.flashing = QVariantAnimation(self, duration=FLASH_HOLD + FLASH_FADE, startValue=1.0, endValue=0.0)
         self.flashing.setKeyValueAt(FLASH_HOLD / (FLASH_HOLD + FLASH_FADE), 1.0)
@@ -325,38 +338,107 @@ class RatioIcon(QWidget):
     def show_ratio(self, ratio):
         if ratio != self.ratio:
             self.ratio = ratio
-            self.setToolTip("Aspect ratio: %.1f dB/dec" % ratio + ("\n" + self.hint if self.hint else ""))
+            self.setToolTip("Aspect ratio: %.1f %s" % (ratio, RATIO_UNIT) + ("\n" + self.hint if self.hint else ""))
+            if self.flag is not None:
+                self.open_flag()
+            self.update()
+
+    def _fonts(self):
+        plain = theme.ui_font(FLAG_PT)
+        bold = QFont(plain)
+        bold.setBold(True)
+        return plain, bold
+
+    def open_flag(self):
+        """The flag with the choices as they are now, the widget as wide as it."""
+        plain, bold = self._fonts()
+        x, top = self.PAD, self.PAD + ICON - FLAG_LIFT - FLAG_HIGH
+        self.cells = []
+        for ratio, to, current in self.choices():
+            w = QFontMetricsF(bold if current else plain).horizontalAdvance(ratio_text(ratio)) + 2 * FLAG_CELL
+            self.cells.append((QRectF(x, top, w, FLAG_HIGH), ratio, to, current))
+            x += w
+        x += QFontMetricsF(plain).horizontalAdvance(RATIO_UNIT) + FLAG_CELL
+        self.flag = QRectF(self.PAD, top, x - self.PAD, FLAG_HIGH)
+        self.setFixedSize(math.ceil(self.flag.right()) + self.PAD, self.SIDE)
+        self.raise_()
+        self.update()
+
+    def close_flag(self):
+        self.cells, self.flag, self._hover = [], None, None
+        self.setFixedSize(self.SIDE, self.SIDE)
+        self.update()
+
+    def _cell_at(self, at):
+        return next((i for i, (box, *_) in enumerate(self.cells) if box.contains(at)), None)
+
+    def _point(self, at):
+        """The cell under the mouse at, its hand where a click chooses."""
+        i = self._cell_at(at)
+        self.setCursor(Qt.PointingHandCursor if i is not None and self.cells[i][2] is not None else Qt.ArrowCursor)
+        if i != self._hover:
+            self._hover = i
             self.update()
 
     def enterEvent(self, ev):
-        self.update()
+        if self.hint:
+            self.open_flag()
+            self._point(ev.position())
         super().enterEvent(ev)
 
+    def mouseMoveEvent(self, ev):
+        self._point(ev.position())
+
     def leaveEvent(self, ev):
-        self.update()
+        if self.hint:
+            self.close_flag()
         super().leaveEvent(ev)
 
     def mousePressEvent(self, ev):
         ev.setAccepted(bool(self.hint) and ev.button() == Qt.LeftButton)     # the graph behind takes no pan
 
     def mouseDoubleClickEvent(self, ev):
-        self.mousePressEvent(ev)                 # quick clicks: each its own step
+        self.mousePressEvent(ev)                 # quick clicks: each its own choice
 
     def mouseReleaseEvent(self, ev):
-        if self.hint and ev.button() == Qt.LeftButton and self.rect().contains(ev.position().toPoint()):
-            ev.accept()
-            self.clicked.emit()
-        else:
-            ev.ignore()
+        if not (self.hint and ev.button() == Qt.LeftButton):
+            return ev.ignore()
+        ev.accept()
+        i = self._cell_at(ev.position())
+        if i is not None and self.cells[i][2] is not None:
+            self.chosen.emit(self.cells[i][2])
+
+    def _paint_flag(self, p):
+        p.save()
+        plain, bold = self._fonts()
+        p.setPen(QPen(theme.BORDER, 1))
+        p.setBrush(theme.CELL)
+        p.drawRect(self.flag.adjusted(0.5, 0.5, -0.5, -0.5))
+        for i, (box, ratio, to, current) in enumerate(self.cells):
+            lit = i == self._hover and to is not None
+            if lit:
+                p.fillRect(box.adjusted(0, 1, 0, -1), theme.GRID)
+            p.setFont(bold if current else plain)
+            p.setPen(theme.OFF if to is None else theme.TEXT if lit or current else theme.LABEL)
+            p.drawText(box, Qt.AlignCenter, ratio_text(ratio))
+        p.setFont(plain)
+        p.setPen(theme.SECONDARY)
+        unit = QRectF(self.cells[-1][0].right(), self.flag.top(), self.flag.right() - self.cells[-1][0].right(),
+                      FLAG_HIGH)
+        p.drawText(unit.adjusted(0, 0, -FLAG_CELL, 0), Qt.AlignVCenter | Qt.AlignLeft, RATIO_UNIT)
+        p.restore()
 
     def paintEvent(self, ev):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        if self.flag is not None:
+            self._paint_flag(p)
+            return
         color = QColor(theme.SECONDARY)
-        color.setAlphaF(ICON_LIT if self.hint and self.underMouse() else ICON_REST)
+        color.setAlphaF(ICON_REST)
         if self.glow:
             g, to = self.glow, theme.ACCENT
             color = QColor.fromRgbF(*(a + (b - a) * g for a, b in zip(color.getRgbF(), (*to.getRgbF()[:3], 1.0))))
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
         # the lines whole pixels of the screen wide, on whole pixels of the screen: sharp at any display scaling,
         # also where the icon itself starts within a pixel (at 125 %, say)
         k = self.devicePixelRatioF()
@@ -393,9 +475,8 @@ class RatioCorner:
     its axis titles cross, ICON_NEAR from there towards the corner of the plot area; its ink within the graph whatever
     the titles' font. db_title: the dB axis's title, where that is not the axis's own label.
 
-    choose: for a graph that zooms, a click sets the next ratio of a round of RATIOS and the ratio the view had,
-    from small to large (step); one that rounds to one decimal as one of RATIOS counts once, as that one. The gain
-    scales around 0 dB. RATIO_CONFIRM after the last click, or any other change of the view, ends the round: the
+    choose: for a graph that zooms, the icon's flag offers RATIOS and the ratio the view had (choices); the gain
+    scales around 0 dB. RATIO_CONFIRM after the last choice, or any other change of the view, ends the round: the
     ratio set is then the one to come back to. The time passing confirms it, and the icon flashes (time_up)."""
 
     def __init__(self, graph, db_title=None, choose=False):
@@ -403,20 +484,26 @@ class RatioCorner:
         self.view = graph.getPlotItem().getViewBox()
         self.db_title = db_title if db_title is not None else graph.getPlotItem().getAxis("left").label
         self.icon = RatioIcon(graph, RATIO_HINT if choose else None)
-        self.round = None                        # (the ratios, the index of the one set, the dB range at the start)
-        self._stepping = False
+        self.round = None                        # the dB range at the start of a round of choices
+        self._choosing = False
         self.timer = QTimer(self.icon, singleShot=True, interval=RATIO_CONFIRM, timeout=self.time_up)
-        self.icon.clicked.connect(self.step)
+        self.icon.chosen.connect(self.choose)
+        self.icon.choices = self.choices
         self.view.sigRangeChanged.connect(self.update)
         self.view.sigResized.connect(self.update)
         self.view.sigResized.connect(self.place)
         self.view.sigRangeChanged.connect(self._changed)
         self.view.sigResized.connect(self._changed)
 
+    def ratio_of(self, db):
+        """How many dB of gain are as long as one decade of frequency with the dB range db and the frequencies as
+        they are."""
+        x0, x1 = self.view.viewRange()[0]
+        return (db[1] - db[0]) / (x1 - x0) * self.view.width() / self.view.height()
+
     def ratio(self):
-        """How many dB of gain are as long as one decade of frequency, as the view is now."""
-        (x0, x1), (y0, y1) = self.view.viewRange()
-        return (y1 - y0) / (x1 - x0) * self.view.width() / self.view.height()
+        """The aspect ratio as the view is now."""
+        return self.ratio_of(self.view.viewRange()[1])
 
     def db_range(self, ratio):
         """The dB range for ratio with the frequencies as they are: 0 dB where it is, as far as the view's limits
@@ -431,26 +518,35 @@ class RatioCorner:
         bottom = min(max(bottom, lo), hi - span)
         return bottom, bottom + span
 
-    def step(self):
-        """The next ratio of the round, skipping one that would leave the view as it is."""
+    def choices(self):
+        """The ratios to choose, from small to large: (ratio, its dB range, whether in view) each. Each of RATIOS,
+        or where the view's limits keep it out of reach (ratio, None, False) and the nearest in reach; and the ratio
+        the view had at the start of the round. Ratios that look alike (ratio_text) count once: one of RATIOS before
+        the view's, the view's before a nearest."""
+        start = self.round if self.round is not None else tuple(self.view.viewRange()[1])
+        nearest, exact, grey = {}, {}, {}
+        for r in RATIOS:
+            to = self.db_range(r)
+            near = self.ratio_of(to)
+            if ratio_text(near) == ratio_text(r):
+                exact[ratio_text(r)] = r, to
+            else:
+                grey[ratio_text(r)] = r, None
+                nearest.setdefault(ratio_text(near), (near, to))
+        reach = {**nearest, ratio_text(self.ratio_of(start)): (self.ratio_of(start), start), **exact}
+        now = ratio_text(self.ratio())
+        return sorted([(r, to, text == now) for text, (r, to) in reach.items()] +
+                      [(r, None, False) for text, (r, _) in grey.items() if text not in reach], key=lambda c: c[0])
+
+    def choose(self, to):
+        """The dB range to, in a round that keeps the view as it was among the choices."""
         if self.round is None:
-            now = self.ratio()
-            same = [r for r in RATIOS if "%.1f" % r == "%.1f" % now]
-            ratios = sorted(set(RATIOS) | (set() if same else {now}))
-            self.round = ratios, ratios.index(same[0] if same else now), tuple(self.view.viewRange()[1])
-        ratios, i, start = self.round
-        here = self.view.viewRange()[1]
-        for _ in ratios[1:]:
-            i = (i + 1) % len(ratios)
-            to = self.db_range(ratios[i]) if ratios[i] in RATIOS else start     # back: the view as it was
-            if not all(math.isclose(a, b, abs_tol=1e-9) for a, b in zip(to, here)):
-                break
-        self.round = ratios, i, start
-        self._stepping = True
+            self.round = tuple(self.view.viewRange()[1])
+        self._choosing = True
         try:
             self.view.setRange(yRange=to, padding=0)
         finally:
-            self._stepping = False
+            self._choosing = False
         self.timer.start()
 
     def confirm(self):
@@ -462,7 +558,7 @@ class RatioCorner:
         self.icon.flash()
 
     def _changed(self, *_):
-        if not self._stepping:
+        if not self._choosing:
             self.confirm()
 
     def update(self, *_):
@@ -474,7 +570,7 @@ class RatioCorner:
         cross = QPointF(self.db_title.sceneBoundingRect().center().x() + TITLE_INK,
                         graph.getPlotItem().getAxis("bottom").label.sceneBoundingRect().center().y() + TITLE_INK)
         to = QPointF(self.view.sceneBoundingRect().bottomLeft()) - cross
-        half = QPoint(icon.width() // 2, icon.height() // 2)          # the middle of its square
+        half = QPoint(icon.SIDE // 2, icon.SIDE // 2)                  # the middle of its square
         at = graph.mapFromScene(cross + to * (ICON_NEAR / math.hypot(to.x(), to.y()))) - half
         icon.move(max(at.x(), -icon.PAD), min(at.y(), graph.height() - icon.height() + icon.PAD))
 

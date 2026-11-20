@@ -732,43 +732,67 @@ class Graph(WindowTest):
         self.assertEqual([G.ratio_text(r) for r in (0.49, 0.5, 1.49, 24.5, 99.49, 99.5)],
                          [G.RATIO_LOW, "1", "1", "25", "99", G.RATIO_HIGH])
 
-    def test_a_click_on_the_aspect_ratio_sets_the_next(self):
+    def flag(self):
+        """The aspect ratio's flag, open: per ratio as it shows its text, dB range or None, and whether in view."""
+        icon = self.graph.ratio.icon
+        icon.open_flag()
+        self.assertEqual(icon.width(), math.ceil(icon.flag.right()) + icon.PAD)
+        return [(G.ratio_text(r), to, current) for _, r, to, current in icon.cells]
+
+    def choose_ratio(self, text, double=False):
+        """A click on the ratio text in the open flag; double: as the second click of two quick ones."""
+        icon = self.graph.ratio.icon
+        at = next(box for box, r, *_ in icon.cells if G.ratio_text(r) == text).center().toPoint()
+        if double:
+            QTest.mouseDClick(icon, Qt.LeftButton, Qt.NoModifier, at)          # the second press, as Qt gives it
+            QTest.mouseRelease(icon, Qt.LeftButton, Qt.NoModifier, at)
+        else:
+            QTest.mouseClick(icon, Qt.LeftButton, Qt.NoModifier, at)
+        self.spin(20)
+
+    def test_the_aspect_ratio_from_its_flag(self):
         corner, icon, view = self.graph.ratio, self.graph.ratio.icon, self.graph.view
         view.setRange(xRange=(2.5, 3.5), yRange=(-12, 12), padding=0)          # room for all of them around 0 dB
         self.spin(50)
         start, now = view.viewRange(), corner.ratio()
-        self.assertFalse(any("%.1f" % r == "%.1f" % now for r in G.RATIOS))
+        self.assertFalse(any(G.ratio_text(r) == G.ratio_text(now) for r in G.RATIOS))
         self.assertEqual(icon.toolTip(), "Aspect ratio: %.1f dB/dec\n%s" % (now, G.RATIO_HINT))
-        self.assertEqual(icon.cursor().shape(), Qt.PointingHandCursor)
+        self.assertEqual(icon.width(), icon.SIDE)                              # closed
         ratios = sorted(G.RATIOS + (now,))
+        self.assertEqual(self.flag(), [(G.ratio_text(r), corner.db_range(r) if r in G.RATIOS else tuple(start[1]),
+                                        r == now) for r in ratios])
+        cell = icon.cells[0][0].center()
+        app.sendEvent(icon, QMouseEvent(QEvent.MouseMove, cell, icon.mapToGlobal(cell), Qt.NoButton, Qt.NoButton,
+                                        Qt.NoModifier))
+        self.assertEqual(icon.cursor().shape(), Qt.PointingHandCursor)
         zero = start[1][0] / (start[1][1] - start[1][0])                       # where 0 dB is, of the height
-        for k in range(1, 5):
-            QTest.mouseClick(icon, Qt.LeftButton)
-            self.spin(20)
+        for r in G.RATIOS[::-1] + (now,):
+            self.choose_ratio(G.ratio_text(r))
             (x0, x1), (y0, y1) = view.viewRange()
-            self.assertAlmostEqual(corner.ratio(), ratios[(ratios.index(now) + k) % 4], places=9)
+            self.assertAlmostEqual(corner.ratio(), r, places=9)
             self.assertEqual([x0, x1], start[0])                               # the gain gives
             self.assertAlmostEqual(y0 / (y1 - y0), zero, places=9)             # around 0 dB
             self.assertTrue(corner.timer.isActive())
             self.assertEqual(icon.toolTip().splitlines()[0], "Aspect ratio: %.1f dB/dec" % corner.ratio())
+            self.assertEqual([G.ratio_text(c) for _, c, _, bold in icon.cells if bold], [G.ratio_text(r)])
+            self.assertEqual(len(icon.cells), len(ratios))                     # the view's own stays in the round
         self.assertEqual(view.viewRange(), start)                              # the view as it was
         self.assertEqual(corner.timer.interval(), G.RATIO_CONFIRM)
+        icon.close_flag()
+        self.assertEqual(icon.width(), icon.SIDE)
 
         # near one of them: it counts once, and comes back whole
         view.setRange(yRange=corner.db_range(24.97), padding=0)
         self.spin(20)
-        QTest.mouseClick(icon, Qt.LeftButton)                                  # two quick clicks: two steps
-        QTest.mouseDClick(icon, Qt.LeftButton)                                 # the second press, as Qt gives it
-        QTest.mouseRelease(icon, Qt.LeftButton)
-        self.spin(20)
-        self.assertAlmostEqual(corner.ratio(), 10, places=9)
-        QTest.mouseClick(icon, Qt.LeftButton)
+        self.assertEqual([(t, current) for t, _, current in self.flag()], [("10", False), ("25", True), ("50", False)])
+        self.choose_ratio("10")                                                # two quick clicks: two choices
+        self.choose_ratio("25", double=True)
         self.assertAlmostEqual(corner.ratio(), 25, places=9)
         corner.time_up()                                                       # the time passed: a new round
         self.assertEqual(icon.flashing.state(), QAbstractAnimation.Running)    # confirmed, to see
         self.assertEqual(icon.glow, 1.0)                                       # at once full
         icon.flashing.stop()
-        QTest.mouseClick(icon, Qt.LeftButton)
+        self.choose_ratio("50")
         self.assertAlmostEqual(corner.ratio(), 50, places=9)
 
         # another change of the view ends the round, without a flash
@@ -777,6 +801,28 @@ class Graph(WindowTest):
         self.assertIsNone(corner.round)
         self.assertFalse(corner.timer.isActive())
         self.assertEqual(icon.flashing.state(), QAbstractAnimation.Stopped)
+        icon.close_flag()
+        self.graph.reset_view()
+
+    def test_out_of_reach_grey_with_the_nearest_in_reach(self):
+        corner, icon, view = self.graph.ratio, self.graph.ratio.icon, self.graph.view
+        self.win.resize(1800, 700)                                             # a wide graph
+        self.spin(100)
+        view.setRange(xRange=(3, 3.3), yRange=(-6, 6), padding=0)              # as close as the frequencies come
+        self.spin(50)
+        least = corner.ratio_of((0, 3))                                        # the least gain in view: 3 dB
+        self.assertGreater(least, 10.5)
+        flag = self.flag()
+        self.assertIn(("10", None, False), flag)                              # grey
+        nearest = next(to for t, to, _ in flag if t == G.ratio_text(least))
+        self.assertAlmostEqual(nearest[1] - nearest[0], 3)
+        self.assertEqual([t for t, *_ in flag], sorted([t for t, *_ in flag], key=float))   # from small to large
+        before = view.viewRange()
+        self.choose_ratio("10")
+        self.assertEqual(view.viewRange(), before)                            # takes no click
+        self.choose_ratio(G.ratio_text(least))
+        self.assertAlmostEqual(corner.ratio(), least, places=9)
+        icon.close_flag()
         self.graph.reset_view()
 
     def test_the_aspect_ratio_as_close_as_the_limits_allow(self):
