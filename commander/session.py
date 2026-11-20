@@ -69,6 +69,9 @@ SLOTS = range(1, 21)
 SLOT_LEFT = list(range(3, 20)) + list(range(21, 27))
 SLOT_RIGHT = list(range(3, 20))
 SLOT_KEYS = {(13, i) for i in SLOT_LEFT} | {(14, i) for i in SLOT_RIGHT}
+SLOT_PARTS = (("EQ Left", {(13, i) for i in SLOT_LEFT if i < P.BASS[0]}),    # as an incomplete reply names them
+              ("EQ Right", {(14, i) for i in SLOT_RIGHT}),
+              ("Bass/Treble", {(13, i) for i in P.BASS + P.TREBLE}))
 SLOT_FLAG = (13, 1)
 TRANSFER_SPACING = 0.3         # between the messages of a slot transfer
 TRANSFER_SETTLE = 1.0          # after the flag word, before reading the slot back
@@ -134,8 +137,13 @@ def incomplete(answer):
         lacks.append("the number of Preset %d" % ((flag >> 4) + 1))
     if answer["name"] is None:
         lacks.append("no name")
-    if flag is not None and (flag >> 4) + 1 == n and flag & 0x0F != 0x0F and SLOT_KEYS - set(vals):
-        lacks.append("%d of %d values missing" % (len(SLOT_KEYS - set(vals)), len(SLOT_KEYS)))
+    if flag is not None and (flag >> 4) + 1 == n and flag & 0x0F != 0x0F:
+        for part, keys in SLOT_PARTS:
+            missing = len(keys - set(vals))
+            if missing == len(keys):
+                lacks.append("no " + part)
+            elif missing:
+                lacks.append("%d of %d %s values missing" % (missing, len(keys), part))
     return "The device's reply was incomplete: " + ", ".join(lacks)
 
 

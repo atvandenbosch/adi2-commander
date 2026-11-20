@@ -9,7 +9,7 @@ from commander.device import codec, models, simulator
 from commander.device import params as P
 from commander.device.connection import NotDelivered, NotStarted, PortBusy
 from commander.device.models import DAC, PRO, PRO_24
-from commander.session import Session, loaded
+from commander.session import Session, incomplete, loaded
 from commander.device.simulator import SimPort, SimulatedAdi2
 from tests.support import DUMP, PRESETS
 
@@ -795,8 +795,15 @@ class Unread(Harness):
         self.run_for(10.0)
         self.assertEqual(self.session.unread, {
             1: "The device's reply was incomplete: no name",
-            2: "The device's reply was incomplete: 1 of 40 values missing",
+            2: "The device's reply was incomplete: 1 of 6 Bass/Treble values missing",
             5: "The device's reply was incomplete: no preset number"})
+
+    def test_the_parts_whose_values_are_missing(self):
+        answer = {"n": 3, "name": list(b"Desk"), "vals": {(13, 1): 0x20}}             # Preset 3, used, Dual EQ off
+        answer["vals"].update({(13, i): 0 for i in range(3, 20) if i != 8})
+        answer["vals"].update({(13, i): 0 for i in P.BASS})
+        self.assertEqual(incomplete(answer), "The device's reply was incomplete: 1 of 17 EQ Left values missing, "
+                                             "no EQ Right, 3 of 6 Bass/Treble values missing")
 
     def test_a_slot_read_before_keeps_its_reading(self):
         self.connect()
