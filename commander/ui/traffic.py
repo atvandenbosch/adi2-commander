@@ -16,7 +16,7 @@ holds the list, the recording goes on; Clear deletes the recording; Copy and Sav
 rows shown when none is selected, one line each with the bytes in full. Serial numbers in port names show as #1,
 #2, …: one number each, the same for as long as Commander runs.
 
-Opened by Ctrl+click on the connection light or Ctrl+Shift+M (the window); closing it hides its tab again.
+Opened by Ctrl+click on the connection light or Ctrl+Shift+T (the window); closing it hides its tab again.
 """
 
 import datetime

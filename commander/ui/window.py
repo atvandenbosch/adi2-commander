@@ -1,8 +1,8 @@
-"""The main window: output tabs; on the left edge the input, the output's other settings, the presets and the settings
-of the device, each opened and closed by its tab, as many as the screen has room for; the response graph, which takes
-the room left; beside it, one under the other, what shapes the sound: the parametric EQ (a table per channel; with
-Dual EQ off both show the one EQ of both channels, in the shared colour), Bass/Treble, and Loudness with a graph of
-what it does; and a status bar with the connection.
+"""The main window: output tabs, beside them the level of the output shown (VolumeSection); on the left edge the
+input, the output's other settings, the presets and the settings of the device, each opened and closed by its tab, as
+many as the screen has room for; the response graph, which takes the room left; beside it, one under the other, what
+shapes the sound: the parametric EQ (a table per channel; with Dual EQ off both show the one EQ of both channels, in
+the shared colour), Bass/Treble, and Loudness with a graph of what it does; and a status bar with the connection.
 
 One title, EQ, over the column, with what the EQ was loaded from and, on the right, Import and Export of the EQ of
 this output as a file. Close above the tables Dual EQ: Share L > R and Share R > L, or Split L <> R. Below that each
@@ -52,6 +52,7 @@ from .legend import Legend
 from .importdialog import ImportDialog, read_file
 from .loudness import LoudnessGraph
 from .output import OutputPanel, shared_tip
+from .volume import VolumeSection
 from .presets import INPUT_TAG, ChosenRow, NameEditor, PresetPanel, SideTab, actions
 from .preview import PresetPreview
 from .scrim import Scrim
@@ -272,7 +273,7 @@ class MainWindow(QMainWindow):
         self.pointer = QCursor.pos                   # where the mouse is, on the screen
         self.setWindowTitle("ADI-2 Commander")
 
-        # top: output tabs; the connection is in the status bar
+        # top: output tabs and the volume section; the connection is in the status bar
         self.model = models.DAC                          # the model the window is laid out for: the last connected
         self.status_shown = None                         # the device's status message the tabs show: show_tabs
         self.tabs = QTabBar()                            # a tab per channel of P.CHANNELS: Analog In, then the outputs
@@ -281,13 +282,19 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentIndex(P.CHANNELS.index(P.OUTPUTS[0]))
         self.tabs.setTabVisible(P.CHANNELS.index(P.INPUT_CHANNEL), False)  # on a model with an analog input
         self.tabs.currentChanged.connect(self.set_output)
+        self.tabs.setUsesScrollButtons(False)            # every tab in full: the volume section gives way
         self.tabs.setIconSize(QSize(DOT + DOT_GAP, DOT))
         self.no_dot = QIcon(dot_pixmap(theme.GOOD, True, alpha=0, gap=DOT_GAP))   # a dot's room, so no tab moves
         self.dot = dot_icon(theme.GOOD, True)
         self.dot.addPixmap(dot_pixmap(theme.GOOD, True, gap=DOT_GAP), QIcon.Disabled)   # a fact: not greyed out
         top = QHBoxLayout()
-        top.addWidget(self.tabs)
-        top.addStretch()
+        top.addWidget(self.tabs, 0, Qt.AlignBottom)
+        top.addSpacing(SECTION_GAP)
+        self.volume_section = VolumeSection(session, self.marks)
+        self.volume_section.rearranged.connect(self.fit_tabs)
+        self.fit_tabs()
+        top.addWidget(self.volume_section, 1, Qt.AlignVCenter)
+        top.addSpacing(INNER_GAP)
         self.more = MoreButton(self.tabs)                # the backups folder and About; About on F1 too
         self.more.setToolTip("More options")
         self.more.clicked.connect(self.show_more)
@@ -539,7 +546,8 @@ class MainWindow(QMainWindow):
         self.traffic_tab.hide()
         self.traffic_tab.toggled.connect(self.traffic_tab.setVisible)
         self.lamp.ctrl_clicked.connect(lambda: self.show_traffic(True))
-        QShortcut(QKeySequence("Ctrl+Shift+M"), self, lambda: self.show_traffic(not self.traffic_tab.open))
+        QShortcut(QKeySequence("Ctrl+Shift+T"), self, lambda: self.show_traffic(not self.traffic_tab.open))
+        QShortcut(QKeySequence("Ctrl+Shift+M"), self, self.toggle_mute)
         # a line between two open panels: they stand on the same ground
         self.panel_lines = []
         for _ in range(4):
@@ -669,7 +677,7 @@ class MainWindow(QMainWindow):
     # -- session events -----------------------------------------------------------------------
     def tick(self):
         self.session.tick()
-        self.output_panel.volume.tick(self.session.clock())  # a held Volume arrow repeats on the session's clock
+        self.volume_section.tick(self.session.clock())  # held arrows repeat, Volume rises, on the session's clock
         self.lamp.busy = bool(self.session.pending or self.session.sent or self.session.operating())
         self.lamp.phase += 1
         self.lamp.update()
@@ -768,6 +776,16 @@ class MainWindow(QMainWindow):
         elif not self.open_tab(self.tabs.currentIndex()):   # the first output that can be opened
             self.tabs.setCurrentIndex(next(P.CHANNELS.index(o) for o in P.OUTPUTS
                                            if self.open_tab(P.CHANNELS.index(o))))
+
+    def fit_tabs(self, *_):
+        """The tabs as high as the volume section, their names on the line of its names on one line."""
+        pad = (self.volume_section.bar_height() - self.tabs.fontMetrics().height()) // 2 - theme.TAB_LINE
+        self.tabs.setStyleSheet("QTabBar::tab { padding: %dpx 16px; }" % pad)
+
+    def sizeHint(self):
+        """With the volume section on one line, as it is at the width of the hint."""
+        hint, section = super().sizeHint(), self.volume_section
+        return QSize(hint.width(), hint.height() - section.bar_height() + section.bar_height(1))
 
     def open_tab(self, i):
         return self.tabs.isTabVisible(i) and self.tabs.isTabEnabled(i)
@@ -939,6 +957,7 @@ class MainWindow(QMainWindow):
         self.loudness_model.set_output(self.output)
         if P.has_bt(self.output[1]):
             self.output_panel.set_output(self.output)
+            self.volume_section.set_output(self.output)
         else:
             self.show_stage(loudness=False)
         self.refresh()
@@ -1171,6 +1190,11 @@ class MainWindow(QMainWindow):
         elif self.before_switch:
             self.before_switch.setFocus()
 
+    def toggle_mute(self):
+        """Mute of the output shown, from the keyboard."""
+        if P.has_bt(self.output[1]):
+            self.volume_section.toggle(self.volume_section.key(P.MUTE))
+
     def toggle_load_bt(self):
         """Load B/T with Preset: whether selecting a preset brings its Bass/Treble too; on the left address
         (Session.at)."""
@@ -1314,7 +1338,7 @@ class MainWindow(QMainWindow):
         for w in self.under_veil():
             w.setEnabled(False)
         self.refresh()
-        self.scrim.cover([self.display, self.sound], row)
+        self.scrim.cover([self.display, self.sound], row, clear=[self.volume_section])
 
     def finish_edit(self, ok):
         """OK: write the preset, when changed, and leave once the device has it. Cancel: leave."""
@@ -1686,6 +1710,8 @@ class MainWindow(QMainWindow):
         self.refresh_edit()
         self.input_panel.refresh()
         self.output_panel.refresh()
+        self.volume_section.setVisible(has_bt)
+        self.volume_section.refresh()
         self.device_panel.refresh()
         for m in self.band_models + [self.bt_model, self.loudness_model]:
             m.refresh()

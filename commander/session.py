@@ -368,10 +368,10 @@ class Session:
         meanwhile, so the next step would wait for it."""
         self._held = on
 
-    def set(self, key, value):
+    def set(self, key, value, jump=False):
         """Queue a write. The value must already be on the device's grid and within range; Volume rises at most a
         held step from where it is (params.volume_held_step, as fast as the remote control), Dim or not, and may fall
-        any amount."""
+        any amount. jump: Volume may rise any amount too, as the user sets it directly."""
         if not self.writable(key):
             raise ValueError("parameter %d/%d is not writable now" % key)
         names = self.source_names(key) if key[0] in P.OUTPUT_ADDRESSES and key[1] == P.SOURCE else None
@@ -387,7 +387,7 @@ class Session:
             lo, hi = P.limits(key, self.revision(), self.model)
         if not lo <= value <= hi:
             raise ValueError("%d/%d: %d outside %d..%d" % (key + (value, lo, hi)))
-        if key[0] in P.OUTPUT_ADDRESSES and key[1] == P.VOLUME:
+        if key[0] in P.OUTPUT_ADDRESSES and key[1] == P.VOLUME and not jump:
             now = self.state[key]
             most = P.volume_held_step(now + P.volume_offset(self.state, key[0], self.model))
             if value - now > most:

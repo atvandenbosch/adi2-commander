@@ -1,7 +1,8 @@
 """The veil over the window while a preset is edited: a dialog that does not pop up. What belongs to the edit stays
 clear, the page (the stage and the sound column) and its tab (the preset's row, joined to the page); the rest lies
 under the veil, drawn but out of reach. An outline goes around what stays clear. The tab stands a little higher than
-the row, over the edges of the rows beside it, on the ground of the page's column.
+the row, over the edges of the rows beside it, on the ground of the page's column. What stays within reach besides,
+no part of the edit (the volume section), stays clear without an outline.
 
 The veil only draws: mouse events go through it. What lies under it is disabled by the window, so that neither the
 mouse nor the keyboard reaches it."""
@@ -24,18 +25,19 @@ class Scrim(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.page, self.tab = [], None
+        self.page, self.tab, self.clear = [], None, []
         self.watched = []
         parent.installEventFilter(self)
         self.hide()
 
-    def cover(self, page, tab=None):
+    def cover(self, page, tab=None, clear=()):
         """page: the widgets that make the clear area, as one rectangle; tab: a widget beside it, joined to it, or
-        None."""
-        self.page, self.tab = page, tab
+        None; clear: widgets that stay within reach besides, each clear around what is in it, without an outline:
+        no part of the edit."""
+        self.page, self.tab, self.clear = page, tab, list(clear)
         for w in self.watched:
             w.removeEventFilter(self)
-        self.watched = list(page) + ([tab] + self._ancestors(tab) if tab is not None else [])
+        self.watched = list(page) + self.clear + ([tab] + self._ancestors(tab) if tab is not None else [])
         for w in self.watched:
             w.installEventFilter(self)
         self.setGeometry(self.parentWidget().rect())
@@ -45,7 +47,7 @@ class Scrim(QWidget):
     def uncover(self):
         for w in self.watched:
             w.removeEventFilter(self)
-        self.watched, self.page, self.tab = [], [], None
+        self.watched, self.page, self.tab, self.clear = [], [], None, []
         self.hide()
 
     def _ancestors(self, w):
@@ -105,6 +107,12 @@ class Scrim(QWidget):
         veil.setFillRule(Qt.OddEvenFill)
         veil.addRect(QRectF(self.rect()))
         veil.addPath(clear)
+        for w in self.clear:
+            if w.isVisible():
+                around = QPainterPath()
+                inner = QRectF(w.childrenRect()).translated(self._rect(w).topLeft())
+                around.addRoundedRect(inner.adjusted(-MARGIN, -MARGIN, MARGIN, MARGIN), RADIUS, RADIUS)
+                veil = veil.subtracted(around)
         p.fillPath(veil, VEIL)
         p.setPen(QPen(OUTLINE, 1))
         p.drawPath(clear.translated(0.5, 0.5))

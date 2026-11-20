@@ -809,30 +809,31 @@ class ProWindow(WindowTest):
         """With settings of its own, Phones 1/2 shows and writes Mute and the other settings of the D/A converter at
         Line Out's address, and says so, as Line Out does; Volume is its own. Dim where Line Out or Phones 1/2 is
         active."""
-        panel, sim = self.win.output_panel, self.sim
+        panel, sim, section = self.win.output_panel, self.sim, self.win.volume_section
+        _, mute, dim = section.level.items
         sim.state[(12, 8)] = 1
         self.spin(4000)
         QTest.mouseClick(self.win.output_tab, Qt.LeftButton)
         self.win.tabs.setCurrentIndex(tab(6))
         volume = sim.state[(6, P.VOLUME)], sim.state[(3, P.VOLUME)]
-        QTest.mouseClick(panel.options[P.MUTE], Qt.LeftButton)
-        s = panel.volume
+        QTest.mouseClick(mute, Qt.LeftButton)
+        s = section.volume
         QTest.mouseClick(s, Qt.LeftButton, pos=QPoint(4, s.height() // 2))
         self.spin(1500)
         self.assertEqual((sim.state[(3, P.MUTE)], (6, P.MUTE) in sim.state), (1, False))
         self.assertEqual((sim.state[(6, P.VOLUME)], sim.state[(3, P.VOLUME)]), (volume[0] - 5, volume[1]))
         shared = "One setting for Line Out and Phones 1/2"
-        self.assertIn(shared, panel.options[P.MUTE].toolTip())
+        self.assertIn(shared, mute.toolTip())
         self.assertIn(shared, panel.steppers[P.DA_FILTER].toolTip())
         self.assertNotIn(shared, panel.steppers[P.CROSSFEED].toolTip())
-        self.assertTrue(panel.options[P.DIM].isEnabled())                      # Line Out is active
+        self.assertTrue(dim.isEnabled())                                        # Line Out is active
         self.session.device_status = self.session.device_status._replace(output=0)
         self.win.refresh()
-        self.assertFalse(panel.options[P.DIM].isEnabled())
+        self.assertFalse(dim.isEnabled())
         self.win.tabs.setCurrentIndex(tab(3))
-        self.assertIn(shared, panel.options[P.MUTE].toolTip())
+        self.assertIn(shared, mute.toolTip())
         self.win.tabs.setCurrentIndex(tab(9))
-        self.assertNotIn(shared, panel.options[P.MUTE].toolTip())
+        self.assertNotIn(shared, mute.toolTip())
 
     def test_ref_level_of_phones_1_2_beside_line_out(self):
         """Phones 1/2 with the settings of Line Out: on their tab its Ref Level beside Line Out's, which sets it, shown
@@ -933,14 +934,12 @@ class ProWindow(WindowTest):
         QTest.mouseClick(side, Qt.LeftButton)
         self.assertFalse(area.isHidden())
         self.assertEqual(panel.steppers[P.REF_LEVEL].text(panel.steppers[P.REF_LEVEL].value), "+19 dBu")
-        self.assertEqual(panel.volume_label.text(), "Volume (dBr)")                  # Auto Ref Level on
-        QTest.mouseClick(panel.options[P.MUTE], Qt.LeftButton)
-        self.spin(1500)
-        self.assertEqual(self.sim.state[(3, P.MUTE)], 1)
+        unit = lambda: self.win.volume_section.volume.unit                       # noqa: E731
+        self.assertEqual(unit(), "dBr")                                         # Auto Ref Level on
         self.win.tabs.setCurrentIndex(tab(9))
         QTest.mouseClick(panel.options[P.AUTO_REF_LEVEL], Qt.LeftButton)
         self.spin(1500)
-        self.assertEqual((self.sim.state[(9, P.AUTO_REF_LEVEL)], panel.volume_label.text()), (0, "Volume (dB)"))
+        self.assertEqual((self.sim.state[(9, P.AUTO_REF_LEVEL)], unit()), (0, "dB"))
         self.assertTrue(panel.steppers[P.REF_LEVEL].isEnabled())
         QTest.mouseClick(self.win.input_tab, Qt.LeftButton)
         self.assertFalse(self.win.input_area.isHidden())

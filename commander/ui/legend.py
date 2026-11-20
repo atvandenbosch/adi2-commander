@@ -158,7 +158,7 @@ class _Item(QWidget):
         self.pointed.emit(False)
 
 
-def _segment_path(rect, radius, left, right):
+def segment_path(rect, radius, left, right):
     """A rectangle with its left corners rounded or not, and its right ones."""
     path = QPainterPath()
     x0, y0, x1, y1 = rect.left(), rect.top(), rect.right(), rect.bottom()
@@ -199,7 +199,7 @@ class Group(QWidget):
                     continue
                 last = i == len(shown) - 1
                 r = QRectF(item.geometry()).adjusted(0.5, 0.5, 0.5 if not last else -0.5, -0.5)
-                path = _segment_path(r, 3, i == 0, last)
+                path = segment_path(r, 3, i == 0, last)
                 if item.on or item._under_mouse:
                     p.fillPath(path, FACE)
                 p.setPen(QPen(OUTLINE_ON if item.on else OUTLINE_OFF, 1))

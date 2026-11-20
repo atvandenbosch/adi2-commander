@@ -4,10 +4,11 @@ A setting the output does not have (IEM: Ref Level and Auto Ref Level; Rear TRS 
 ADI-2/4 Pro has) is left out. The input is in the Input panel.
 
     one of a few values     a stepper (‹ value ›)
-    Width, Balance          a stepper too: Swapped .. -0.50 .. Mono .. 0.50 .. Stereo, L 100 .. C .. R 100;
-                            the value opens a slider instead of a list
-    Volume                  a stepper too, by 0.5 dB up; the value opens a slider to aim at, rising step by step
-    on or off               an option: Lock Volume, Auto Ref Level, Mute, Dim
+    Width                   a stepper too: Swapped .. -0.50 .. Mono .. 0.50 .. Stereo; the value opens a slider
+                            instead of a list
+    on or off               an option: Auto Ref Level
+
+Volume, Lock Volume, Mute, Dim and Balance are in the volume section (volume.VolumeSection).
 """
 
 import math
@@ -22,18 +23,8 @@ from .widgets import ATTACHED_GAP, GROUP_STYLE, INNER_GAP, TITLE_STYLE, Action, 
 
 LABEL_WIDTH, VALUE_WIDTH, ROW_HEIGHT = 112, 124, 30
 NAME_INDENT = 6                                  # px: where the row names of the tables start, in Segoe UI
-OPTIONS = {P.LOCK_VOLUME: "Lock Volume", P.AUTO_REF_LEVEL: "Auto Ref Level", P.MUTE: "Mute", P.DIM: "Dim"}
-OPTION_TIPS = {P.LOCK_VOLUME: "On: disables the device's VOLUME knob for this output;\n"
-                              "Volume in the device's menu sets a fixed level.",
-               P.AUTO_REF_LEVEL: "On: the device chooses Ref Level from Volume and the positive EQ gain.",
-               P.MUTE: "On: this output is silent.",
-               P.DIM: "On: turns this output down by 20 dB; off brings them back.\n"
-                      "Volume shows the lowered level."}
-DIM_ACTIVE_ONLY = "Dim works on the active output only."
-LOWERED = {(P.MUTE,): "Mute is on: this output is silent.",                # Volume, its value in amber
-           (P.DIM,): "Dim is on.",
-           (P.MUTE, P.DIM): "Mute and Dim are on: this output is silent."}
-OUT_OF_DIM = "A step turns Dim off and goes on from this level."
+OPTIONS = {P.AUTO_REF_LEVEL: "Auto Ref Level"}
+OPTION_TIPS = {P.AUTO_REF_LEVEL: "On: the device chooses Ref Level from Volume and the positive EQ gain."}
 TIPS = {P.REF_LEVEL: "The output level at full scale",
         P.MONO: "On: both channels summed\nto Left: the sum on the left output only",
         P.MS_PROC: "Mid/side: mono content to the left channel, stereo content to the right",
@@ -60,37 +51,32 @@ PROCESSING = (P.MONO, P.WIDTH, P.MS_PROC, P.POLARITY, P.CROSSFEED)      # the DS
 EQ_OR_CROSSFEED_FROM = 705600                    # from this rate the device runs the EQ or Crossfeed, the EQ first
 PHONES_REF = "phones_ref"                         # the row of the Ref Level of Phones 1/2 beside Line Out's
 SHARED_REF_TIP = "Set by the Ref Level of Line Out: 3 dB higher, %s at most"
-VOLUME_UNIT = 6                                  # 0.1 dB per pixel of Volume's slider: ~200 px, as Balance's
 
 
 class RangeSlider(QWidget):
-    """A value along a track from end to end (Width, Balance, Volume), filled in grey from the anchor (Width,
+    """A value along a track from end to end (Width, Balance), filled in grey from the anchor (Width,
     Balance: the value that leaves the sound as it is) to the knob, with a tick at each point named between the ends.
-    A drag, or a click on the track, puts the knob there. Which end is which, the buttons under it say.
-
-    unit: values per pixel; grid: the values it takes; lo: where it starts, if not at the bottom of the range. Width
-    and Balance: one pixel per hundredth."""
+    A drag, or a click on the track, puts the knob there. Which end is which, the buttons under it say. One pixel per
+    hundredth."""
 
     moved = Signal(int)
     KNOB, TRACK = 12, 4                          # px
 
-    def __init__(self, index, anchor, ticks, unit=1, grid=1, lo=None):
+    def __init__(self, index, anchor, ticks):
         super().__init__()
         self.lo, self.hi = P.OUTPUT_RANGES[index]
-        self.lo = self.lo if lo is None else lo
-        self.anchor, self.ticks, self.unit, self.grid = anchor, ticks, unit, grid
+        self.anchor, self.ticks = anchor, ticks
         self.value, self._dragging = anchor, False
         self.setCursor(Qt.PointingHandCursor)
-        self.setFixedSize(self.KNOB + math.ceil((self.hi - self.lo) / unit) + 1, Stepper.HEIGHT)
+        self.setFixedSize(self.KNOB + self.hi - self.lo + 1, Stepper.HEIGHT)
 
     def x_of(self, value):
         """The middle of the value's column of pixels."""
-        return self.KNOB // 2 + (value - self.lo) / self.unit + 0.5
+        return self.KNOB // 2 + value - self.lo + 0.5
 
     def value_at(self, x):
-        """The value on the grid nearest to the column of pixels that holds x."""
-        v = self.lo + (math.floor(x) - self.KNOB // 2) * self.unit
-        return max(self.lo, min(self.hi, self.lo + round((v - self.lo) / self.grid) * self.grid))
+        """The value of the column of pixels that holds x."""
+        return max(self.lo, min(self.hi, self.lo + math.floor(x) - self.KNOB // 2))
 
     def set_value(self, value):
         if not self._dragging and value != self.value:
@@ -141,33 +127,12 @@ class RangeSlider(QWidget):
         self._knob(p, self.value)
 
 
-class VolumeSlider(RangeSlider):
-    """Volume's slider, from the bottom of the device's own scale (floor) to the top: the knob is the Volume the device
-    has, filled from the bottom; while Volume rises step by step to a value aimed at, a ring marks that value. A drag
-    moves the ring."""
-
-    def __init__(self, floor):
-        super().__init__(P.VOLUME, floor, [0], unit=VOLUME_UNIT, grid=P.VOLUME_STEP, lo=floor)
-        self.actual = floor
-
-    def paintEvent(self, e):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        self._track(p, self.lo, self.actual)
-        if self.value != self.actual:
-            p.setPen(QPen(theme.TEXT if self.isEnabled() else theme.DISABLED, 1.5))
-            p.setBrush(Qt.NoBrush)
-            p.drawEllipse(QPointF(self.x_of(self.value), self.height() / 2), self.KNOB / 2 - 1, self.KNOB / 2 - 1)
-        self._knob(p, self.actual)
-
-
 class RangePopup(QFrame):
     """Under a RangeStepper: the slider, and a button for each named point to go there at once. Every change goes to
-    the stepper (aim), which shows it. The arrow keys and the wheel move by the slider's grid, PgUp and PgDn as the
-    stepper's arrows. Enter or a click elsewhere closes it as it is; Esc as the stepper says (give_up)."""
+    the stepper (aim), which shows it. The arrow keys and the wheel move by one, PgUp and PgDn as the stepper's arrows.
+    Enter or a click elsewhere closes it as it is; Esc brings back the value it opened with."""
 
     NOTCH = 120                                  # angleDelta of one wheel notch
-    closed = Signal()                            # however it closes
 
     def __init__(self, stepper):
         super().__init__(stepper, Qt.Popup | Qt.FramelessWindowHint)
@@ -177,9 +142,9 @@ class RangePopup(QFrame):
         self.setStyleSheet("RangePopup { background: %s; border: 1px solid %s; }"
                            % (theme.PANEL.name(), theme.BORDER.name()))
         self.slider = stepper.slider()
-        stepper.show_on(self.slider)
+        self.slider.set_value(stepper.value)
         self.slider.moved.connect(self.choose)
-        self.buttons = buttons = QHBoxLayout()
+        buttons = QHBoxLayout()
         buttons.setContentsMargins(0, 0, 0, 0)
         actions = []
         for n, (text, value) in enumerate(stepper.points):
@@ -187,7 +152,6 @@ class RangePopup(QFrame):
                 buttons.addStretch()
             b = Action(compact=True)
             b.setText(text)
-            b.setToolTip(stepper.point_tip(text))
             b.setFocusPolicy(Qt.NoFocus)         # the keys stay with the slider
             b.clicked.connect(lambda _=False, value=value: self.choose(value))
             buttons.addWidget(b)
@@ -210,21 +174,17 @@ class RangePopup(QFrame):
         if self.stepper.value is None:
             self.close()
             return
-        self.stepper.show_on(self.slider)
+        self.slider.set_value(self.stepper.value)
         self.setEnabled(self.stepper.isEnabled())
 
-    def closeEvent(self, e):
-        self.closed.emit()
-        super().closeEvent(e)
-
-    def _by_grid(self, direction):
+    def _by_one(self, direction):
         s = self.slider
-        self.choose(max(s.lo, min(s.hi, s.value + direction * s.grid)))
+        self.choose(max(s.lo, min(s.hi, s.value + direction)))
 
     def keyPressEvent(self, e):
         k, v = e.key(), self.slider.value
         if k in (Qt.Key_Left, Qt.Key_Down, Qt.Key_Right, Qt.Key_Up):
-            self._by_grid(1 if k in (Qt.Key_Right, Qt.Key_Up) else -1)
+            self._by_one(1 if k in (Qt.Key_Right, Qt.Key_Up) else -1)
         elif k in (Qt.Key_PageUp, Qt.Key_PageDown):
             n = self.stepper.neighbour(v, 1 if k == Qt.Key_PageUp else -1, False)
             if n is not None:
@@ -232,7 +192,7 @@ class RangePopup(QFrame):
         elif k in (Qt.Key_Return, Qt.Key_Enter):
             self.close()
         elif k == Qt.Key_Escape:
-            self.stepper.give_up(self.opened)
+            self.stepper.aim(self.opened)
             self.close()
         else:
             super().keyPressEvent(e)
@@ -243,7 +203,7 @@ class RangePopup(QFrame):
         while abs(self._wheel) >= self.NOTCH:
             direction = 1 if self._wheel > 0 else -1
             self._wheel -= direction * self.NOTCH
-            self._by_grid(direction)
+            self._by_one(direction)
 
 
 class RangeStepper(Stepper):
@@ -279,29 +239,13 @@ class RangeStepper(Stepper):
     def slider(self):
         return RangeSlider(self.index, self.anchor, [v for _, v in self.points[1:-1]])
 
-    def show_on(self, slider):
-        """Its state on the popup's slider."""
-        slider.set_value(self.value)
-
-    def point_tip(self, name):
-        return ""
-
     def aim(self, value):
         """A value chosen on the slider: written at once."""
         if value != self.value and self.isEnabled():
             self.chosen.emit(value)
 
-    def give_up(self, opened):
-        """Esc on the slider: back to the value it opened with."""
-        self.aim(opened)
-
-    def dress(self, popup):
-        """Anything of its own on the popup, before it is shown."""
-
     def show_menu(self):
-        popup = RangePopup(self)
-        self.dress(popup)
-        self.popup = popup
+        self.popup = RangePopup(self)
         self.popup.destroyed.connect(lambda: setattr(self, "popup", None))
         self.popup.ensurePolished()                  # its border from the style sheet counts in its size
         self.popup.adjustSize()
@@ -314,172 +258,6 @@ class RangeStepper(Stepper):
         super().show_state(*args, **kwargs)
         if self.popup is not None:
             self.popup.follow()
-
-
-class VolumeStepper(RangeStepper):
-    """Volume, as the device has it, by 0.5 dB: one step per click on an arrow, per key press and per wheel notch,
-    with or without Ctrl; a touchpad's small wheel steps add up to a notch first. With Dim on, a step goes from the
-    Volume reported, as any other, and turns Dim off: Dim on does not say whether the device moved Volume down (it
-    does only on the active output), so going back up by the 20 dB of Dim is left to Dim itself.
-
-    Up is held to the pace of the device's remote control, so that Volume never jumps up; down is not:
-    - A held arrow or key repeats after a pause, as the remote control, up or down as fast as it: steps that grow
-      lower down the device's own scale (params.volume_held, with the output's offset).
-    - The value opens a slider (RangePopup) to aim at a Volume: lower, it is written at once; higher, Volume rises to
-      it in the same steps at the same pace, and only while the slider is open: closing it in any way (Enter, Esc, a
-      click elsewhere), a step of the user's own, or the device moving Volume elsewhere stops it. Min and 0.0 under
-      the slider.
-    Neither goes below the bottom of the device's own scale (floor), where its display shows a dash. A step up never
-    goes out before the previous one has: each write rises one held step at most. While held or rising, the session
-    leaves reading back until it is over (Session.hold). The window's tick drives it (tick), on the session's clock."""
-
-    NOTCH = 120                                  # angleDelta of one wheel notch
-    REPEAT_DELAY = 0.5                           # s from the press to the first repeat, as the remote control
-    REPEAT_INTERVAL = 0.2                        # s between steps: 2.5 dB/s up, below the session's six writes a second
-
-    def __init__(self, sent, holding, offset):
-        super().__init__(P.VOLUME, [], anchor=None)
-        self.off = None                          # no value of Volume means off
-        self.sent = sent                         # () -> bool: no Volume write of the output shown is still queued
-        self.holding = holding                   # (bool) -> None: Session.hold
-        self.offset = offset                     # () -> int: params.volume_offset for the output shown
-        self.unit = "dB"                         # dBr while Auto Ref Level is on: the panel says
-        self.set_floor(P.VOLUME_FLOOR)
-        self._wheel = 0
-        self._hold = None                        # the direction while held
-        self._rise = None                        # (Volume aimed at, the value last written) while rising
-        self._due = 0.0                          # when the next step of either is due
-        self._told = False                       # held or rising, as told to the session
-        self._now = 0.0                          # the session's clock at the last tick
-
-    def set_floor(self, floor):
-        """The bottom of the device's own scale, as this output reports it (params.volume_floor): Min."""
-        self.floor, self.anchor = floor, floor
-        self.points = [("Min", floor), ("0.0", 0)]
-
-    def neighbour(self, value, direction, fine):
-        v = P.step(("out", P.VOLUME), value, direction)
-        return v if v != value and (direction > 0 or v >= self.floor) else None
-
-    def slider(self):
-        return VolumeSlider(self.floor)
-
-    def show_on(self, slider):
-        slider.actual = self.value
-        slider.set_value(self.value if self._rise is None else self._rise[0])
-        slider.update()
-
-    def point_tip(self, name):
-        if name == "Min":
-            return "The lowest Volume on the device's scale (%s)" % self.text(self.points[0][1])
-        return "0 %s: no attenuation" % self.unit
-
-    def dress(self, popup):
-        popup.closed.connect(self.stop)              # it rises only in view
-        popup.stop = stop = Action(compact=True)     # between Min and 0.0, while rising
-        stop.setText("Stop")
-        stop.setToolTip("Stop rising: Volume stays where it has got to.")
-        stop.setFocusPolicy(Qt.NoFocus)
-        stop.clicked.connect(self.stop)
-        stop.setVisible(self._rise is not None)
-        popup.buttons.insertStretch(1)
-        popup.buttons.insertWidget(2, stop)
-
-    def aim(self, value):
-        """Lower: at once. Higher: rising to it, step by step, while the slider is open."""
-        if not self.isEnabled() or self.value is None:
-            return
-        self._hold, self._due = None, self._now
-        self._rise = (value, self.value) if value > self.value and self.popup is not None else None
-        if value < self.value:
-            self.chosen.emit(value)
-        self._tell()
-
-    def give_up(self, opened):
-        """Esc on the slider: Volume stays where it has got to, as on closing it."""
-        self.stop()
-
-    def stop(self):
-        self._rise = None
-        self._tell()
-
-    def step(self, direction, fine=False):
-        """A step of the user's own: it ends rising to a Volume aimed at."""
-        self.stop()
-        super().step(direction, fine)
-
-    def _tell(self):
-        if self.popup is not None:                   # the slider and its Stop as they now are
-            self.popup.stop.setVisible(self._rise is not None)
-            self.show_on(self.popup.slider)
-        on = self._hold is not None or self._rise is not None
-        if on != self._told:
-            self._told = on
-            self.holding(on)
-
-    def _set_hold(self, direction):
-        self._hold, self._due = direction, self._now + self.REPEAT_DELAY
-        self._tell()
-
-    def tick(self, now):
-        self._now = now
-        if self._hold is None and self._rise is None:
-            return
-        if not self.isEnabled() or self.value is None:
-            self._hold = self._rise = None
-        elif self._rise is not None and (self.popup is None or not self.popup.isVisible()
-                                         or self.value != self._rise[1] or self.value >= self._rise[0]):
-            self._rise = None                                    # out of view, moved elsewhere, or there
-        elif now >= self._due and self.sent():
-            self._due = now + self.REPEAT_INTERVAL
-            if self._rise is not None:
-                v = min(self._rise[0], P.volume_held(self.value, +1, self.offset()))
-                self._rise = (self._rise[0], v)
-            else:
-                v = P.volume_held(self.value, self._hold, self.offset(), self.floor)
-            if v is not None and v != self.value:
-                self.chosen.emit(v)
-        self._tell()
-
-    def mousePressEvent(self, e):
-        super().mousePressEvent(e)
-        zone = self._zone(e.position().x())
-        if e.button() == Qt.LeftButton and zone and self.isEnabled():
-            self._set_hold(zone)
-
-    def mouseReleaseEvent(self, e):
-        self._set_hold(None)
-
-    def keyPressEvent(self, e):
-        k = e.key()
-        if k in (Qt.Key_Left, Qt.Key_Down, Qt.Key_Right, Qt.Key_Up):
-            if not e.isAutoRepeat():                 # the system's own repeat gives way to the pace of tick
-                super().keyPressEvent(e)
-                self._set_hold(1 if k in (Qt.Key_Right, Qt.Key_Up) else -1)
-            return
-        super().keyPressEvent(e)
-
-    def keyReleaseEvent(self, e):
-        if not e.isAutoRepeat():
-            self._set_hold(None)
-        super().keyReleaseEvent(e)
-
-    def focusOutEvent(self, e):
-        self._wheel = 0
-        self._set_hold(None)
-        super().focusOutEvent(e)
-
-    def wheelEvent(self, e):
-        if not self.hasFocus():
-            self._wheel = 0
-            e.ignore()                               # leave the value alone, let the panel scroll
-            return
-        e.accept()
-        self._wheel += e.angleDelta().y()
-        while abs(self._wheel) >= self.NOTCH:
-            direction = 1 if self._wheel > 0 else -1
-            self._wheel -= direction * self.NOTCH
-            self.step(direction)
 
 
 def shared_tip(session, key):
@@ -539,11 +317,6 @@ class OutputPanel(QWidget):
         self.session, self.marks = session, marks
         self.out = None
         self.steppers, self.options, self.rows = {}, {}, {}
-        self.volume = VolumeStepper(lambda: (self.out[1], P.VOLUME) not in self.session.pending, self.session.hold,
-                                    lambda: P.volume_offset(self.session.state, self.out[1], self.session.model))
-        self.volume.setFixedWidth(VALUE_WIDTH)
-        self.volume.chosen.connect(lambda value: self.edited.emit((self.out[1], P.VOLUME), value, False))
-        self.volume_label = _label("Volume (dB)")
         title = QLabel("OUTPUT")
         title.setStyleSheet(TITLE_STYLE)
         lay = QVBoxLayout(self)
@@ -554,9 +327,8 @@ class OutputPanel(QWidget):
         self.phones_ref.setFixedWidth(VALUE_WIDTH)
         self.phones_ref.chosen.connect(lambda value: self.edited.emit(self.session.kept_ref_level(), value, False))
         self.labels = {}
-        groups = [("LEVEL", [(P.LOCK_VOLUME, None), (P.VOLUME, "Volume"), (P.AUTO_REF_LEVEL, None),
-                             (P.REF_LEVEL, "Ref Level"), (PHONES_REF, "Ref Level Ph 1/2"), (P.MUTE, None),
-                             (P.DIM, None), (P.BALANCE, "Balance")]),
+        groups = [("LEVEL", [(P.AUTO_REF_LEVEL, None), (P.REF_LEVEL, "Ref Level"),
+                             (PHONES_REF, "Ref Level Ph 1/2")]),
                   ("PROCESSING", [(P.MONO, "Mono"), (P.WIDTH, "Width"), (P.MS_PROC, "M/S-Proc"),
                                   (P.POLARITY, "Polarity"), (P.CROSSFEED, "Crossfeed")]),
                   ("DAC", [(P.DA_FILTER, "DA Filter"), (P.DE_EMPHASIS, "De-Emphasis"),
@@ -580,8 +352,6 @@ class OutputPanel(QWidget):
             option.clicked.connect(lambda i=i: self.toggle(i))
             self.options[i] = option
             return _row(option, indent=NAME_INDENT - Option.RING - 1)        # the track where the names start
-        if i == P.VOLUME:
-            return _row(self.volume_label, self.volume)
         self.labels[i] = _label(text)
         if i == PHONES_REF:
             return _row(self.labels[i], self.phones_ref)
@@ -619,14 +389,6 @@ class OutputPanel(QWidget):
     def key(self, i):
         """The key of setting i of this output, where the device holds it (Session.at)."""
         return self.session.at((self.out[1], i))
-
-    def active(self, i):
-        """Setting i is that of an output the device has active, as its status message says: of this one, or of one
-        that shares it (Session.sharing)."""
-        st, model = self.session.device_status, self.session.model
-        active = () if model is None else model.active
-        return (st is not None and st.output < len(active)
-                and bool(set(self.session.sharing((self.out[1], i))) & set(active[st.output])))
 
     def plug_warning(self, out=None):
         """Plugging headphones into output out (else this one) now brings up the device's Hi-Power warning: Hi-Power
@@ -677,28 +439,6 @@ class OutputPanel(QWidget):
         eq_on = s.get((left, P.EQ_ENABLE)) == 1 or self.session.dual(out) and s.get((right, P.EQ_ENABLE)) == 1
         return st is not None and st.rate is not None and st.rate >= EQ_OR_CROSSFEED_FROM and eq_on
 
-    def refresh_volume(self):
-        """Its unit in the row name: dBr while Auto Ref Level is on, else dB. Never faded (it works whatever else is
-        on or off). With Lock Volume on it is the fixed volume: held, as the device refuses a write and takes it from
-        its own menu only. With Mute or Dim on its value is amber: the output is silent, or Dim is on."""
-        s, out, ready = self.session.state, self.out[1], self.session.ready()
-        key = (out, P.VOLUME)
-        on = lambda i: ready and s.get(self.key(i)) == 1                      # noqa: E731
-        self.volume.unit = "dBr" if on(P.AUTO_REF_LEVEL) else "dB"
-        self.volume_label.setText("Volume (%s)" % self.volume.unit)
-        lowering = tuple(i for i in (P.MUTE, P.DIM) if on(i))
-        if ready:
-            self.volume.set_floor(P.volume_floor(s, out, self.session.model))
-        lo, hi = self.volume.floor, P.OUTPUT_RANGES[P.VOLUME][1]
-        tip = [LOWERED.get(lowering), OUT_OF_DIM if P.DIM in lowering and not on(P.LOCK_VOLUME) else None,
-               "Lock Volume is on: set it in the device's menu." if on(P.LOCK_VOLUME) else
-               "Adjust with the arrows or the mouse wheel.\nClick the value for a slider: up rises step by step.",
-               "%s … +%s, step 0.5 dB" % (self.volume.text(lo), self.volume.text(hi))]
-        if key in self.marks.mismatch:
-            tip.append("Sent %s, the device has %s." % tuple(self.volume.text(v) for v in self.marks.mismatch[key]))
-        self.volume.show_state(s.get(key) if ready else None, self.session.writable(key), "\n".join(filter(None, tip)),
-                               bad=key in self.marks.mismatch, held=on(P.LOCK_VOLUME), warned=bool(lowering))
-
     def toggle(self, i):
         key = self.key(i)
         if self.session.writable(key):
@@ -737,14 +477,11 @@ class OutputPanel(QWidget):
                 tip += "\nSent %s, the device has %s." % (stepper.text(sent), stepper.text(actual))
             stepper.show_state(v, self.session.writable(key), tip, faded, key in self.marks.mismatch, held, warned)
         self.refresh_phones_ref(ready)
-        self.refresh_volume()
         for i, option in self.options.items():
             key = self.key(i)
             v = s.get(key) if ready else None
             self.rows[i].setVisible(not P.absent(i, v))
             on = v == 1
             tip = "%s: %s\n%s" % (OPTIONS[i], "on" if on else "off", OPTION_TIPS[i])
-            enabled = self.session.writable(key)
-            if i == P.DIM and not self.active(i):               # as on the device: the current output only
-                enabled, tip = False, tip + "\n" + DIM_ACTIVE_ONLY
-            option.show_state(on, enabled, "\n".join(filter(None, (tip, shared_tip(self.session, key)))))
+            option.show_state(on, self.session.writable(key),
+                              "\n".join(filter(None, (tip, shared_tip(self.session, key)))))

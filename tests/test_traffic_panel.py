@@ -72,10 +72,10 @@ class Panel(WindowTest):
         QTest.mouseClick(self.win.traffic_tab, Qt.LeftButton)
         self.assertTrue(self.win.traffic_tab.isHidden() and self.win.traffic_area.isHidden())
 
-    def test_ctrl_shift_m_opens_and_closes(self):
-        QTest.keyClick(self.win, Qt.Key_M, Qt.ControlModifier | Qt.ShiftModifier)
+    def test_ctrl_shift_t_opens_and_closes(self):
+        QTest.keyClick(self.win, Qt.Key_T, Qt.ControlModifier | Qt.ShiftModifier)
         self.assertFalse(self.win.traffic_area.isHidden())
-        QTest.keyClick(self.win, Qt.Key_M, Qt.ControlModifier | Qt.ShiftModifier)
+        QTest.keyClick(self.win, Qt.Key_T, Qt.ControlModifier | Qt.ShiftModifier)
         self.assertTrue(self.win.traffic_tab.isHidden() and self.win.traffic_area.isHidden())
 
     def test_everything_recorded_also_before_it_opened(self):

@@ -58,6 +58,12 @@ class EditStand(WindowTest):
             self.assertFalse(w.isEnabled())
         self.assertFalse(win.load_bt.isEnabled())
         self.assertFalse(win.presets.rows[4].isEnabled())
+        self.assertEqual(win.scrim.clear, [win.volume_section])                # within reach, on the output itself
+        mute = win.volume_section.level.items[1]
+        self.assertTrue(mute.isEnabled())
+        QTest.mouseClick(mute, Qt.LeftButton)
+        self.spin(1500)
+        self.assertEqual(self.sim.state[(3, P.MUTE)], 1)
         QTest.keyClick(win, Qt.Key_Tab, Qt.ControlModifier)                   # no other output meanwhile
         self.assertEqual(win.tabs.currentIndex(), tab(3))
         for w in (win.band_views[0], win.bt_view, self.cancel(), win.preset_name, win.export_action):

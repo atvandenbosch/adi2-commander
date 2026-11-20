@@ -17,7 +17,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 - Under DEVICE, Factory Settings sets Remap Keys and the keys as from the factory.
 - The window opens where it was when it last closed, as large, and maximized if it was.
 - The MIDI traffic with the device: every message Commander sends and every buffer it receives, with the time.
-  Ctrl+click the connection light, or press Ctrl+Shift+M. Copy and Save take the rows, to share them.
+  Ctrl+click the connection light, or press Ctrl+Shift+T. Copy and Save take the rows, to share them.
 
 ### Changed
 
@@ -51,6 +51,8 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
   for.
 - A point taken in a graph frames in the tables what it changes, in its band's row, until one works in a table
   again; Tab goes into that row.
+- Volume, Lock Volume, Mute, Dim and Balance are in the top bar, with switches for the EQ, Bass/Treble and
+  Loudness. Volume has a slider; Ctrl+Shift+M switches Mute.
 
 ### Fixed
 

@@ -455,7 +455,8 @@ class Stepper(QWidget):
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton or not self.isEnabled() or self.value is None:
             return
-        self.setFocus()
+        if self.focusPolicy() & Qt.ClickFocus:
+            self.setFocus()
         zone = self._zone(e.position().x())
         if zone:
             self.step(zone, bool(e.modifiers() & Qt.ControlModifier))
