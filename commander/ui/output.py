@@ -128,9 +128,10 @@ class RangeSlider(QWidget):
 
 
 class RangePopup(QFrame):
-    """Under a RangeStepper: the slider, and a button for each named point to go there at once. Every change goes to
-    the stepper (aim), which shows it. The arrow keys and the wheel move by one, PgUp and PgDn as the stepper's arrows.
-    Enter or a click elsewhere closes it as it is; Esc brings back the value it opened with."""
+    """Under a RangeStepper: the slider, and a button for each named point. Every change goes to the stepper (aim),
+    which shows it. The arrow keys and the wheel move by one, PgUp and PgDn as the stepper's arrows: it stays open, to
+    adjust further. A named point is chosen at once and closes it, as Enter or a click elsewhere does; Esc brings back
+    the value it opened with."""
 
     NOTCH = 120                                  # angleDelta of one wheel notch
 
@@ -153,7 +154,7 @@ class RangePopup(QFrame):
             b = Action(compact=True)
             b.setText(text)
             b.setFocusPolicy(Qt.NoFocus)         # the keys stay with the slider
-            b.clicked.connect(lambda _=False, value=value: self.choose(value))
+            b.clicked.connect(lambda _=False, value=value: self.pick(value))
             buttons.addWidget(b)
             actions.append(b)
         ends = max(actions[0].sizeHint().width(), actions[-1].sizeHint().width())
@@ -168,6 +169,11 @@ class RangePopup(QFrame):
     def choose(self, value):
         self.slider.set_value(value)
         self.stepper.aim(value)
+
+    def pick(self, value):
+        """A named point: chosen, and done."""
+        self.choose(value)
+        self.close()
 
     def follow(self):
         """The stepper's state: its value unless the knob is being dragged, and whether it can be changed."""

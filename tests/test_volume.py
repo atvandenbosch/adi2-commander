@@ -527,20 +527,16 @@ class VolumeSection(WindowTest):
         QTest.keyClick(pop, Qt.Key_PageUp)                                      # as the stepper's arrow
         self.settle()
         self.assertEqual(self.sim.state[(3, P.BALANCE)], -10)
-        buttons = {b.text(): b for b in pop.findChildren(Action)}
-        self.assertEqual(sorted(buttons), ["C", "L 100", "R 100"])
-        for text, value in (("R 100", 100), ("L 100", -100), ("C", 0)):
-            QTest.mouseClick(buttons[text], Qt.LeftButton)
-            self.settle()
-            self.assertEqual((self.sim.state[(3, P.BALANCE)], slider.value), (value, value))
-        self.assertTrue(pop.isVisible())                                        # open, to adjust further
         self.sim.front_panel([(3, P.BALANCE, 30)])                              # the device moves the knob
         self.settle()
         self.assertEqual(slider.value, 30)
-        QTest.keyClick(pop, Qt.Key_Return)
+        buttons = {b.text(): b for b in pop.findChildren(Action)}
+        self.assertEqual(sorted(buttons), ["C", "L 100", "R 100"])
+        QTest.mouseClick(buttons["R 100"], Qt.LeftButton)                       # a named point: chosen, and done
         self.spin(50)
         self.assertIsNone(s.popup)
-        self.assertEqual(self.sim.state[(3, P.BALANCE)], 30)
+        self.settle()
+        self.assertEqual(self.sim.state[(3, P.BALANCE)], 100)
 
     def test_esc_brings_balance_back(self):
         s = self.balance

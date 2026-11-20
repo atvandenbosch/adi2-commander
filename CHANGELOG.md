@@ -53,6 +53,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
   again; Tab goes into that row.
 - Volume, Lock Volume, Mute, Dim and Balance are in the top bar, with switches for the EQ, Bass/Treble and
   Loudness. Volume has a slider; Ctrl+Shift+M switches Mute.
+- Width and Balance: a named point under the slider closes it.
 
 ### Fixed
 
