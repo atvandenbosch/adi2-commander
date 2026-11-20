@@ -155,10 +155,13 @@ def _pen(color, width=1.0, alpha=1.0, style=Qt.SolidLine):
 
 
 def round_dots(pen, pitch):
-    """The pen drawing round dots as wide as itself, pitch px apart: dashes of next to nothing with round caps."""
-    tiny = 1e-3                                  # in pen widths, as the rest of the pattern
+    """The pen drawing round dots as wide as itself, pitch px apart: dashes of next to nothing with round caps. A pen
+    of 1 px or less Qt draws pixel by pixel, without caps: there a dot is a dash of one pixel, so that each falls on
+    a pixel."""
+    width = pen.widthF()
+    dot = 1 / width if width <= 1 else 1e-3     # in pen widths, as the rest of the pattern
     pen.setCapStyle(Qt.RoundCap)
-    pen.setDashPattern([tiny, pitch / pen.widthF() - tiny])
+    pen.setDashPattern([dot, pitch / width - dot])
     return pen
 
 
