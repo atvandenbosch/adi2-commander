@@ -283,10 +283,12 @@ class Window(WindowTest):
         view = win.loudness_view
         view.setFocus()
         plot = win.graph.getPlotItem().getViewBox().sceneBoundingRect()
+        measured = g.legend.sizeHint()                                      # off the stage, by the head
         view.setCurrentIndex(view.model().index(0, 1))
         self.assertIs(stage.currentWidget(), g)                             # at once
         self.spin(50)
         self.assertEqual(g.getPlotItem().getViewBox().sceneBoundingRect(), plot)   # in the same place
+        self.assertEqual(g.legend.sizeHint(), measured)
         self.assertEqual(g.getPlotItem().getAxis("left").labelText, "Volume (dB)")
         self.assertIs(head.legend, g.legend)
         self.assertTrue(g.legend.isVisible() and not win.legend.isVisible())

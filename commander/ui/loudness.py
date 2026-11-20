@@ -114,6 +114,7 @@ class Legend(QWidget):
             for w, gap in ((mark, MARK_GAP), (label, 0)):
                 self._lay.addWidget(w)
                 self._lay.addSpacing(gap)
+        self._row.updateGeometry()               # its new size counts also while the legend is off the stage
 
 
 class _View(pg.ViewBox):
