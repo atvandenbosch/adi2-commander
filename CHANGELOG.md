@@ -8,62 +8,38 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 
 ### Added
 
-- Import: Level for Fit. Free adjusts the level for the closest fit, as before; Fixed matches filters as they are,
-  and a curve centred on 0 dB.
-- Import: a Preamp line can be checked; it is used with Fit at a fixed level.
-- The graphs show their aspect ratio in dB per decade, in the corner where the axes meet: the response graph, the
-  Loudness graph and Import's. In the response graph a click on it sets 10, 25 or 50 dB per decade (IEC 60263), in
-  turn with the ratio it had.
-- Under DEVICE, Factory Settings sets Remap Keys and the keys as from the factory.
-- The window opens where it was when it last closed, as large, and maximized if it was.
-- The MIDI traffic with the device: every message Commander sends and every buffer it receives, with the time.
-  Ctrl+click the connection light, or press Ctrl+Shift+T. Copy and Save take the rows, to share them.
+- The window opens where and as large as it was when it last closed.
+- The graphs show their scale in dB per decade where the axes meet. In the response graph, point at it to choose
+  10, 25 or 50.
+- Import: Fit can adjust the level (Free) or keep it (Fixed); with Fixed, the file's Preamp line can be included.
+- Under DEVICE, Factory Settings resets Remap Keys and the functions of the keys.
+- A panel that logs the MIDI traffic with the device, to save and share: Ctrl+click the connection light, or press
+  Ctrl+Shift+T.
 
 ### Changed
 
-- Import: Origin and fs come first in the conversion row; Restart and Stop (of a fit) are one
-  button.
-- The legends of the graphs show what can be clicked and what is shown: each group is one control, the segment of a
-  shown item outlined.
-- The installer offers Install for all users, in Program Files, and Install for me only. Up to 0.2.0 it installed for
-  the current user only, by default in %LOCALAPPDATA%\Programs; updates keep that. To install for all users instead,
-  uninstall Commander first.
-- Backups are kept per device, named by the model, the serial number and the time: the last five of each device.
-- Export offers a file name with the serial number after the model.
-- The title bar shows the serial number after the model.
-- The tooltip of the letters beside a preset names the outputs it is selected on.
-- Presets: the row under the mouse offers Select, over its dot and number, and for a preset Edit and Store at its
-  end. Manual and Temp are selected with Select as well; a click on a row selects nothing. A double click selects,
-  except on an unused preset and where Select is amber.
-- The preview of a preset lies over the left of the graph while the mouse is on its row, at 25 dB per decade.
-- The letters of the outputs a preset is selected on follow its name; a name cut short fades out before them.
-- The response graph shows what each section adds: point at the switch of an EQ, Bass/Treble or Loudness, or turn
-  on Sections in the legend. The legend names the channels Left and Right.
-- Import's legend names the channels Left and Right too; Bass/Treble shows with them.
-- Import's legend has Sections too: what each EQ and Bass/Treble adds.
-- Import: what a fit tries now (Candidate) shows as white dots over the sum.
-- The Loudness graph is drawn as the response graph; with a DSD input, Loudness is faded.
-- Import: while a fit works on one channel of two, the other steps back.
-- The tooltips of the keys under DEVICE say what each key does with Remap Keys as it is set.
-- The dots of More options are as heavy as the text of the tabs.
-- The first time, the window opens tall enough to show EQ, Bass/Treble and Loudness without scrolling.
-- While a preset is not read, the backup of the connection waits, and the status bar says which preset it waits
-  for.
-- A point taken in a graph frames in the tables what it changes, in its band's row, until one works in a table
-  again; Tab goes into that row.
 - Volume, Lock Volume, Mute, Dim and Balance are in the top bar, with switches for the EQ, Bass/Treble and
   Loudness. Volume has a slider; Ctrl+Shift+M switches Mute.
-- Width and Balance: a named point under the slider closes it.
+- The response graph shows the curve of each section (EQ, Bass/Treble, Loudness): point at its switch, or turn on
+  Sections in the legend. The legends name the channels Left and Right.
+- Import's graph and the Loudness graph match the response graph.
+- Dragging a point in a graph outlines the values it changes in the tables.
+- Presets: Select, Edit and Store appear on the row under the mouse, and a double click selects. A preset's preview
+  shows while the mouse is on its row.
+- Import: the conversion settings row is rearranged.
+- Under DEVICE, the tooltip of each key says what the key does with Remap Keys as set.
+- The device's serial number names its backups, the last five of each device, and shows in the title bar and in
+  Export's file name.
+- The installer offers Install for all users or Install for me only. Updates keep the existing installation; to
+  install for all users instead, uninstall Commander first.
 
 ### Fixed
 
-- Import: with Dual EQ, Bass and Treble are drawn once, as bright as the other bands.
-- Setup asks to close Commander while it runs, also in another account or Windows session, before it changes
-  anything; a cancelled update could leave a Commander that did not start. The uninstaller asks as well.
-- The connection dropped when the device took longer than a second to send a preset; it now has up to three
-  seconds.
-- The connection dropped when the device's reply for a preset stayed incomplete. The connection now stays; the
-  preset says "not read", with what the reply lacked in its tooltip, and shows its last full reading, if any.
+- Import: with Dual EQ, Bass and Treble are drawn once.
+- The connection stays when the device is slow to send a preset, or its reply stays incomplete. Such a preset is
+  "not read", and the backup waits for it.
+- Setup and the uninstaller ask to close a running Commander, also in another Windows session. A cancelled update
+  could leave a Commander that did not start.
 
 ## [0.2.0] - 2026-11-14
 
