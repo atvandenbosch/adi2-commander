@@ -11,6 +11,7 @@ from unittest import mock
 
 import numpy as np
 from PySide6.QtCore import QPoint, QPointF, QRect, QSettings, QSize, Qt
+from PySide6.QtGui import QPen
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel
 
@@ -22,15 +23,16 @@ from commander.device.simulator import SimPort, SimulatedAdi2
 from commander.session import Session
 from commander import app as commander_app
 from commander.ui import about
+from commander.ui.graph import BAND_ALPHA, COMPARE_DOTS, SECTION_W, round_dots
 from commander.ui import loudness as L
 from commander.conversion import setupfile
 from commander.ui import simulated, theme
 from commander.ui.tables import FLASH_TIME, KEY_ROLE
 from commander.ui.output import PHONES_REF
 from commander.ui.untested import UntestedBox
-from commander.ui.window import PHONES_1_2, MainWindow
+from commander.ui.window import GEOMETRY, MAXIMIZED, PHONES_1_2, MainWindow
 from commander.ui.widgets import FRAME, SIDE, label_color, placement
-from tests.gui import OUTPUT_TABS, Clock, WindowTest, hover, tab, tooltip_color
+from tests.gui import OUTPUT_TABS, Clock, WindowTest, assert_ratio_corner, hover, tab, tooltip_color
 from tests.support import DUMP, PRESETS
 
 
@@ -73,6 +75,13 @@ class Window(WindowTest):
             self.assertEqual([edges(w)[1] for w in (self.win.band_views[0], self.win.export_action, self.win.more)],
                              [SIDE] * 3)
             self.assertEqual(edges(self.win.sound)[1], 0)              # its scroll bar against the edge
+
+    def test_at_its_size_hint_the_column_shows_all(self):
+        hint = self.win.sizeHint()
+        for height in (hint.height(), hint.height() - 20):
+            self.win.resize(hint.width(), height)
+            self.spin(100)
+            self.assertEqual(self.win.sound.verticalScrollBar().isVisible(), height < hint.height())
 
     def test_about_opens_the_license(self):
         shown = []
@@ -229,9 +238,12 @@ class Window(WindowTest):
         self.assertEqual(g.legend.names(), ["Loudness", "No boost", "Handles", "At current volume"])
         self.assertEqual(len(g.family_levels), 78)                         # -45 ... -5 dB but three:
         self.assertFalse({-30, -10, -20.5} & set(g.family_levels))         # Loudness, No boost, the current volume
-        family, now = g.family.opts["pen"], g.now.opts["pen"]
-        self.assertEqual((family.dashPattern(), round(family.color().alphaF(), 2)), ([1.0, 3.0], L.FAMILY_ALPHA))
-        self.assertEqual((now.dashPattern(), now.color().alphaF()), ([1.0, 3.0], 1.0))   # its own line, lit
+        full_pen, family, now = g.full_boost.opts["pen"], g.family.opts["pen"], g.now.opts["pen"]
+        self.assertEqual((full_pen.widthF(), full_pen.color().alphaF()), (SECTION_W, 1.0))   # a section
+        dots = lambda w: round_dots(QPen(Qt.black, w), COMPARE_DOTS).dashPattern()          # noqa: E731
+        self.assertEqual((family.widthF(), family.dashPattern(), round(family.color().alphaF(), 2)),
+                         (1.0, dots(1.0), L.FAMILY_ALPHA))                 # as Compare, thin: in the background
+        self.assertEqual((now.widthF(), now.dashPattern(), now.color().alphaF()), (SECTION_W, dots(SECTION_W), 1.0))
         self.assertEqual(self.sim.state[(3, 12)], -205)                     # -20.5 dB
         self.assertAlmostEqual(g.boost[0], 7 * (20 - 9.5) / 20)             # 9.5 dB above it
         self.sim.front_panel([(3, 12, -350)])                               # turned down to -35 dB
@@ -253,6 +265,15 @@ class Window(WindowTest):
         self.win.tabs.setCurrentIndex(tab(6))                                    # every output has its own
         self.assertAlmostEqual(g.boost[0], 7 * 0 / 20)                      # Phones at -10 dB: none
 
+    def test_the_loudness_graph_shows_its_aspect_ratio(self):
+        g = self.win.loudness_graph
+        self.win.show_stage(loudness=True)
+        self.spin(50)
+        assert_ratio_corner(self, g, g.getPlotItem().getAxis("left").label)
+        self.assertTrue(g.ratio.icon.isVisible() and not self.win.graph.ratio.icon.isVisible())   # one at a time
+        self.win.show_stage(loudness=False)
+        self.assertFalse(g.ratio.icon.isVisible())
+
     def test_the_loudness_graph_takes_the_stage_while_one_works_in_its_table(self):
         win, stage, head = self.win, self.win.stage, self.win.graph_head
         g = win.loudness_graph
@@ -262,10 +283,12 @@ class Window(WindowTest):
         view = win.loudness_view
         view.setFocus()
         plot = win.graph.getPlotItem().getViewBox().sceneBoundingRect()
+        measured = g.legend.sizeHint()                                      # off the stage, by the head
         view.setCurrentIndex(view.model().index(0, 1))
         self.assertIs(stage.currentWidget(), g)                             # at once
         self.spin(50)
         self.assertEqual(g.getPlotItem().getViewBox().sceneBoundingRect(), plot)   # in the same place
+        self.assertEqual(g.legend.sizeHint(), measured)
         self.assertEqual(g.getPlotItem().getAxis("left").labelText, "Volume (dB)")
         self.assertIs(head.legend, g.legend)
         self.assertTrue(g.legend.isVisible() and not win.legend.isVisible())
@@ -309,7 +332,7 @@ class Window(WindowTest):
         self.assertEqual([v.chosen for v in win.band_views + [win.bt_view, view]], [True, False, False, False])
         self.assertEqual(len({focused, chosen, fill()}), 3)                # focus, fainter, none
 
-    def test_a_switch_turned_on_takes_its_table_and_stage_turned_off_nothing(self):
+    def test_a_switch_turned_on_takes_its_table_turned_off_nothing(self):
         win, stage = self.win, self.win.stage
         left, right = win.band_views
         right.setFocus()
@@ -317,25 +340,26 @@ class Window(WindowTest):
         left.setFocus()
         left.setCurrentIndex(left.model().index(2, 2))
         self.spin(50)
-        QTest.mouseClick(win.loudness_switch, Qt.LeftButton)                # on: its table, where Tab enters it
-        view = win.loudness_view
-        self.assertEqual((view.hasFocus(), view.currentIndex().row(), view.currentIndex().column()), (True, 0, 1))
-        self.assertIs(stage.currentWidget(), win.loudness_graph)
+        QTest.mouseClick(win.bt_switch, Qt.LeftButton)                      # on: its table, where Tab enters it
+        view = win.bt_view
+        self.assertTrue(view.hasFocus() and view.currentIndex().isValid())
         QTest.mouseClick(win.eq_switches[1], Qt.LeftButton)                 # off: the focus stays
         self.assertTrue(view.hasFocus() and view.chosen)
-        self.assertIs(stage.currentWidget(), win.loudness_graph)
+        QTest.mouseClick(win.loudness_switch, Qt.LeftButton)                # on: the focus and the stage stay, the
+        self.assertTrue(view.hasFocus())                                    # response graph shows it when pointed at
+        self.assertIs(stage.currentWidget(), win.graph)
         left.setFocus()
         QTest.keyClick(left, Qt.Key_Return)                                 # in an editor
-        QTest.mouseClick(win.loudness_switch, Qt.LeftButton)                # off: back to its table
+        QTest.mouseClick(win.bt_switch, Qt.LeftButton)                      # off: back to its table
         self.assertTrue(left.hasFocus())
-        self.assertIs(stage.currentWidget(), win.graph)
         QTest.mouseClick(win.eq_switches[1], Qt.LeftButton)                 # on: its current cell
         self.assertEqual((right.hasFocus(), right.currentIndex().row()), (True, 3))
         self.settle()
-        self.assertEqual([self.sim.state[(3, P.LOUDNESS_ENABLE)], self.sim.state[(4, P.EQ_ENABLE)]], [0, 1])
+        self.assertEqual([self.sim.state[(3, P.LOUDNESS_ENABLE)], self.sim.state[(4, P.BT_ENABLE)],
+                          self.sim.state[(4, P.EQ_ENABLE)]], [1, 0, 1])
         win.tabs.setFocus()
         QTest.keyClick(win.tabs, Qt.Key_Backtab)                            # no switch in the Tab order
-        self.assertIn(QApplication.focusWidget(), win.band_views + [win.bt_view, view])
+        self.assertIn(QApplication.focusWidget(), win.band_views + [win.bt_view, win.loudness_view])
 
     def test_the_loudness_shelves_have_points_to_choose_and_drag(self):
         g, view = self.win.loudness_graph, self.win.loudness_view
@@ -351,6 +375,10 @@ class Window(WindowTest):
         p, q = at(-23.0), at(-25.0)
         QTest.mousePress(g.viewport(), Qt.LeftButton, Qt.NoModifier, p)
         self.assertEqual((view.currentIndex().row(), g.current), (1, (3, P.LD_TREBLE)))   # Treble, on the press
+        rings = [round(s.pen().color().alphaF(), 2) for s in g.handles.points()]
+        labels = [round(t.color.alphaF(), 2) for t in g.handle_labels]
+        self.assertEqual((rings[:2], labels), ([BAND_ALPHA, 1.0], [BAND_ALPHA, 1.0]))   # one opacity, as a band's
+        self.assertEqual([s.pos() for s in g.dots.points()], [spots[1]])   # off its curve: a centre dot
         for i in range(1, 11):
             QTest.mouseMove(g.viewport(), QPoint(p.x(), p.y() + (q.y() - p.y()) * i // 10))
             self.spin(20)
@@ -373,6 +401,7 @@ class Window(WindowTest):
         p = at()
         QTest.mouseClick(g.viewport(), Qt.LeftButton, Qt.NoModifier, p)
         self.assertEqual((view.currentIndex().row(), g.current), (2, key))  # Low Vol Ref, on the press
+        self.assertEqual(g.dots.points().size, 0)                            # on its curve: no centre dot
         g.stick_start(key)
         g.stick(-60)                                                        # 60 px up: 10 dB/s
         k, ref, dy, t = g._stick
@@ -425,6 +454,17 @@ class Window(WindowTest):
         self.sim.power(False)
         self.spin(1000)
         self.assertEqual(self.win.windowTitle(), "ADI-2 Commander")
+
+    def test_the_serial_number_in_the_title(self):
+        self.sim.power(False)
+        self.spin(1000)
+        self.sim.serial = "12345678"
+        self.sim.power(True)
+        for _ in range(60):
+            self.spin(50)
+            if self.session.ready():
+                break
+        self.assertEqual(self.win.windowTitle(), "ADI-2 Commander – ADI-2 DAC FS 12345678")
 
     def test_a_model_that_is_not_supported(self):
         self.sim.power(False)
@@ -489,6 +529,22 @@ class Window(WindowTest):
         self.assertNotIn("dashed", self.win.bt_switch.styleSheet())             # off stays off
         self.sim.signal(usb=176400)
         self.assertEqual(state(), (False, False, False, True))
+
+    def test_dsd_fades_the_loudness_graph(self):
+        g, view = self.win.loudness_graph, self.win.loudness_view
+        QTest.mouseClick(self.win.loudness_switch, Qt.LeftButton)           # on
+        view.setFocus()
+        view.setCurrentIndex(view.model().index(1, 1))                      # Treble: the Loudness stage
+        self.sim.front_panel([(out, 1, 3) for out in (3, 6, 9)])            # USB
+        self.sim.signal(usb=176400, dsd=True)
+        self.spin(1100)
+        color = lambda item: item.opts["pen"].color().rgb()                 # noqa: E731
+        self.assertEqual({color(i) for i in (g.full_boost, g.no_boost, g.now)}, {theme.faded(theme.LOUDNESS).rgb()})
+        self.assertIn("DSD input: no DSP", g._describe((3, P.LD_TREBLE)))
+        QTest.mouseClick(self.win.loudness_switch, Qt.LeftButton)           # off: grey, as without DSD
+        self.spin(300)
+        self.assertEqual(color(g.full_boost), theme.OFF.rgb())
+        self.assertIn("Loudness not in the signal path", g._describe((3, P.LD_TREBLE)))
 
     def test_the_active_output_has_a_dot_on_its_tab(self):
         def marked():
@@ -753,30 +809,31 @@ class ProWindow(WindowTest):
         """With settings of its own, Phones 1/2 shows and writes Mute and the other settings of the D/A converter at
         Line Out's address, and says so, as Line Out does; Volume is its own. Dim where Line Out or Phones 1/2 is
         active."""
-        panel, sim = self.win.output_panel, self.sim
+        panel, sim, section = self.win.output_panel, self.sim, self.win.volume_section
+        _, mute, dim = section.level.items
         sim.state[(12, 8)] = 1
         self.spin(4000)
         QTest.mouseClick(self.win.output_tab, Qt.LeftButton)
         self.win.tabs.setCurrentIndex(tab(6))
         volume = sim.state[(6, P.VOLUME)], sim.state[(3, P.VOLUME)]
-        QTest.mouseClick(panel.options[P.MUTE], Qt.LeftButton)
-        s = panel.volume
+        QTest.mouseClick(mute, Qt.LeftButton)
+        s = section.volume
         QTest.mouseClick(s, Qt.LeftButton, pos=QPoint(4, s.height() // 2))
         self.spin(1500)
         self.assertEqual((sim.state[(3, P.MUTE)], (6, P.MUTE) in sim.state), (1, False))
         self.assertEqual((sim.state[(6, P.VOLUME)], sim.state[(3, P.VOLUME)]), (volume[0] - 5, volume[1]))
         shared = "One setting for Line Out and Phones 1/2"
-        self.assertIn(shared, panel.options[P.MUTE].toolTip())
+        self.assertIn(shared, mute.toolTip())
         self.assertIn(shared, panel.steppers[P.DA_FILTER].toolTip())
         self.assertNotIn(shared, panel.steppers[P.CROSSFEED].toolTip())
-        self.assertTrue(panel.options[P.DIM].isEnabled())                      # Line Out is active
+        self.assertTrue(dim.isEnabled())                                        # Line Out is active
         self.session.device_status = self.session.device_status._replace(output=0)
         self.win.refresh()
-        self.assertFalse(panel.options[P.DIM].isEnabled())
+        self.assertFalse(dim.isEnabled())
         self.win.tabs.setCurrentIndex(tab(3))
-        self.assertIn(shared, panel.options[P.MUTE].toolTip())
+        self.assertIn(shared, mute.toolTip())
         self.win.tabs.setCurrentIndex(tab(9))
-        self.assertNotIn(shared, panel.options[P.MUTE].toolTip())
+        self.assertNotIn(shared, mute.toolTip())
 
     def test_ref_level_of_phones_1_2_beside_line_out(self):
         """Phones 1/2 with the settings of Line Out: on their tab its Ref Level beside Line Out's, which sets it, shown
@@ -877,14 +934,12 @@ class ProWindow(WindowTest):
         QTest.mouseClick(side, Qt.LeftButton)
         self.assertFalse(area.isHidden())
         self.assertEqual(panel.steppers[P.REF_LEVEL].text(panel.steppers[P.REF_LEVEL].value), "+19 dBu")
-        self.assertEqual(panel.volume_label.text(), "Volume (dBr)")                  # Auto Ref Level on
-        QTest.mouseClick(panel.options[P.MUTE], Qt.LeftButton)
-        self.spin(1500)
-        self.assertEqual(self.sim.state[(3, P.MUTE)], 1)
+        unit = lambda: self.win.volume_section.volume.unit                       # noqa: E731
+        self.assertEqual(unit(), "dBr")                                         # Auto Ref Level on
         self.win.tabs.setCurrentIndex(tab(9))
         QTest.mouseClick(panel.options[P.AUTO_REF_LEVEL], Qt.LeftButton)
         self.spin(1500)
-        self.assertEqual((self.sim.state[(9, P.AUTO_REF_LEVEL)], panel.volume_label.text()), (0, "Volume (dB)"))
+        self.assertEqual((self.sim.state[(9, P.AUTO_REF_LEVEL)], unit()), (0, "dB"))
         self.assertTrue(panel.steppers[P.REF_LEVEL].isEnabled())
         QTest.mouseClick(self.win.input_tab, Qt.LeftButton)
         self.assertFalse(self.win.input_area.isHidden())
@@ -932,6 +987,7 @@ class ProWindow(WindowTest):
         self.sim.front_panel([(7, 28, 3), (10, 28, 3)])               # Preset 2 on Phones 1/2 and Phones 3/4
         self.spin(1500)
         self.assertEqual(self.win.presets.rows[3].tags.text(), "P34")
+        self.assertEqual(self.win.presets.rows[3].tags.toolTip(), "Selected on Phones 3/4")
 
     def test_export_names_the_device_and_the_output(self):
         self.win.tabs.setCurrentIndex(tab(9))
@@ -1025,7 +1081,7 @@ class AnalogIn(WindowTest):
                          ("Analog In", 0, "ANALOG IN"))
         self.assertTrue(win.band_views[0].isVisible())
         self.assertFalse(win.bt_view.isVisible() or win.loudness_view.isVisible() or win.load_bt.isVisible())
-        self.assertFalse(win.legend.items["BT"].isVisible())
+        self.assertEqual(win.legend.items["sections"].toolTip().split("\n")[0], "What the EQ adds")
         self.assertFalse(win.output_tab.isEnabled() or win.output_area.isVisible())
         self.assertEqual(win.output_tab.toolTip(), "The settings of Analog In are in the input panel.")
         win.tabs.setCurrentIndex(tab(3))
@@ -1042,14 +1098,15 @@ class AnalogIn(WindowTest):
         self.assertEqual(self.sim.state[(1, 28)], 3)
         self.assertTrue(win.presets.rows[3].dot.on)
         win.tabs.setCurrentIndex(tab(3))
-        self.assertEqual(win.presets.rows[3].tags.text(), "In")       # selected on Analog In
+        self.assertEqual(win.presets.rows[3].tags.text(), "In")
+        self.assertEqual(win.presets.rows[3].tags.toolTip(), "Selected on Analog In")
 
     def test_select_and_store_say_what_they_do_without_its_bass_treble(self):
-        hover(self.win, self.win.presets.rows[3])
+        row = self.win.presets.rows[3]
+        hover(self.win, row)
         self.spin(20)
-        preview = self.win.preview
-        self.assertEqual(preview.select.toolTip(), "Select it on Analog In: its EQ is loaded there.")
-        self.assertTrue(preview.store.toolTip().startswith(
+        self.assertEqual(row.select.toolTip(), "Select it on Analog In: its EQ is loaded there.")
+        self.assertTrue(row.store.toolTip().startswith(
             "Store the current EQ of Analog In in Preset 2, with Bass/Treble at 0 dB.\n"))
         clear = self.win.presets.rows[22]
         self.assertTrue(clear.toolTip().endswith("Store sets the Bass/Treble of the preset to 0 dB."))
@@ -1086,6 +1143,73 @@ class Placement(unittest.TestCase):
     def test_maximized_where_it_does_not_fit(self):
         self.assertIsNone(placement(QSize(1199, 594), QRect(0, 0, 1024, 720)))          # too wide
         self.assertIsNone(placement(QSize(1000, 700), QRect(0, 0, 1280, 720)))          # too high with its frame
+
+
+class AsBefore(unittest.TestCase):
+    """The window opens where it was when it last closed, as large, maximized if it was; the first time in the middle
+    of the screen."""
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.settings = QSettings(os.path.join(folder.name, "settings.ini"), QSettings.IniFormat)
+        self.screen = QApplication.primaryScreen()
+
+    def window(self):
+        clock = Clock()
+        sim = SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=clock)
+        session = Session(lambda: SimPort(sim), clock=clock)
+        win = MainWindow(session, settings=self.settings)
+        win.timer.setInterval(24 * 3600 * 1000)
+        self.addCleanup(session.close)
+        self.addCleanup(win.close)
+        return win
+
+    def closed(self, maximized):
+        """A window shown, then closed normal or maximized: what it left in the settings."""
+        win = self.window()
+        win.show_as_before(self.screen)
+        win.showMaximized() if maximized else win.showNormal()
+        QApplication.processEvents()
+        geometry = win.saveGeometry()
+        win.close()
+        self.assertEqual(self.settings.value(GEOMETRY), geometry)
+        self.assertEqual(self.settings.value(MAXIMIZED, type=bool), maximized)
+        return geometry
+
+    def test_the_first_time_in_the_middle_of_the_screen(self):
+        win = self.window()
+        with mock.patch("commander.ui.window.show_on_screen") as show:
+            win.show_as_before(self.screen)
+        show.assert_called_once_with(win, win.sizeHint(), self.screen)
+
+    def test_where_it_was_and_as_large(self):
+        geometry = self.closed(maximized=False)
+        win = self.window()
+        with mock.patch.object(win, "restoreGeometry", wraps=win.restoreGeometry) as restore:
+            win.show_as_before(self.screen)
+        restore.assert_called_once_with(geometry)
+        self.assertTrue(win.isVisible())
+        self.assertFalse(win.isMaximized())
+
+    def test_maximized_if_it_was(self):
+        self.closed(maximized=True)
+        win = self.window()
+        win.show_as_before(self.screen)
+        QApplication.processEvents()
+        self.assertTrue(win.isMaximized())
+
+    def test_where_qt_cannot_restore_it_maximized_if_it_was(self):
+        for maximized in (True, False):
+            with self.subTest(maximized=maximized):
+                self.closed(maximized)
+                win = self.window()
+                with mock.patch.object(win, "restoreGeometry", return_value=False), \
+                        mock.patch("commander.ui.window.show_on_screen") as show:
+                    win.show_as_before(self.screen)
+                QApplication.processEvents()
+                self.assertEqual(win.isMaximized(), maximized)
+                self.assertEqual(show.call_count, 0 if maximized else 1)
 
 
 class SimulatedModel(unittest.TestCase):
@@ -1240,6 +1364,13 @@ class Backup(unittest.TestCase):
             self.assertEqual(f.read(), setupfile.write(taken, session.slots, session.model, session.revision()))
         self.assertEqual(self.sim.state[(4, 7)], taken[(4, 7)] + 4)
 
+    def test_named_by_the_serial_number(self):
+        self.sim.serial = "12345678"
+        win, session = self.window(backups=self.folder)
+        self.run_for(win, 8)
+        [name] = self.copies()
+        self.assertTrue(name.startswith("ADI-2 DAC FS 12345678 "))
+
     def test_a_new_copy_only_when_the_state_differs(self):
         win, session = self.window(backups=self.folder)
         self.run_for(win, 8)
@@ -1248,6 +1379,34 @@ class Backup(unittest.TestCase):
         self.sim.power(True)
         self.run_for(win, 8)
         self.assertEqual(len(self.copies()), 1)
+
+    def test_not_saved_while_a_slot_is_not_read_and_said_so(self):
+        answer, lose = self.sim._answer_preset, {1, 4}
+
+        def lossy(slot):
+            if slot not in lose:
+                answer(slot)
+        self.sim._answer_preset = lossy
+        win, session = self.window(backups=self.folder)
+        self.run_for(win, 10)
+        self.assertEqual(self.copies(), [])
+        self.assertEqual(win.file_note.text(), "Backup not saved: Presets 1 and 4 could not be read")
+        self.assertIn(theme.WARN.name(), win.file_note.styleSheet())
+        lose.clear()
+        self.run_for(win, 70)                                               # asked again after a minute
+        self.assertEqual(len(self.copies()), 1)
+        self.assertEqual(win.file_note.text(), "")
+
+    def test_the_note_goes_with_the_device(self):
+        self.sim._answer_preset = lambda slot: None
+        win, session = self.window(backups=self.folder)
+        self.run_for(win, 20, lambda: len(session.unread) == 2)             # 3 s a slot
+        self.assertEqual(win.file_note.text(), "Backup not saved: Presets 1 and 2 could not be read")
+        self.run_for(win, 70, lambda: len(session.unread) == 20)
+        self.assertEqual(win.file_note.text(), "Backup not saved: 20 presets could not be read")
+        self.sim.power(False)
+        self.run_for(win, 2)
+        self.assertEqual(win.file_note.text(), "")
 
     def test_gone_before_the_slots_are_read(self):
         win, session = self.window(backups=self.folder)

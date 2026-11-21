@@ -7,9 +7,9 @@ from unittest import mock
 
 from commander.device import codec, models, simulator
 from commander.device import params as P
-from commander.device.connection import PortBusy
+from commander.device.connection import NotDelivered, NotStarted, PortBusy
 from commander.device.models import DAC, PRO, PRO_24
-from commander.session import Session, loaded
+from commander.session import Session, incomplete, loaded
 from commander.device.simulator import SimPort, SimulatedAdi2
 from tests.support import DUMP, PRESETS
 
@@ -127,6 +127,73 @@ class Connect(Harness):
         self.sim.power(False)
         self.run_for(0.6)
         self.assertEqual(self.statuses(), ["searching"])
+
+
+class Traffic(Harness):
+    def test_records_what_goes_out_and_comes_in_in_order(self):
+        self.connect()
+        entries = list(self.session.traffic.entries)
+        self.assertEqual(entries[0][1:], ("port", 'opened  in "%s"  out "%s"' % self.session.port.names))
+        self.assertEqual(entries[1].kind, "out")
+        self.assertEqual(list(entries[1].data), codec.header(DAC.id) + [0x03, 0x09, 0xF7])   # the first dump request
+        sent = [list(e.data) for e in entries if e.kind == "out"]
+        self.assertEqual(sent, self.sim.received)
+        self.assertIn("in", {e.kind for e in entries})
+        self.assertEqual([e.t for e in entries], sorted(e.t for e in entries))
+
+    def test_kept_across_connections(self):
+        self.connect()
+        before = len(self.session.traffic.entries)
+        self.sim.power(False)
+        self.run_for(1.0)
+        self.sim.power(True)
+        self.run_for(3.0)
+        self.assertEqual(self.session.status, "ready")
+        self.assertGreater(len(self.session.traffic.entries), before)
+        port = [e.data for e in self.session.traffic.entries if e.kind == "port"]
+        self.assertEqual(port[1:3], ["no longer listed", "closed"])
+        self.assertEqual(port[0], port[-1])                              # opened again
+
+
+class PortFailures(Harness):
+    """The log has what happened to the port; the connection's detail says what it means."""
+
+    def setUp(self):
+        super().setUp()
+        self.details = []
+        self.session.on_connection.append(lambda s, d: self.details.append((s, d)))
+
+    def logged(self):
+        return [e.data for e in self.session.traffic.entries if e.kind == "port"]
+
+    def failing(self, error):
+        def open_port():
+            raise error
+        self.session.open_port = open_port
+
+    def test_busy(self):
+        self.failing(PortBusy("midiInOpen failed (winmm 4)"))
+        self.run_for(0.1)
+        self.assertEqual(self.details, [("busy", "the ADI-2 MIDI port is in use by another program")])
+        self.assertEqual(self.logged(), ["not opened: midiInOpen failed (winmm 4)"])
+
+    def test_not_started(self):
+        self.failing(NotStarted("the first winmm call has not returned"))
+        self.run_for(0.1)
+        self.assertEqual(self.details, [("searching", "Windows is starting its MIDI service")])
+        self.assertEqual(self.logged(), ["not opened: the first winmm call has not returned"])
+
+    def test_not_delivered(self):
+        self.connect()
+        self.details.clear()
+
+        def send(msg):
+            raise NotDelivered("not done after 3 s; midiOutReset")
+        self.session.port._port.send = send
+        self.session.set((4, 4), -12)
+        self.run_for(0.5)
+        self.assertEqual(self.details, [("searching", "device lost (SysEx not delivered)")])
+        self.assertEqual(self.logged()[1:], ["send failed: not done after 3 s; midiOutReset", "closed"])
 
 
 class Recognition(Harness):
@@ -526,6 +593,28 @@ class Slots(Harness):
         self.assertEqual(self.asked()[:5], [0, 1, 2, 3, 3])
         self.assertEqual(sorted(self.session.slots), list(range(1, 21)))
 
+    def test_an_answer_slower_than_the_timeout_completes_over_the_requests(self):
+        answer, asked = self.sim._answer_preset, []
+
+        def slow_for_slot_3(slot):
+            if slot != 3:
+                return answer(slot)
+            if asked:                                               # only the first request is answered
+                return
+            asked.append(slot)
+            before = len(self.sim.outbox)
+            answer(slot)
+            (name_due, name), *values = self.sim.outbox[before:]
+            self.sim.outbox[before:] = [(name_due + 0.3, name)] + [(due + 1.2, m) for due, m in values]
+
+        self.sim._answer_preset = slow_for_slot_3
+        self.connect()
+        self.run_for(4.0)
+        self.assertEqual(self.asked()[:6], [0, 1, 2, 3, 3, 4])
+        self.assertEqual(self.session.status, "ready")
+        self.assertEqual((self.session.slots[3]["dual"], self.session.slots[3]["vals"]),
+                         (self.sim.slots[3]["dual"], self.sim.slots[3]["vals"]))
+
     def test_device_gone_forgets_the_slots(self):
         self.connect()
         self.run_for(3.0)
@@ -656,6 +745,99 @@ class Stale(Harness):
         self.session.set((10, 28), 6)                                   # Preset 5
         self.run_for(4.0)
         self.assertEqual((self.session.state[(10, 28)], self.session.stale(9), self.stale_events), (6, {}, []))
+
+
+class Unread(Harness):
+    """A slot whose answer stays incomplete is not read; the connection stays."""
+
+    def setUp(self):
+        super().setUp()
+        self.operations = []
+        self.session.on_operation.append(lambda kind, slot, result: self.operations.append((kind, slot, result)))
+        self.lose = {}                                                  # {slot: which messages of its answer go}
+        answer = self.sim._answer_preset
+
+        def lossy(slot):
+            before = len(self.sim.outbox)
+            answer(slot)
+            if slot in self.lose:
+                self.sim.outbox[before:] = [(t, m) for t, m in self.sim.outbox[before:] if not self.lose[slot](m)]
+        self.sim._answer_preset = lossy
+
+    def asked(self, slot):
+        return sum(1 for m in self.sim.received if m[5] == 0x03 and m[6] == 0x09 + slot)
+
+    def test_the_connection_stays_and_the_round_goes_on(self):
+        self.lose[1] = lambda m: True
+        self.connect()
+        self.run_for(6.0)
+        self.assertEqual(self.session.status, "ready")
+        self.assertEqual(self.session.unread, {1: "No reply from the device"})
+        self.assertEqual(sorted(self.session.slots), list(range(2, 21)))
+        self.assertIn([1], self.slot_events)
+
+    def test_asked_again_after_a_minute_not_every_round(self):
+        self.lose[1] = lambda m: True
+        self.connect()
+        self.run_for(10.0)
+        self.assertEqual(self.asked(1), 3)
+        self.run_for(60.0)
+        self.assertEqual(self.asked(1), 6)
+        del self.lose[1]
+        self.run_for(65.0)
+        self.assertEqual((self.session.unread, sorted(self.session.slots)), ({}, list(range(1, 21))))
+
+    def test_what_the_answer_lacked(self):
+        self.lose = {1: lambda m: m[5] == 0x05,                                     # the name
+                     2: lambda m: m[5] == 0x01 and len(m) < 20,                     # the short last message
+                     5: lambda m: m[5] == 0x01}                                     # the flag word
+        self.connect()
+        self.run_for(10.0)
+        self.assertEqual(self.session.unread, {
+            1: "The device's reply was incomplete: no name",
+            2: "The device's reply was incomplete: 1 of 6 Bass/Treble values missing",
+            5: "The device's reply was incomplete: no preset number"})
+
+    def test_the_parts_whose_values_are_missing(self):
+        answer = {"n": 3, "name": list(b"Desk"), "vals": {(13, 1): 0x20}}             # Preset 3, used, Dual EQ off
+        answer["vals"].update({(13, i): 0 for i in range(3, 20) if i != 8})
+        answer["vals"].update({(13, i): 0 for i in P.BASS})
+        self.assertEqual(incomplete(answer), "The device's reply was incomplete: 1 of 17 EQ Left values missing, "
+                                             "no EQ Right, 3 of 6 Bass/Treble values missing")
+
+    def test_a_slot_read_before_keeps_its_reading(self):
+        self.connect()
+        self.run_for(3.0)
+        before = self.session.slots[1]
+        self.slot_events.clear()
+        self.lose[1] = lambda m: m[5] == 0x05
+        self.run_for(70.0)
+        self.assertEqual(self.session.slots[1], before)
+        self.assertIn(1, self.session.unread)
+        self.assertIn(1, self.session.read_at)
+        self.assertIn([1], self.slot_events)
+
+    def test_store_that_cannot_read_the_slot_writes_nothing(self):
+        self.connect()
+        self.run_for(3.0)
+        self.lose[7] = lambda m: True
+        since = len(self.sim.received)
+        self.session.store(6, 7)
+        self.run_for(8.0)
+        self.assertEqual(self.operations, [("store", 7, {"not read": "No reply from the device"})])
+        self.assertFalse([m for m in self.sim.received[since:] if m[5] in (0x02, 0x06)])
+        self.assertEqual(self.session.status, "ready")
+
+    def test_write_that_cannot_read_back(self):
+        self.connect()
+        self.run_for(3.0)
+        content = dict(loaded(self.session.slots[2]), name="Back")
+        self.session.write_slot(8, content)
+        self.run_for(2.5)                                               # read before writing, then written
+        self.lose[8] = lambda m: True
+        self.run_for(8.0)
+        self.assertEqual(self.operations, [("write", 8, {"not read back": "No reply from the device"})])
+        self.assertEqual(bytes(self.sim.slots[8]["name"]).split(b"\0")[0].strip(), b"Back")      # written
 
 
 class StoreWrite(Harness):

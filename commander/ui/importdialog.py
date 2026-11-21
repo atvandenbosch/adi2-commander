@@ -3,14 +3,17 @@ Cancel writes nothing. The conversion itself is eqimport's; this is what the use
 
     Input       the file as written. A check box in the margin before every line that can be used; what cannot be
                 used is grey, its tooltip says why. In a Commander file the rows of its table are the lines to use
-                (Origin ADI-2), or its Filter lines (Origin External). A curve: a summary instead, with the choice
-                of the column that is the curve.
-    Conversion  Map or Fit, convert again, Close enough (stop the fit and take its best so far), Origin, fs, and with
-                Fit Bass/Treble. The graph: per channel the input (wide and see-through), the sum of the result
-                and its bands, on the main window's scale; below it, on the same scale, how far the sum is off the
-                input. The sum and its bands as the device makes them; a fit's free level moves the input onto
-                them ("Input (adj.)"). Only the result counts here, not the device. Its legend works as the main
-                window's.
+                (Origin ADI-2), or its Filter lines (Origin External). A Preamp line starts unchecked and is used
+                with Fit at a fixed level; checking it sets both. Checked where it is not used, it is amber and
+                ignored. A curve: a summary instead, with the choice of the column that is the curve.
+    Conversion  Origin ('—' for a curve) and fs; Map or Fit, and with Fit its Level, Bass/Treble and one button:
+                Stop while the fit runs (take its best so far), else Restart. The graph:
+                per channel the input (wide and see-through), the sum of the result and its bands, on the main
+                window's scale; below it, on the same scale, how far the sum is off the input. The sum and its
+                bands as the device makes them; a fit's free level moves the input onto them, a fixed level centres
+                a curve on 0 dB ("Input (adj.)"). While a fit runs, what it tries now: white dots, as thick as the
+                sum; fitting one channel after the other, the channel it does not work on steps back. Only the
+                result counts here, not the device. Its legend works as the main window's.
     Output      the result in the tables of the main window, read only; what the input does not set is '—', and
                 goes to the device at its factory default. A check box per block says whether OK writes it; a
                 block the input does not set at all starts unchecked. OK and Cancel.
@@ -18,7 +21,7 @@ Cancel writes nothing. The conversion itself is eqimport's; this is what the use
 
 What the file is decides how the dialog starts (once, on opening): a Commander file maps its table; a file that
 fits the device exactly as written maps; any other file fits, and a curve only fits. Every change recomputes; a fit runs in a thread of
-its own, again half a second after the last click on a line. OK waits for the fit, or for Close enough. The dialog
+its own, again half a second after the last click on a line. OK waits for the fit, or for Stop. The dialog
 follows the device when Dual EQ changes there, and keeps OK off while the device is gone.
 
 Into a preset being edited (the window's edit stand) it works the same, on the preset instead of the device, and says
@@ -29,13 +32,13 @@ include Bass/Treble, and Output has no Bass/Treble table. A preset being edited 
 """
 
 import itertools
-import math
 import os
+import time
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QIcon, QPainter, QPalette, QPen, QPixmap, QPolygonF
+from PySide6.QtCore import QPointF, QRect, QSize, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QPalette, QPen
 from PySide6.QtWidgets import (QApplication, QCheckBox, QDialog, QFrame, QGraphicsTextItem, QGridLayout, QHBoxLayout,
                                QLabel, QListWidget, QListWidgetItem, QProgressBar, QScrollArea, QSplitter,
                                QStackedWidget, QStyle, QStyledItemDelegate, QStyleOptionButton, QVBoxLayout, QWidget)
@@ -47,10 +50,11 @@ from ..conversion import eqimport as I
 from ..device import filters as F
 from ..device import params as P
 from . import theme
-from .graph import (BAND_ALPHA, BAND_W, COMPARE_W, DEVIATION_FILL, DEVIATION_W, DIMMED, INPUT_ALPHA, INPUT_W,
-                    LEGEND_GAP, MIN_POINTS, POINTS_PER_PIXEL, SUM_W, TITLE_ROOM, X_HI, X_LO, X_PAD, Y_HI, Y_LO, ZONE_INK,
-                    _fading_pen, _ticks, side_color, title_axes)
-from .legend import GROUP_GAP, _Item as LegendItem
+from .graph import (BAND_ALPHA, BAND_W, COMPARE_DOTS, DEVIATION_FILL, DEVIATION_W, DIMMED, INPUT_ALPHA, INPUT_W,
+                    LEGEND_GAP, MIN_POINTS, POINTS_PER_PIXEL, SECTION_W, SUM_W, TITLE_ROOM, X_HI, X_LO, X_PAD, Y_HI,
+                    Y_LO, ZONE_INK, RatioCorner, _fading_pen, _ticks, round_dots, side_color, title_axes)
+from .legend import (CHANNEL_NAMES, GROUP_GAP, NAME_OFF, NAME_ON, SHARED_NAME, Group as LegendGroup,
+                     _Item as LegendItem)
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, CellDelegate, Marks, ParamModel, ParamView,
                      band_rows, bt_rows)
 from .widgets import (ATTACHED_GAP, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE, Action, Choice, Segmented,
@@ -60,9 +64,13 @@ MAP, FIT = 0, 1
 DIFF_ROOM = 8.0                                  # dB below the main window's scale, for the deviation
 DIFF_MID = Y_LO - DIFF_ROOM / 2
 REFIT_MS = 500                                   # after the last click on a line, the fit starts again
-CANDIDATE_ALPHA = 0.85                           # what the fit tries now: a little faint
 CURVES_KEPT = 4000                               # curves kept for drawing again, before they are let go
 PROGRESS_MS = 100                                # a fit's best so far is shown at most this often
+GUARD_MS = 400                                   # a click this soon after the convert button changed is not taken:
+                                                 # it was meant for what the button was
+CONVERT_TEXTS = {"restart": "Restart", "stop": "Stop"}
+CONVERT_TIPS = {"restart": "Fit again, from the start.",
+                "stop": "Stop the fit and take what it has found so far."}
 LEVEL_SHOWN = 0.05                               # dB: a fit's level from here on is said
 LABEL_ROOM = 12                                  # px beside 20 Hz and 20 kHz for their labels
 BODY_MARGIN = 12                                 # px above and below the columns
@@ -70,9 +78,14 @@ ZONE_TOP = INNER_GAP                             # px above the legend in the gr
 UNDEFINED = "—"
 UNDEFINED_TIP = "Not set: factory default"
 NO_BT = "%s has no Bass/Treble."                   # why a Bass or Treble row cannot be used, with the name
+PREAMP_OFF = "Used with Fit at a fixed level; checking it sets both"
+PREAMP_MAP = "Unmappable: used with Fit at a fixed level only"
+PREAMP_FREE = "Ignored: used with a fixed level only"
+PREAMP_NO_EQ = "Ignored: no filters checked for this channel"
+PREAMP_ALONE = "Preamp: used with filters only"
 STATE_ROLE, WARN_ROLE, MARK_ROLE = Qt.UserRole + 1, Qt.UserRole + 2, Qt.UserRole + 3
-AGAIN_ICON = 14                                  # px, the round arrow
 BOX, LINE_H = 22, 22                             # px: the check box's part of the margin; a line of the file
+ROW_SPACING = 6                                  # px between the widgets of a row, as widgets.head
 
 
 def read_file(path, fs):
@@ -238,51 +251,6 @@ def _hz(f):
     return "%.3g Hz" % f if f < 1000 else "%.3g kHz" % (f / 1000)
 
 
-def again_icon(color):
-    """A round arrow, clockwise: convert again."""
-    size, scale = AGAIN_ICON, 4                  # drawn large, shown small: sharp at any display scaling
-    pm = QPixmap(size * scale, size * scale)
-    pm.setDevicePixelRatio(scale)
-    pm.fill(Qt.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.Antialiasing)
-    pen = QPen(color, 1.0)                       # as thin as the letters of a button
-    pen.setCapStyle(Qt.FlatCap)
-    p.setPen(pen)
-    radius, start, span = size / 2 - 2.6, 60, -300    # degrees: from the top right, clockwise, open at the top
-    cx, cy = size / 2, size / 2 + 0.7            # lower: the arrowhead rises above the circle, and all of it centres
-    p.drawArc(QRectF(cx - radius, cy - radius, 2 * radius, 2 * radius), start * 16, span * 16)
-    end = math.radians(start + span)
-    at = QPointF(cx + radius * math.cos(end), cy - radius * math.sin(end))
-    ahead = QPointF(math.sin(end), math.cos(end))     # clockwise along the circle, on the screen
-    side = QPointF(-ahead.y(), ahead.x())
-    p.setPen(Qt.NoPen)
-    p.setBrush(color)
-    p.drawPolygon(QPolygonF([at + ahead * 2.2, at - ahead * 0.3 + side * 1.8, at - ahead * 0.3 - side * 1.8]))
-    p.end()
-    return QIcon(pm)
-
-
-def enough_icon(color, disabled):
-    """A check mark: close enough, take what the fit has found so far. Its own colour when it cannot be pressed."""
-    icon = QIcon()
-    for c, mode in ((color, QIcon.Normal), (disabled, QIcon.Disabled)):
-        size, scale = AGAIN_ICON, 4
-        pm = QPixmap(size * scale, size * scale)
-        pm.setDevicePixelRatio(scale)
-        pm.fill(Qt.transparent)
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.Antialiasing)
-        pen = QPen(c, 1.2)
-        pen.setCapStyle(Qt.RoundCap)
-        pen.setJoinStyle(Qt.RoundJoin)
-        p.setPen(pen)
-        p.drawPolyline(QPolygonF([QPointF(3.0, 7.4), QPointF(5.8, 10.2), QPointF(11.0, 4.0)]))
-        p.end()
-        icon.addPixmap(pm, mode)
-    return icon
-
-
 # -- the graph -----------------------------------------------------------------------------------------
 
 class TwoScales(pg.AxisItem):
@@ -313,12 +281,16 @@ class TwoScales(pg.AxisItem):
 
 class CurveGraph(pg.PlotWidget):
     """Per channel the input, the sum and its bands on the main window's scale and at its resolution (freqs: two points
-    per pixel); below it the deviation. What the legend hides is not drawn; what it points at stays bright, the rest
-    steps back. resolution_changed: the width asks for other frequencies; the curves are to be computed again."""
+    per pixel); below it the deviation. Sections: what each EQ and Bass/Treble adds (off at first). Bass/Treble
+    belongs to every channel: its bands and section are drawn once, while a channel is shown. What the legend hides is
+    not drawn; what it points at stays bright, the rest steps back, as in the main window. resolution_changed: the
+    width asks for other frequencies; the curves are to be computed again."""
 
     resolution_changed = Signal()
 
-    LAYERS = ("input", "sum", "bands", "deviation", "candidate")
+    LAYERS = ("input", "sum", "sections", "bands", "deviation", "candidate")
+    # each layer over the one before, in both channels; what the fit tries over the sum, which shows between its dots
+    Z = {"input": 0, "bands": 1, "sections": 1.5, "sum": 2, "deviation": 2, "candidate": 3}
 
     def __init__(self):
         self.axis = TwoScales([("Gain (dB)", 0.0), ("Deviation (dB)", DIFF_MID)])
@@ -353,19 +325,32 @@ class CurveGraph(pg.PlotWidget):
         self.setYRange(Y_LO - DIFF_ROOM, Y_HI, padding=0)
         self.points = MIN_POINTS
         self.x = np.linspace(X_LO, X_HI, self.points)
-        self.visible = {k: True for k in ("L", "R", "BT") + self.LAYERS}
+        self.visible = {k: k != "sections" for k in ("L", "R") + self.LAYERS}
         self.drawn = {}                                  # {item: (curve, look)} as it is on screen
         self.emphasis = None                             # a legend item pointed at
+        self.fitted = None                               # the channel a fit works on, of two fitted one after the other
         self.channels = []
-        # a fixed set of items, updated in place: per channel (left last, on top) the input under the rest, its
-        # bands, what the fit tries now, the sum and the deviation
+        self.bt = []                                     # the curves of Bass and Treble, for all channels
+        # a fixed set of items, updated in place: per channel (left last, on top) the input, its bands, its EQ, what
+        # the fit tries now, the sum and the deviation; Bass and Treble once
         self.items = []
         for _ in (0, 1):
             self.items.append({"input": self.plot(connect="finite"),
-                               "bands": [self.plot(connect="finite") for _ in range(7)],
+                               "bands": [self.plot(connect="finite") for _ in range(5)],
+                               "sections": self.plot(connect="finite"),
                                "candidate": self.plot(connect="finite"), "sum": self.plot(connect="finite"),
                                "deviation": self.plot(connect="finite", fillLevel=DIFF_MID)})
         self.items.reverse()
+        self.bt_items = [self.plot(connect="finite") for _ in range(2)]
+        self.bt_section = self.plot(connect="finite")
+        for items in self.items:
+            for layer, z in self.Z.items():
+                for item in items[layer] if layer == "bands" else [items[layer]]:
+                    item.setZValue(z)
+        for item in self.bt_items:
+            item.setZValue(self.Z["bands"])
+        self.bt_section.setZValue(self.Z["sections"])
+        self.ratio = RatioCorner(self, db_title=self.axis.titles[0][0])     # the dB titles are TwoScales' own
 
     def fit_x(self):
         """20 Hz to 20 kHz with room for their labels: the main window's room, or more in a narrower graph."""
@@ -383,18 +368,31 @@ class CurveGraph(pg.PlotWidget):
             self.points = points
             self.resolution_changed.emit()
 
-    def draw(self, channels):
-        """channels: per channel (key 'L' or 'R', colour, input, sum or None, [(band curve, colour, key)], what the fit
-        tries now or None), at freqs(); the input and what is tried moved to the sum's level already."""
-        self.channels = channels
+    def draw(self, channels, bt=(), fitted=None):
+        """channels: per channel (key 'L' or 'R', colour, input, sum or None, [band curve], what the fit tries now or
+        None), at freqs(); the input and what is tried moved to the sum's level already. bt: the curves of Bass and
+        Treble, in every sum. fitted: the key of the channel a fit works on while the other waits or is done."""
+        self.channels, self.bt, self.fitted = channels, list(bt), fitted
         self.x = np.linspace(X_LO, X_HI, len(channels[0][2])) if channels else self.x
         self.redraw()
 
     def redraw(self):
         """Only what changed is drawn again: with a fit running, most curves stay as they are from one drawing to the
         next."""
+        keys = [c[0] for c in self.channels]
+        shown = any(self.visible[k] for k in keys)
+        for item, y in itertools.zip_longest(self.bt_items, self.bt if shown and self.visible["bands"] else []):
+            if y is None:
+                self._clear(item)
+            else:
+                self._band(item, y, theme.BT, (*keys, "bands"))
+        if shown and self.bt:
+            self._show(self.bt_section, "sections", np.sum(self.bt, axis=0), theme.BT, SECTION_W, 1.0,
+                       (*keys, "sections"))
+        else:
+            self._clear(self.bt_section)
         for k, items in enumerate(self.items):
-            everything = items["bands"] + [items["candidate"], items["sum"], items["deviation"], items["input"]]
+            everything = items["bands"] + [items[n] for n in ("sections", "candidate", "sum", "deviation", "input")]
             if k >= len(self.channels) or not self.visible[self.channels[k][0]]:
                 for item in everything:
                     self._clear(item)
@@ -403,17 +401,20 @@ class CurveGraph(pg.PlotWidget):
             if tried is None:
                 self._clear(items["candidate"])
             else:
-                self._show(items["candidate"], "candidate", tried, color, COMPARE_W, CANDIDATE_ALPHA,
-                           (key, "candidate"), style=Qt.DotLine)
-            for item, band in itertools.zip_longest(items["bands"], bands):
-                if band is None or not self.visible["bands"] or not self.visible[band[2]]:
+                self._show(items["candidate"], "candidate", tried, theme.TEXT, SUM_W, 1.0, (key, "candidate"),
+                           dots=COMPARE_DOTS)
+            for item, y in itertools.zip_longest(items["bands"], bands):
+                if y is None or not self.visible["bands"]:
                     self._clear(item)
-                else:                                    # fading in its tails, as in the main window
-                    alpha = BAND_ALPHA * self._dim((band[2], "bands"))
-                    self._put(item, band[0], ("band", QColor(band[1]).rgba(), alpha),
-                              lambda band=band, alpha=alpha: _fading_pen(band[1], BAND_W, alpha, self.x, band[0]))
+                else:
+                    self._band(item, y, color, (key, "bands"))
             first = self.channels[0]
             as_left = k and self.visible[first[0]] and np.array_equal(given, first[2])
+            if total is None or not bands:
+                self._clear(items["sections"])
+            else:
+                self._show(items["sections"], "sections", np.sum(bands, axis=0), color, SECTION_W, 1.0,
+                           (key, "sections"))
             if total is None:
                 self._clear(items["sum"])
                 self._clear(items["deviation"])
@@ -431,10 +432,21 @@ class CurveGraph(pg.PlotWidget):
                 self._show(items["input"], "input", given, color, INPUT_W, INPUT_ALPHA, (key, "input"))
 
     def _dim(self, keys):
-        return DIMMED if self.emphasis is not None and self.emphasis not in keys else 1.0
+        """DIMMED where this steps back: a legend item is pointed at and it is none of keys; else, while a fit works
+        on one channel of two, it is of the other."""
+        if self.emphasis is not None:
+            return DIMMED if self.emphasis not in keys else 1.0
+        return DIMMED if self.fitted is not None and self.fitted not in keys else 1.0
 
-    def _show(self, item, layer, y, color, width, alpha, keys, clip=True, style=Qt.SolidLine, fill=None):
-        """fill: the alpha of the area between the curve and its fillLevel, relative to the line's."""
+    def _band(self, item, y, color, keys):
+        """A band as in the main window: fading in its tails; full while Bands is pointed at, DIMMED where it steps
+        back (_dim; keys: what it belongs to), else BAND_ALPHA."""
+        alpha = 1.0 if self.emphasis == "bands" else DIMMED if self._dim(keys) < 1 else BAND_ALPHA
+        self._put(item, y, ("band", QColor(color).rgba(), alpha), lambda: _fading_pen(color, BAND_W, alpha, self.x, y))
+
+    def _show(self, item, layer, y, color, width, alpha, keys, clip=True, fill=None, dots=None):
+        """fill: the alpha of the area between the curve and its fillLevel, relative to the line's; dots: round dots
+        this many px apart."""
         if not self.visible[layer]:
             self._clear(item)
             return
@@ -444,15 +456,14 @@ class CurveGraph(pg.PlotWidget):
         def pen():
             p = QPen(c, width)
             p.setCosmetic(True)
-            p.setStyle(style)
-            return p
+            return round_dots(p, dots) if dots else p
 
         brush = None
         if fill is not None:
             area = QColor(c)
             area.setAlphaF(c.alphaF() * fill)
             brush = lambda: QBrush(area)
-        self._put(item, y, (c.rgba(), width, style, fill), pen, clip, brush)
+        self._put(item, y, (c.rgba(), width, fill, dots), pen, clip, brush)
 
     def _put(self, item, y, look, pen, clip=True, brush=None):
         """y with the pen pen() makes and the area brush() fills, unless the item shows that already (look: what
@@ -473,46 +484,51 @@ class CurveGraph(pg.PlotWidget):
 
 
 class CurveLegend(QWidget):
-    """As the main window's legend: the channels, then the layers. A click shows or hides an item, a double-click
-    shows only this item of its group (again: the whole group), pointing at it lights its curves."""
+    """As the main window's legend: the channels (Left and Right, or Left = Right), then the layers. Bass/Treble belongs
+    to every channel. A click shows or hides an item, a double-click shows only this item of its group (again: the
+    whole group), pointing at it lights its curves."""
 
-    LAYERS = [("input", "wide", "Input"), ("sum", "thick", "Sum"), ("bands", "thin", "Bands"),
-              ("deviation", "area", "Deviation"), ("candidate", "dotted", "Candidate")]
-    TIPS = {"bands": "Includes Bass and Treble\n", "deviation": "How far the sum is off the input, below\n",
+    CHANNELS = ("L", "R")
+    # the curves of the graph, then the deviation below it
+    LAYERS = [("input", "wide", "Input"), ("sum", "thick", "Sum"), ("sections", "medium", "Sections"),
+              ("bands", "thin", "Bands"), ("candidate", "dots", "Candidate"), ("deviation", "area", "Deviation")]
+    TIPS = {"deviation": "How far the sum is off the input, below\n",
             "candidate": "What the fit is trying now, better or not; while it fits\n"}
+    SHARED_TIP = "Dual EQ off: the same for both channels\n"
+    BT_TIPS = {"sum": ("What the result does to the channel: its EQ\n",          # without Bass/Treble, with
+                       "What the result does to the channel: EQ and Bass/Treble together\n"),
+               "sections": ("What the EQ adds\n", "What each EQ and Bass/Treble adds\n"),
+               "bands": ("", "Includes Bass and Treble\n")}
 
     def __init__(self, graph):
         super().__init__()
         self.graph = graph
         self.channels = {}                               # {key: (name, colour)} of the channels there are
+        self.bt = False                                  # Bass/Treble in the result
         self.fitting = False                             # what the fit tries now is shown only while it fits
         self.input_name, self.input_tip = "Input", ""    # "Input (adj.)" when a fit moved it
-        self.items = {k: LegendItem() for k in ("L", "R", "BT") + tuple(k for k, _, _ in self.LAYERS)}
+        self.items = {k: LegendItem() for k in self.CHANNELS + tuple(k for k, _, _ in self.LAYERS)}
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(GROUP_GAP)
-        for keys in (("L", "R", "BT"), tuple(k for k, _, _ in self.LAYERS)):
-            group = QWidget()
-            group_lay = QHBoxLayout(group)
-            group_lay.setContentsMargins(0, 0, 0, 0)
-            group_lay.setSpacing(4)
+        for keys in (self.CHANNELS, tuple(k for k, _, _ in self.LAYERS)):
             for k in keys:
                 item = self.items[k]
                 item.clicked.connect(lambda k=k: self.toggle(k))
                 item.double_clicked.connect(lambda k=k: self.isolate(k))
                 item.pointed.connect(lambda on, k=k: self.point(k, on))
-                group_lay.addWidget(item)
-            lay.addWidget(group)
+            lay.addWidget(LegendGroup([self.items[k] for k in keys]))
         self._before = None                              # the group's state before the first click of a double-click
         self.refresh()
 
-    def set_channels(self, channels):
-        self.channels = channels
+    def set_channels(self, channels, bt=False):
+        """channels: {key: (name, colour)}; bt: Bass/Treble in the result."""
+        self.channels, self.bt = channels, bt
         self.refresh()
 
     def _group(self, key):
-        if key in ("L", "R", "BT"):
-            return [k for k in ("L", "R", "BT") if k in self.channels]
+        if key in self.CHANNELS:
+            return [k for k in self.CHANNELS if k in self.channels]
         return [k for k, _, _ in self.LAYERS]
 
     def toggle(self, key):
@@ -545,15 +561,17 @@ class CurveLegend(QWidget):
             item = self.items[k]
             on = self.graph.visible[k]
             item.show_mark(kind, color if on else theme.OFF)
+            item.set_on(on)
             item.name.setText(name)
-            item.name.setStyleSheet("color: %s;" % (theme.TEXT if on else theme.OFF).name())
-            group = ("channel", "channels") if k in ("L", "R", "BT") else ("layer", "layers")
-            tip = self.input_tip if k == "input" else self.TIPS.get(k, "")
+            item.name.setStyleSheet("color: %s;" % (NAME_ON if on else NAME_OFF).name())
+            group = ("channel", "channels") if k in self.CHANNELS else ("layer", "layers")
+            tip = {"input": self.input_tip, "L": self.SHARED_TIP if name == SHARED_NAME else ""}.get(k)
+            if tip is None:
+                tip = self.BT_TIPS[k][self.bt] if k in self.BT_TIPS else self.TIPS.get(k, "")
             item.setToolTip(tip + "Click: show or hide · Double-click: only this %s; again: all %s" % group)
-        for k in ("L", "R", "BT"):
+        for k in self.CHANNELS:
             self.items[k].setVisible(k in self.channels)
         self.items["candidate"].setVisible(self.fitting)
-
     def set_fitting(self, on):
         if on != self.fitting:
             self.fitting = on
@@ -565,9 +583,8 @@ class CurveLegend(QWidget):
             self.refresh()
 
     def marks(self):
-        out = {k: ("line", name, color) for k, (name, color) in self.channels.items()}
-        out.update({k: (kind, self.input_name if k == "input" else name, theme.SECONDARY)
-                    for k, kind, name in self.LAYERS})
+        out = {k: ("thick", name, color) for k, (name, color) in self.channels.items()}   # a channel: its sum
+        out.update({k: (kind, self.input_name if k == "input" else name, theme.TEXT) for k, kind, name in self.LAYERS})
         return out
 
 
@@ -654,9 +671,9 @@ class FitThread(QThread):
     tried = Signal(object, object)
     done = Signal(object)
 
-    def __init__(self, jobs, fs, tone, parent):
+    def __init__(self, jobs, fs, tone, free_level, parent):
         super().__init__(parent)
-        self.jobs, self.fs, self.tone = jobs, fs, tone
+        self.jobs, self.fs, self.tone, self.free_level = jobs, fs, tone, free_level
 
     def run(self):
         out = {}
@@ -666,7 +683,7 @@ class FitThread(QThread):
                 def progress(fraction, result, k=k, blocks=blocks):
                     self.progressed.emit((k + fraction) / n, {**out, blocks: result})
                 out[blocks] = X.fit(curve, self.fs, tone=self.tone, starts=starts, progress=progress,
-                                    cancel=self.isInterruptionRequested,
+                                    cancel=self.isInterruptionRequested, free_level=self.free_level,
                                     candidate=lambda result, blocks=blocks: self.tried.emit(blocks, result))
         except X.Cancelled:
             return
@@ -678,6 +695,7 @@ class FitThread(QThread):
 class ImportDialog(QDialog):
     SIZE = QSize(1500, 780)
     maximized = False                                     # as the last one was closed: the next one opens so too
+    fixed_level = False                                   # Fit's Level, as last chosen: the next one starts so too
 
     def __init__(self, source, path, session, out, live=None, fs=F.FS, parent=None, preset=None, name=None):
         """source: what read_file made of the file at path; session: a Session, or a Draft with preset its number
@@ -695,7 +713,9 @@ class ImportDialog(QDialog):
         self.dual = session.dual(out)
         self.connected = session.ready()
         self.mode, self.origin, self.tone = FIT, I.EXTERNAL, False
+        self.fixed = ImportDialog.fixed_level                # Fit with a fixed level: the curve at its own level
         self.eq, self.cf, self.column = None, None, None     # a filter file, or a curve and its column
+        self.pre = {}                                       # {line: (channel, dB)} the file's Preamp lines
         self.groups, self.chosen, self.problem = {}, [], ""
         self.drop_note = ""                                 # a file dropped on the dialog that is no filter file
         self.outcome, self.levels, self.notes = {}, {}, {}        # {block: {target: Placed}}, {block: dB}, {key: text}
@@ -704,7 +724,7 @@ class ImportDialog(QDialog):
         self.values, self.unchanged = {}, False
         self.refit = QTimer(self, singleShot=True, timeout=self.start_fit)
         self.repaint_soon = QTimer(self, singleShot=True, interval=PROGRESS_MS, timeout=self.show_result)
-        self.names = None                                   # the channels the legend shows
+        self.names = None                                   # the channels the legend shows, and Bass/Treble
         self.results, self.job_curves = {}, {}              # the fit's best so far, and what each job fits
         self.tried = {}                                     # {blocks: eqfit.Result} the fit tries now
         self.curves = {}                                    # see curve()
@@ -723,6 +743,7 @@ class ImportDialog(QDialog):
         curve = isinstance(source, C.CurveFile)
         self.eq, self.cf = (None, source) if curve else (source, None)
         self.column = source.chosen if curve else None
+        self.pre = {} if curve else I.preamps(source)
         self.path = path
         kind = "curve" if curve else I.category(source)
         self.mode = MAP if kind in ("commander", "fits") else FIT
@@ -746,7 +767,8 @@ class ImportDialog(QDialog):
         self.file_label.setText(os.path.basename(path))
         self.way.set_current(self.mode)
         self.way.set_enabled_at(MAP, not curve, "A curve has no filters to map." if curve else "")
-        for box, index in ((self.origin_box, 0 if self.origin == I.ADI2 else 1), (self.fs_box, None)):
+        origin = -1 if curve else 0 if self.origin == I.ADI2 else 1      # a curve: none
+        for box, index in ((self.origin_box, origin), (self.fs_box, None)):
             box.blockSignals(True)
             if index is None:
                 if box.findData(int(self.fs_given)) < 0:
@@ -780,39 +802,42 @@ class ImportDialog(QDialog):
 
         self.way = Segmented(["Map", "Fit"])
         self.way.changed.connect(self.set_mode)
-        self.again = Action(compact=True)
-        self.again.setIcon(again_icon(theme.BUTTON_TEXT))
-        self.again.setIconSize(QSize(AGAIN_ICON, AGAIN_ICON))
-        self.again.setFixedSize(self.way.sizeHint().height(), self.way.sizeHint().height())
-        self.again.setToolTip("Convert again")
-        self.again.clicked.connect(lambda: self.recompute(fit_now=True))
-        self.enough = Action(compact=True)
-        self.enough.setIcon(enough_icon(theme.BUTTON_TEXT, theme.DISABLED))
-        self.enough.setIconSize(QSize(AGAIN_ICON, AGAIN_ICON))
-        self.enough.setFixedSize(self.way.sizeHint().height(), self.way.sizeHint().height())
-        self.enough.setToolTip("Close enough: stop the fit and take what it has found so far.")
-        self.enough.clicked.connect(self.good_enough)
-        self.origin_label = self.label("Origin")
+        # one button, as a browser's reload and stop: Stop while a fit runs, else Restart. One width for both
+        # texts: the row stays as it is when the button changes
+        self.convert = Action(compact=True)
+        widths = []
+        for text in CONVERT_TEXTS.values():
+            self.convert.setText(text)
+            widths.append(self.convert.sizeHint().width())
+        self.convert.setFixedSize(max(widths), self.way.sizeHint().height())
+        self.convert.clicked.connect(self.convert_clicked)
+        self.convert_as, self.convert_since = None, 0.0      # what it does now, and since when (time.monotonic)
         self.origin_box = Choice()
         self.origin_box.addItems([I.ADI2, I.EXTERNAL])
+        self.origin_box.setPlaceholderText(UNDEFINED)        # a curve
         self.origin_box.currentIndexChanged.connect(self.set_origin)
-        self.origin_group = QWidget()                     # with its gap after it: gone as a whole for a curve
-        origin_lay = QHBoxLayout(self.origin_group)
-        origin_lay.setContentsMargins(0, 0, 24 + 6, 0)
-        origin_lay.setSpacing(6)
-        origin_lay.addWidget(self.origin_label)
-        origin_lay.addWidget(self.origin_box)
         self.fs_box = Choice()
         for rate in P.SAMPLE_RATES:
             self.fs_box.addItem("%g" % (rate / 1000), rate)
         self.fs_box.currentIndexChanged.connect(self.set_fs)
         fs_label = self.label("<i>f</i><sub>s</sub>")
         fs_label.setTextFormat(Qt.RichText)
+        self.level_box = Choice()
+        self.level_box.addItems(["Free", "Fixed"])
+        self.level_box.setToolTip("Free: the level is adjusted for the closest fit.\n"
+                                  "Fixed: filters are matched as they are, a curve centred on 0 dB.")
+        self.level_box.currentIndexChanged.connect(self.set_level)
         self.tone_box = QCheckBox("Include Bass/Treble")     # a check box, as everything that takes part
         self.tone_box.setStyleSheet("color: %s;" % theme.LABEL.name())
         self.tone_box.clicked.connect(self.toggle_tone)
-        controls = head(self.way, self.again, self.enough, 24, self.origin_group, fs_label, self.fs_box, self.label("kHz"), 24,
-                        self.tone_box)
+        # how the input is read; the way and, with Fit, what it may do and its button. Switching the way changes only
+        # what follows it. The gaps show the groups; a part that is not there takes its gap with it.
+        self.tone_group = _row(self.tone_box, gap=INNER_GAP)
+        self.fit_group = _row(_row(self.label("Level"), self.level_box, gap=INNER_GAP), self.tone_group,
+                              _row(self.convert, gap=INNER_GAP))
+        controls = head(self.label("Origin"), self.origin_box,
+                        _row(fs_label, self.fs_box, self.label("kHz"), gap=INNER_GAP),
+                        _row(self.way, gap=SECTION_GAP), self.fit_group)
         self.graph = CurveGraph()
         self.graph.resolution_changed.connect(self.show_graph)
         self.legend = CurveLegend(self.graph)
@@ -1014,14 +1039,23 @@ class ImportDialog(QDialog):
         self.tone = not self.tone
         self.recompute(fit_now=True)
 
+    def set_level(self, index):
+        self.fixed = ImportDialog.fixed_level = index == 1
+        self.recompute(fit_now=True)
+
     def set_column(self, column):
         self.column = column
         self.summary.show_curve(self.cf, column)
         self.recompute(fit_now=True)
 
     def toggle_line(self, line):
+        """A line checked or unchecked; a Preamp line checked sets Fit at a fixed level, where it is used."""
         self.own = set(self.selection())
         self.own.symmetric_difference_update({line})
+        if line in self.pre and line in self.own and not self.preamp_used():
+            self.mode = FIT
+            self.way.set_current(FIT)
+            self.fixed = ImportDialog.fixed_level = True
         self.recompute(fit_now=False)
 
     def toggle_block(self, side):
@@ -1062,6 +1096,25 @@ class ImportDialog(QDialog):
                 why[line] = NO_BT % self.name
         return usable, why
 
+    def preamp_used(self):
+        """Preamp lines are used with Fit at a fixed level only."""
+        return self.mode == FIT and self.fixed
+
+    def preamp_lines(self):
+        """The Preamp lines checked, (channel, dB) each, when they are used."""
+        if not self.preamp_used():
+            return []
+        return [self.pre[n] for n in sorted(self.selection()) if n in self.pre]
+
+    def preamp(self, block):
+        """The dB the Preamp lines checked add to the input of an EQ block."""
+        return I.preamp_db(self.preamp_lines(), block)
+
+    def alike(self):
+        """With Dual EQ, both channels the same input: one fit for both."""
+        g = self.groups
+        return len(g) == 2 and g["L"] == g["R"] and self.preamp("L") == self.preamp("R")
+
     def selection(self):
         """The lines checked: once the user has changed one, theirs, with Map and Fit alike; until then the proposal
         for this way and Origin."""
@@ -1097,11 +1150,13 @@ class ImportDialog(QDialog):
         else:
             usable, why = self.usable()
             chosen = [usable[n] for n in sorted(self.selection()) if n in usable]
+            pre = {n: self.pre[n] for n in self.selection() if n in self.pre} if self.preamp_used() else {}
             try:
-                groups = I.channel_sets(chosen, self.dual)
+                groups = I.channel_sets(chosen, self.dual, [ch for ch, _ in pre.values()])
             except ValueError as e:
                 groups, self.problem = {}, str(e)
-                self.unmapped = {i.line for i in chosen if i.channel in ("L", "R")}
+                self.unmapped = ({i.line for i in chosen if i.channel in ("L", "R")} |
+                                 {n for n, (ch, _) in pre.items() if ch in ("L", "R")})
             if not usable:
                 self.problem = "Nothing to import"
             elif not chosen:
@@ -1148,18 +1203,17 @@ class ImportDialog(QDialog):
             return [(blocks, self.given(blocks[0], F.FREQS), [])]
         tone = I.tone_items(self.chosen)
         groups = self.groups
-        same = self.dual and len(groups) == 2 and groups["L"] == groups["R"]
+        same = self.dual and self.alike()
         out = []
         for blocks, g in ([(("L", "R"), groups["L"])] if same else [((b,), g) for b, g in groups.items()]):
             m = I.mapping(g, self.origin, self.fs)
             start = I.fit_start(m)
-            curve = I.target(g + tone, self.origin, self.fs)
+            curve = I.target(g + tone, self.origin, self.fs) + self.preamp(blocks[0])
             out.append((blocks, curve, [start] if start else []))
         return out
 
     def tone_allowed(self):
-        groups = self.groups
-        return not (self.dual and len(groups) == 2 and groups["L"] != groups["R"])
+        return not (self.dual and len(self.groups) == 2 and not self.alike())
 
     def start_fit(self):
         self.stop_fit()
@@ -1173,7 +1227,7 @@ class ImportDialog(QDialog):
             self.show_result()
             return
         self.results, self.job_curves, self.tried = {}, {blocks: curve for blocks, curve, _ in jobs}, {}
-        t = FitThread(jobs, self.fs, self.tone and self.tone_allowed(), self)
+        t = FitThread(jobs, self.fs, self.tone and self.tone_allowed(), not self.fixed, self)
         t.progressed.connect(lambda fraction, results, t=t: self.fit_progress(t, fraction, results))
         t.tried.connect(lambda blocks, result, t=t: self.fit_tried(t, blocks, result))
         t.done.connect(lambda results, t=t: self.fit_done(t, results))
@@ -1219,11 +1273,20 @@ class ImportDialog(QDialog):
         self.repaint_soon.stop()
         self.show_result()
 
+    def convert_clicked(self):
+        if time.monotonic() - self.convert_since < GUARD_MS / 1000:
+            return
+        if self.convert_as == "stop":
+            self.good_enough()
+        else:
+            self.recompute(fit_now=True)
+
     def good_enough(self):
         """Stop the fit and take its best so far, onto the device's grid as a fit ends."""
         if self.thread is None or set(self.results) != set(self.job_curves):
             return
-        results = {b: X.to_grid(r.settings, self.job_curves[b], self.fs) for b, r in self.results.items()}
+        results = {b: X.to_grid(r.settings, self.job_curves[b], self.fs, not self.fixed)
+                   for b, r in self.results.items()}
         self.stop_fit()
         self.fraction = 1.0
         self.take_fit(results)
@@ -1248,27 +1311,51 @@ class ImportDialog(QDialog):
         differ = E.disagreeing(self.eq) if self.origin == I.ADI2 else set()
         faults = E.table_faults(self.eq)
         tip = "%s.\nUncheck a filter, or try Fit." % self.unmap_reason if self.unmap_reason else self.problem
+        checkable = set(usable) | (set(self.pre) if usable else set())
         for no in range(1, len(self.eq.lines) + 1):
             if no in usable:
                 on = no in checked
                 warn = on and no in self.unmapped
                 self.input.show_line(no, "on" if on else "off", warn=warn, tip=tip if warn else "")
+            elif no in checkable:                        # a Preamp line
+                on = no in checked
+                ignored = self.preamp_ignored(no) if on else ""
+                warn = on and (no in self.unmapped or bool(ignored))
+                self.input.show_line(no, "on" if on else "off", warn=warn,
+                                     tip=tip if no in self.unmapped else ignored if on else PREAMP_OFF)
             else:
                 mark = no in differ or no in faults
                 self.input.show_line(no, None, mark=mark,
-                                     tip="Differs from the table" if no in differ else why.get(no, ""))
+                                     tip="Differs from the table" if no in differ else
+                                     PREAMP_ALONE if no in self.pre else why.get(no, ""))
         self.input.viewport().update()
-        n = len(usable)
-        self.input_note.setText("%d of %d checked" % (len(checked & set(usable)), n) if n else "")
+        n = len(checkable)
+        self.input_note.setText("%d of %d checked" % (len(checked & checkable), n) if n else "")
+
+    def preamp_ignored(self, line):
+        """Why a Preamp line checked is not used, or '': the setting in the way."""
+        if self.mode == MAP:
+            return PREAMP_MAP
+        if not self.fixed:
+            return PREAMP_FREE
+        channel = self.pre[line][0]
+        if self.dual and channel != "all" and channel not in self.groups:
+            return PREAMP_NO_EQ
+        return ""
 
     def show_controls(self):
-        self.origin_group.setVisible(self.cf is None)
+        self.origin_box.setEnabled(self.cf is None)
         commander = self.eq is not None and E.table(self.eq) is not None
-        self.origin_box.setToolTip("ADI-2: the table is imported.\n"
+        self.origin_box.setToolTip("A curve has no filters." if self.cf is not None else
+                                   "ADI-2: the table is imported.\n"
                                    "External: the Filter lines are imported, as Cookbook filters."
                                    if commander else "ADI-2: the numbers as the device has them\n"
                                    "External: Cookbook filters, as filter files usually mean them")
-        self.tone_box.setVisible(self.mode == FIT and self.has_bt)
+        self.fit_group.setVisible(self.mode == FIT)
+        self.level_box.blockSignals(True)
+        self.level_box.setCurrentIndex(1 if self.fixed else 0)
+        self.level_box.blockSignals(False)
+        self.tone_group.setVisible(self.has_bt)
         allowed = self.tone_allowed()
         self.tone_box.setChecked(self.tone and allowed)
         self.tone_box.setEnabled(allowed)
@@ -1331,17 +1418,26 @@ class ImportDialog(QDialog):
         return sum((self.curve(x, freqs) for x in xs), np.zeros(len(freqs)))
 
     def given(self, block, freqs):
-        """The input of an EQ block at freqs: the curve, or the sum of the lines checked for it; None without."""
+        """The input of an EQ block at freqs: the curve (centred with a fixed level), or the sum of the lines checked
+        for it; None without."""
         if self.cf is not None:
-            return None if self.column is None else C.curve(self.cf, self.column, freqs)
+            if self.column is None:
+                return None
+            return (C.centred if self.fixed else C.curve)(self.cf, self.column, freqs)
         group, tone = self.groups.get(block), I.tone_items(self.chosen)
-        return None if group is None and not tone else self.summed((group or []) + tone, freqs)
+        if group is None and not tone:
+            return None
+        return self.summed((group or []) + tone, freqs) + self.preamp(block)
+
+    def centring(self):
+        """A curve with a fixed level: centred on 0 dB."""
+        return self.cf is not None and self.column is not None and self.fixed
 
     def show_graph(self):
         """The conversion's result, and only that: what it does not set is flat. Which blocks go to the device, and
         what the device has now, do not count here."""
         freqs = self.graph.freqs()
-        channels, names, shifts, self.deviation = [], {}, {}, []
+        channels, names, shifts, self.deviation, bt = [], {}, {}, [], []
         sides = [(0, "L"), (1, "R")] if self.dual else [(0, "all")]
         for side, block in sides:
             # drawn at the graph's resolution; how far off, at the frequencies where curves are compared
@@ -1350,12 +1446,13 @@ class ImportDialog(QDialog):
                 continue
             key = "L" if side == 0 else "R"
             placed = list(self.outcome.get(block, {}).values()) + list(self.outcome.get("BT", {}).values())
-            # the sum and its bands as the device makes them; the input moved to their level when a fit chose one
+            # the sum and its bands as the device makes them; the input moved to their level when a fit chose one,
+            # a curve centred on 0 dB with a fixed level
             level = self.levels.get(block, 0.0)
-            shifts[key] = level
+            shifts[key] = level - (C.level(self.cf, self.column) if self.centring() else 0.0)
             color = side_color(side, self.dual)
-            shown_bands = [(self.curve(p, freqs), theme.BT if p.target in I.TONE else color,
-                            "BT" if p.target in I.TONE else key) for p in placed]
+            bands = [self.curve(p, freqs) for p in placed if p.target not in I.TONE]
+            bt = [self.curve(p, freqs) for p in placed if p.target in I.TONE]     # the same in every channel
             tried = None
             if self.fitting:
                 r = next((r for blocks, r in self.tried.items() if block in blocks), None)
@@ -1363,18 +1460,18 @@ class ImportDialog(QDialog):
                     tried = self.summed(list(I.from_fit(r).values()), freqs) - r.level + level
             total = None
             if self.outcome:
-                total = sum((c for c, _, _ in shown_bands), np.zeros(len(freqs)))
+                total = sum(bands + bt, np.zeros(len(freqs)))
                 self.deviation.append((self.summed(placed, F.FREQS) - level, self.given(block, F.FREQS)))
-            channels.append((key, color, given + level, total, shown_bands, tried))
-            names[key] = (("EQ Left", "EQ Right")[side] if self.dual else "EQ (shared)", color)
-        if self.outcome.get("BT"):
-            names["BT"] = ("Bass/Treble", theme.BT)
-        self.legend.set_input(*_adjusted(shifts))
+            channels.append((key, color, given + level, total, bands, tried))
+            names[key] = (CHANNEL_NAMES[side] if self.dual else SHARED_NAME, color)
+        self.legend.set_input(*_adjusted(shifts, self.centring()))
         self.legend.set_fitting(self.fitting)
-        self.graph.draw(channels)
-        if names != self.names:
-            self.names = names
-            self.legend.set_channels(names)
+        fitted = next(iter(self.tried), None) if self.fitting else None
+        self.graph.draw(channels, bt, fitted[0] if fitted and len(fitted) == 1 and len(channels) == 2 else None)
+        shown = names, bool(self.outcome.get("BT"))
+        if shown != self.names:
+            self.names = shown
+            self.legend.set_channels(*shown)
 
     def show_status(self, on, limited):
         parts = []                                       # (text, amber)
@@ -1407,8 +1504,13 @@ class ImportDialog(QDialog):
             for t, amber in parts))
         self.progress.setVisible(self.fitting)
         self.fitting_label.setVisible(self.fitting)
-        self.enough.setEnabled(self.fitting and self.thread is not None and
-                               set(self.results) == set(self.job_curves))
+        does = "stop" if self.fitting else "restart"
+        if does != self.convert_as:
+            self.convert_as, self.convert_since = does, time.monotonic()
+            self.convert.setText(CONVERT_TEXTS[does])
+            self.convert.setToolTip(CONVERT_TIPS[does])
+        self.convert.setEnabled(not self.fitting or self.thread is not None and
+                                set(self.results) == set(self.job_curves))
         self.progress.setValue(int(self.fraction * 1000))
         self.ok.setEnabled(self.connected and not self.fitting and not self.problem and bool(on) and
                            bool(self.values))
@@ -1462,12 +1564,24 @@ class ImportDialog(QDialog):
                 callbacks.remove(f)
 
 
+def _row(*widgets, gap=0):
+    """Widgets side by side as one, gap px before them: hidden, the gap goes too."""
+    w = QWidget()
+    lay = QHBoxLayout(w)
+    lay.setContentsMargins(max(gap - ROW_SPACING, 0), 0, 0, 0)
+    lay.setSpacing(ROW_SPACING)
+    for x in widgets:
+        lay.addWidget(x)
+    return w
+
+
 def _db(x):
     return round(float(x), 1) + 0.0                      # no -0.0
 
 
-def _adjusted(shifts):
-    """The input's name in the legend, and its tooltip: how far a fit moved it, per channel ({'L' or 'R': dB})."""
+def _adjusted(shifts, centred=False):
+    """The input's name in the legend, and its tooltip: how far it was moved, per channel ({'L' or 'R': dB}), by a
+    fit's free level or, centred, onto 0 dB."""
     if all(abs(v) < LEVEL_SHOWN for v in shifts.values()):
         return "Input", ""
     values = {"%+.1f dB" % _db(v) for v in shifts.values()}
@@ -1475,6 +1589,8 @@ def _adjusted(shifts):
         how = values.pop()
     else:
         how = ", ".join("%s %+.1f dB" % ({"L": "left", "R": "right"}[k], _db(v)) for k, v in shifts.items())
+    if centred:
+        return "Input (adj.)", "Moved %s: with a fixed level the curve is centred on 0 dB.\n" % how
     return "Input (adj.)", "Moved %s onto the sum: the fit leaves the level free.\n" % how
 
 

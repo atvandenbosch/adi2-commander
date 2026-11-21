@@ -101,7 +101,7 @@ class Lines(unittest.TestCase):
                     "Channel: all\nFilter: ON PK Fc 300 Hz Gain 1 dB Q 1\n")
         usable, why = I.items(eq, I.EXTERNAL, FS)
         self.assertEqual(list(usable), [8])
-        self.assertEqual(why, {1: "Preamp: not needed on the device", 2: "Off in the file",
+        self.assertEqual(why, {2: "Off in the file",
                                3: "No filter at this frequency", 4: "BP: not on the device",
                                5: "Only L and R are used.", 6: "Not for L or R"})
 
@@ -149,6 +149,26 @@ class Channels(unittest.TestCase):
         text = "Channel: L\nFilter: ON PK Fc 100 Hz Gain 1 dB Q 1\n"
         self.assertEqual(self.sets(text, True), {"L": [2]})
         self.assertEqual(self.sets(text, False), {"all": [2]})
+
+    def test_a_preamp_of_the_other_channel_is_a_conflict_without_dual_eq(self):
+        chosen = group(E.read("Channel: L\nFilter: ON PK Fc 100 Hz Gain 1 dB Q 1\n"))
+        self.assertEqual(list(I.channel_sets(chosen, False, ["L", "all"])), ["all"])
+        self.assertEqual(list(I.channel_sets(chosen, True, ["R"])), ["L"])
+        with self.assertRaises(ValueError):
+            I.channel_sets(chosen, False, ["R"])
+
+
+class Preamp(unittest.TestCase):
+    def test_the_lines_and_their_db_per_block(self):
+        eq = E.read("Preamp: -3 dB\nChannel: L\nPreamp: -1,5 dB\nChannel: R\nPreamp: 2 dB\n"
+                    "Filter: ON PK Fc 100 Hz Gain 1 dB Q 1\n")
+        pre = I.preamps(eq)
+        self.assertEqual(pre, {1: ("all", -3.0), 3: ("L", -1.5), 5: ("R", 2.0)})
+        lines = list(pre.values())
+        self.assertEqual((I.preamp_db(lines, "L"), I.preamp_db(lines, "R"), I.preamp_db(lines, "all")),
+                         (-4.5, -1.0, -2.5))
+        self.assertEqual(I.preamp_db([], "L"), 0.0)
+        self.assertNotIn(1, I.items(eq, I.EXTERNAL, FS)[1])          # not among the lines that cannot be used
 
 
 class Fit(unittest.TestCase):

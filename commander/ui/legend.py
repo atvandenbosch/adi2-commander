@@ -1,6 +1,9 @@
-"""The graph's legend, which is also how one chooses what it shows: two groups, the channels (EQ Left, EQ Right,
-Bass/Treble), each a line in its colour, and the layers (Sum, Bands, Handles, and the sums at the rate the device runs
-at when that is another than the chosen one), each as it looks in the graph.
+"""The graph's legend, which is also how one chooses what it shows: two groups, the channels (Left and Right, or
+Left = Right with one EQ for both), each a line in its colour, and the layers, each as it looks in the graph: Sum,
+what the device does to the channel; Sections, what each EQ and Bass/Treble adds; Bands; Handles; and the sums at the
+rate the device runs at when that is another than the chosen one. Bass/Treble belongs to every channel. Each group is
+one control, its items side by side as the segments of a Segmented: a shown item's segment has a face and a lighter
+outline.
 
     click           shows or hides the item
     double-click    shows only this item of its group; again: the whole group
@@ -9,28 +12,37 @@ at when that is another than the chosen one), each as it looks in the graph.
 With too little room beside the sample rates, the groups go one under the other (set_stacked).
 """
 
-from PySide6.QtCore import QPointF, QSize, Qt, Signal
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QBoxLayout, QHBoxLayout, QLabel, QWidget
 
 from . import theme
-from .graph import (BAND_ALPHA, BAND_W, COMPARE_W, DEVIATION_FILL, DEVIATION_W, INPUT_ALPHA, INPUT_W, SUM_W,
-                    side_color)
+from .graph import (BAND_W, COMPARE_DOTS, DEVIATION_FILL, DEVIATION_W, INPUT_ALPHA, INPUT_W, SECTION_W, SUM_W,
+                    round_dots, side_color)
 
-GROUPS = [["L", "R", "BT"], ["sum", "bands", "handles", "compare"]]
+GROUPS = [["L", "R"], ["sum", "sections", "bands", "handles", "compare"]]
+CHANNEL_NAMES = "Left", "Right"
+SHARED_NAME = "Left = Right"                     # the one EQ for both channels
 GROUP_GAP = 28                                   # pixels between the two groups side by side
 ROW_GAP = 4                                      # ... and one under the other
-ITEM_PAD = 6                                     # px: room around an item's mark and name, to point at
+ITEM_PAD = 10                                    # px: room in a segment beside its mark and name
+ITEM_VPAD = 3                                    # ... above and below the name
+NAME_ON = theme.LABEL                            # the name of an item that is shown
+NAME_OFF = theme.SECONDARY                       # ... that is hidden
+OUTLINE_ON = theme.SECONDARY                     # the outline of a segment whose item is shown
+OUTLINE_OFF = theme.GRID                         # ... that is hidden
+FACE = theme.BACKGROUND                          # the face of a segment whose item is shown, or pointed at; a hidden
+                                                 # one has none: the graph's zone shows through
 MARK_W, MARK_H = 12, 10                          # px: every mark as wide, shown or hidden, so nothing moves
-MARKS = {"L": "line", "R": "line", "BT": "line", "sum": "thick", "bands": "thin", "handles": "ring",
-         "compare": "dashed"}
+MARKS = {"L": "thick", "R": "thick",                                  # a channel: its sum, in its colour
+         "sum": "thick", "sections": "medium", "bands": "thin", "handles": "ring", "compare": "dots"}
 
 
 def mark_pixmap(kind, color):
     """The mark of an item, drawn: a line in a channel's colour, or a layer as it looks in the graph: a thick line
-    for Sum, a thin one for Bands, a ring for the handles, dashed for the compared sums. Also the Loudness graph's:
-    a small curve for Loudness, high at both ends as its boost, and dotted for the current volume. And Import's
-    deviation: a wave about 0 with the area between filled."""
+    for Sum, a medium one for Sections, a thin one for Bands, a ring for the handles, round dots for the compared
+    sums. Also the Loudness graph's: a small curve for Loudness, high at both ends as its boost, and round dots as
+    thick as a section for the current volume. And Import's deviation: a wave about 0 with the area between filled."""
     scale = 4                                    # drawn large, shown small: sharp at any display scaling
     pm = QPixmap(MARK_W * scale, MARK_H * scale)
     pm.setDevicePixelRatio(scale)
@@ -68,25 +80,27 @@ def mark_pixmap(kind, color):
         path.lineTo(QPointF(MARK_W, top))
         p.drawPath(path)
     else:
-        width = {"line": 2.0, "thick": SUM_W, "thin": BAND_W, "dashed": COMPARE_W, "dotted": 1.0,
-                 "wide": INPUT_W}[kind]
-        if kind in ("thin", "wide"):             # as faint as a band beside the sum; as see-through as an input
-            color = QColor(color)
-            color.setAlphaF(color.alphaF() * (BAND_ALPHA if kind == "thin" else INPUT_ALPHA))
+        width = {"line": 2.0, "thick": SUM_W, "medium": SECTION_W, "thin": BAND_W, "dots": SUM_W,
+                 "dotted": SECTION_W, "wide": INPUT_W}[kind]
+        if kind == "wide":                       # as see-through as an input. A band's mark is as bright as the
+            color = QColor(color)                # others: faint, it would read as hidden
+            color.setAlphaF(color.alphaF() * INPUT_ALPHA)
         pen = QPen(color, width)
         pen.setCapStyle(Qt.FlatCap)
-        if kind == "dashed":
-            pen.setDashPattern([2, 1])                                     # 4 px on, 2 off
-        elif kind == "dotted":
-            pen.setDashPattern([1, 3])                                     # as the Loudness graph's family
+        x0, x1 = 1, MARK_W - 1
+        if kind in ("dots", "dotted"):           # as in the graph: as many as fit, in the middle
+            round_dots(pen, COMPARE_DOTS)
+            span = (MARK_W - width) // COMPARE_DOTS * COMPARE_DOTS
+            x0, x1 = (MARK_W - span) / 2, (MARK_W + span) / 2 + 0.01
         p.setPen(pen)
-        p.drawLine(QPointF(1, cy), QPointF(MARK_W - 1, cy))
+        y = cy + 0.5 if width == 1 else cy       # 1 px on one row of pixels: thinner than Sum at any scaling
+        p.drawLine(QPointF(x0, y), QPointF(x1, y))
     p.end()
     return pm
 
 
 class _Item(QWidget):
-    """Its mark, then the name. Hidden: both grey, nothing else changes."""
+    """Its mark, then the name; hidden: both grey. Its group draws its segment."""
 
     clicked = Signal()
     double_clicked = Signal()
@@ -98,8 +112,9 @@ class _Item(QWidget):
         self.mark, self.name = QLabel(), QLabel()
         self.mark.setFixedSize(MARK_W, MARK_H)
         self.color, self._drawn = None, None
+        self.on, self._under_mouse = False, False
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(ITEM_PAD, 0, ITEM_PAD, 0)
+        lay.setContentsMargins(ITEM_PAD, ITEM_VPAD, ITEM_PAD, ITEM_VPAD)
         lay.setSpacing(5)
         for w in (self.mark, self.name):
             lay.addWidget(w)
@@ -110,6 +125,15 @@ class _Item(QWidget):
         if (kind, color.rgb()) != self._drawn:
             self._drawn = (kind, color.rgb())
             self.mark.setPixmap(mark_pixmap(kind, color))
+
+    def set_on(self, on):
+        if on != self.on:
+            self.on = on
+            self._repaint()
+
+    def _repaint(self):
+        if self.parentWidget():
+            self.parentWidget().update()
 
     def mouseReleaseEvent(self, e):
         if self._after_double:
@@ -124,10 +148,63 @@ class _Item(QWidget):
             self.double_clicked.emit()
 
     def enterEvent(self, e):
+        self._under_mouse = True
+        self._repaint()
         self.pointed.emit(True)
 
     def leaveEvent(self, e):
+        self._under_mouse = False
+        self._repaint()
         self.pointed.emit(False)
+
+
+def segment_path(rect, radius, left, right):
+    """A rectangle with its left corners rounded or not, and its right ones."""
+    path = QPainterPath()
+    x0, y0, x1, y1 = rect.left(), rect.top(), rect.right(), rect.bottom()
+    rl, rr = (radius if left else 0), (radius if right else 0)
+    path.moveTo(x0 + rl, y0)
+    path.lineTo(x1 - rr, y0)
+    path.quadTo(x1, y0, x1, y0 + rr)
+    path.lineTo(x1, y1 - rr)
+    path.quadTo(x1, y1, x1 - rr, y1)
+    path.lineTo(x0 + rl, y1)
+    path.quadTo(x0, y1, x0, y1 - rl)
+    path.lineTo(x0, y0 + rl)
+    path.quadTo(x0, y0, x0 + rl, y0)
+    return path
+
+
+class Group(QWidget):
+    """Items side by side as the segments of one control: a shown item's segment with a face and a lighter outline,
+    a hidden one's only outlined; pointed at, with the face."""
+
+    def __init__(self, items):
+        super().__init__()
+        self.items = items
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        for item in items:
+            lay.addWidget(item)
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        shown = [item for item in self.items if item.isVisibleTo(self)]
+        # neighbours share their outline; a shown item's is drawn last, over the others'
+        for chosen in (False, True):
+            for i, item in enumerate(shown):
+                if item.on != chosen:
+                    continue
+                last = i == len(shown) - 1
+                r = QRectF(item.geometry()).adjusted(0.5, 0.5, 0.5 if not last else -0.5, -0.5)
+                path = segment_path(r, 3, i == 0, last)
+                if item.on or item._under_mouse:
+                    p.fillPath(path, FACE)
+                p.setPen(QPen(OUTLINE_ON if item.on else OUTLINE_OFF, 1))
+                p.drawPath(path)
+        p.end()
 
 
 class Legend(QWidget):
@@ -142,16 +219,12 @@ class Legend(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(GROUP_GAP)
         for keys in GROUPS:
-            group = QWidget()
-            group_lay = QHBoxLayout(group)
-            group_lay.setContentsMargins(0, 0, 0, 0)
-            group_lay.setSpacing(4)
             for k in keys:
                 item = self.items[k]
                 item.clicked.connect(lambda k=k: self.toggle(k))
                 item.double_clicked.connect(lambda k=k: self.isolate(k))
                 item.pointed.connect(lambda on, k=k: self.point(k, on))
-                group_lay.addWidget(item)
+            group = Group([self.items[k] for k in keys])
             lay.addWidget(group, 0, Qt.AlignHCenter)
             self.groups.append(group)
         self._before = None                      # the group's state before the first click of a double-click
@@ -182,7 +255,7 @@ class Legend(QWidget):
         return next(g for g in GROUPS if key in g)
 
     def _shown(self, group):
-        """The items of a group that are on screen now: EQ Right is not, with Dual EQ off."""
+        """The items of a group that are on screen now: Right is not, with Dual EQ off."""
         return [k for k in group if self.items[k].isVisibleTo(self)]
 
     def toggle(self, key):
@@ -213,24 +286,31 @@ class Legend(QWidget):
 
     def refresh(self):
         dual, compare = self.graph.dual, self.graph.fs_compare
-        names = {"L": "EQ Left" if dual else "EQ (shared)", "R": "EQ Right", "BT": "Bass/Treble",
-                 "sum": "Sum", "bands": "Bands", "handles": "Handles",
+        names = {"L": CHANNEL_NAMES[0] if dual else SHARED_NAME, "R": CHANNEL_NAMES[1],
+                 "sum": "Sum", "sections": "Sections", "bands": "Bands", "handles": "Handles",
                  "compare": "<i>f</i><sub>s</sub> %g kHz" % (compare / 1000) if compare else ""}
-        colors = {"L": side_color(0, dual), "R": side_color(1, dual), "BT": side_color(None, dual)}
+        colors = {"L": side_color(0, dual), "R": side_color(1, dual)}
+        bt = self.graph.has_bt
         for k, item in self.items.items():
             on = self.graph.visible[k]
             item.show_mark(MARKS[k], colors.get(k, theme.TEXT) if on else theme.OFF)
+            item.set_on(on)
             if item.name.text() != names[k]:
                 item.name.setText(names[k])
                 item.updateGeometry()                # its new width counts now, not after the next event loop pass
-            item.name.setStyleSheet("color: %s;" % (theme.TEXT if on else theme.OFF).name())
+            item.name.setStyleSheet("color: %s;" % (NAME_ON if on else NAME_OFF).name())
             group = ("channel", "channels") if k in GROUPS[0] else ("layer", "layers")
-            note = {"compare": "The sums at the rate the device runs at\n",
-                    "bands": "Includes Bass and Treble\n" if self.graph.has_bt else "",
+            note = {"L": "" if dual else "Dual EQ off: the same for both channels\n",
+                    "sum": "What the device does to the channel: EQ and Bass/Treble together\n" if bt else
+                           "What the device does to the channel: its EQ\n",
+                    "compare": "The sums at the rate the device runs at\n",
+                    "sections": "What each EQ and Bass/Treble adds\n" if bt else "What the EQ adds\n",
+                    "bands": "Includes Bass and Treble\n" if bt else "",
                     "handles": "The points: drag, wheel and click\n"
                                "Off: the band labels stay, but only inform.\n"}.get(k, "")
             item.setToolTip(note +
                             "Click: show or hide · Double-click: only this %s; again: all %s" % group)
         self.items["R"].setVisible(dual)
-        self.items["BT"].setVisible(self.graph.has_bt)
         self.items["compare"].setVisible(compare is not None)
+        for group in self.groups:                    # the items placed now, also when the legend keeps its width:
+            group.layout().activate()                # Left = Right is about as wide as Left and Right

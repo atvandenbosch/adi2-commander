@@ -1,7 +1,8 @@
 ; Inno Setup script for ADI-2 Commander, compiled by tools/build.py, which defines Version, NumericVersion, Folder
 ; (the program folder PyInstaller made), Wizard (the wizard's images), the taskbar identities and the descriptions of
 ; the shortcuts.
-; Per user, without administrator rights: the program goes to %LOCALAPPDATA%\Programs\ADI-2 Commander.
+; For all users, in Program Files, or for the current user only, in %LOCALAPPDATA%\Programs; an update keeps that
+; choice.
 
 #ifndef Version
   #error Compile with tools/build.py
@@ -15,7 +16,11 @@ AppVersion={#Version}
 AppPublisher=Alexander van den Bosch
 AppCopyright=Copyright (C) 2026 Alexander van den Bosch
 VersionInfoVersion={#NumericVersion}
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
+; A dialog offers both; Setup skips it when it finds an earlier installation and uses that one's mode.
+PrivilegesRequiredOverridesAllowed=dialog
+; [Registry] writes to HKCU only in an installation for the current user.
+UsedUserAreasWarning=no
 DefaultDirName={autopf}\ADI-2 Commander
 DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible
@@ -36,14 +41,20 @@ SolidCompression=yes
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[Messages]
+; The two modes as equal choices; all users stays preselected.
+PrivilegesRequiredOverrideAllUsersRecommended=Install for &all users
+
 [InstallDelete]
-; An update replaces the program folder, so that no file of an older version stays behind.
-Type: filesandordirs; Name: "{app}\_internal"
-Type: filesandordirs; Name: "{app}\licenses"
+; An update replaces the program folder, so that no file of an older version stays behind. While Commander still runs,
+; the folder stays: copying then stops at Commander.exe, the first file, and Cancel leaves the installed version whole.
+Type: filesandordirs; Name: "{app}\_internal"; Check: not CommanderRunning
+Type: filesandordirs; Name: "{app}\licenses"; Check: not CommanderRunning
 
 [Registry]
-; What the app remembers (QSettings), removed with it.
-Root: HKCU; Subkey: "Software\ADI-2 Commander"; Flags: uninsdeletekey
+; What the app remembers (QSettings), per user: removed with an installation for the current user only. The
+; uninstaller of an installation for all users reaches one user's settings only, so it leaves them all.
+Root: HKCU; Subkey: "Software\ADI-2 Commander"; Flags: uninsdeletekey; Check: not IsAdminInstallMode
 
 [Files]
 Source: "{#Folder}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -58,3 +69,56 @@ Name: "{autoprograms}\ADI-2 Commander (simulated)"; Filename: "{app}\Commander.e
 
 [Run]
 Filename: "{app}\Commander.exe"; Description: "{cm:LaunchProgram,ADI-2 Commander}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+const
+  GENERIC_WRITE = $40000000;
+  FILE_SHARE_READ = 1;
+  FILE_SHARE_WRITE = 2;
+  FILE_SHARE_DELETE = 4;
+  OPEN_EXISTING = 3;
+  INVALID_HANDLE_VALUE = -1;
+  ERROR_SHARING_VIOLATION = 32;
+
+function CreateFile(FileName: String; DesiredAccess, ShareMode, SecurityAttributes, CreationDisposition,
+  FlagsAndAttributes: Cardinal; TemplateFile: THandle): THandle; external 'CreateFileW@kernel32.dll stdcall';
+function CloseHandle(Handle: THandle): BOOL; external 'CloseHandle@kernel32.dll stdcall';
+
+// A running Commander keeps Commander.exe open, in any account or Windows session, also while it starts; Windows then
+// refuses to open the file for writing.
+function CommanderRunning: Boolean;
+var
+  Handle: THandle;
+begin
+  Handle := CreateFile(ExpandConstant('{app}\Commander.exe'), GENERIC_WRITE,
+    FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE, 0, OPEN_EXISTING, 0, 0);
+  Result := (Handle = INVALID_HANDLE_VALUE) and (DLLGetLastError = ERROR_SHARING_VIOLATION);
+  if Handle <> INVALID_HANDLE_VALUE then
+    CloseHandle(Handle);
+end;
+
+// Asks to close Commander until it is gone: OK looks again; False on Cancel.
+function CommanderClosed(Message: TSetupMessageID): Boolean;
+begin
+  Result := True;
+  while Result and CommanderRunning do
+    Result := SuppressibleMsgBox(FmtMessage(SetupMessage(Message), ['{#SetupSetting("AppName")}']), mbError,
+      MB_OKCANCEL, IDCANCEL) = IDOK;
+end;
+
+// Preparing to Install closes the Commanders it lists when the user agrees; with one in another Windows session it
+// lists none. Otherwise the user closes them here, before anything is changed.
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+    if not (WizardForm.PreparingYesRadio.Visible and WizardForm.PreparingYesRadio.Checked) then
+      if not CommanderClosed(msgSetupAppRunningError) then
+        Abort;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usAppMutexCheck then
+    if not CommanderClosed(msgUninstallAppRunningError) then
+      Abort;
+end;

@@ -15,7 +15,7 @@ BORDER = QColor("#45484d")        # the outline of an action
 CHOSEN = QColor("#2a2c30")        # the background of the preset selected on this output
 TEXT = QColor("#e4e6e8")
 BUTTON_TEXT = QColor("#d6dadd")   # the name of an action
-LABEL = QColor("#b9bec4")         # titles, column and row names, tabs, the status bar
+LABEL = QColor("#b9bec4")         # titles, column and row names, legend names, tabs, the status bar
 SECONDARY = QColor("#868c93")     # what supports: axis numbers, slot numbers, (free), a fixed cell, notes
 OFF = QColor("#6c7076")           # a part of the sound out of the path, or a setting that is off
 DISABLED = QColor("#34363a")      # what cannot be used now: no device, or busy
@@ -30,6 +30,8 @@ LOUDNESS = QColor("#d9d1b4")      # ivory: Loudness, an effect apart with a grap
 WARN = QColor("#f0b21b")          # amber: busy, waiting, attention
 BAD = QColor("#e0503c")           # read-back differs from what was sent
 GOOD = QColor("#4cc46a")
+SENT = QColor("#b9a2f2")          # violet: a MIDI message Commander sent
+RECEIVED = QColor("#b5d67a")      # lime: a MIDI buffer Commander received
 HEADER_PADDING = 8                # px left and right of a column header's text
 TAB_LINE = 2                      # px: the line under the chosen tab
 

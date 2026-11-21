@@ -7,6 +7,7 @@ import tempfile
 import time
 from unittest import mock
 
+import numpy as np
 from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QUrl
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import QApplication, QDialog, QPushButton
@@ -20,7 +21,7 @@ from commander.ui import importdialog as D
 from commander.ui import theme
 from commander.ui import window as W
 from commander.ui.widgets import INNER_GAP, SIDE
-from tests.gui import WindowTest, tab
+from tests.gui import WindowTest, assert_ratio_corner, tab
 from tests.support import TEN_FILTERS
 
 OUT, LEFT, RIGHT = 3, 4, 5
@@ -169,7 +170,7 @@ class ImportExport(ImportTest):
         self.assertEqual(dialog.problem, "Nothing to import")
         self.assertFalse(dialog.ok.isEnabled())
         self.assertEqual([dialog.input.item(n).toolTip() for n in range(3)],
-                         ["Preamp: not needed on the device", "Off in the file", "GraphicEQ: not an EQ filter"])
+                         [D.PREAMP_ALONE, "Off in the file", "GraphicEQ: not an EQ filter"])
         self.spin(300)
         self.assertEqual(self.sim.state, before)
 
@@ -208,6 +209,15 @@ class ImportExport(ImportTest):
                 self.win.export_dialog()
             self.assertTrue(os.path.exists(os.path.join(self.dir.name, exported)), exported)
             self.assertEqual(dialog.call_args[0][3], "Equalizer APO (*.txt);;ADI-2 Remote preset (*.adieqpr)")
+
+    def test_the_name_offered_when_saving(self):
+        for serial, start in ((None, "ADI-2 DAC FS %s " % self.win.output_name()),
+                              ("12345678", "ADI-2 DAC FS 12345678 %s " % self.win.output_name())):
+            self.session.port.serial = serial
+            with mock.patch.object(W.QFileDialog, "getSaveFileName", return_value=("", "")) as dialog:
+                self.win.export_dialog()
+            name = os.path.basename(dialog.call_args[0][2])
+            self.assertTrue(name.startswith(start), name)
 
     def test_already_on_the_device(self):
         path = os.path.join(self.dir.name, "same.txt")
@@ -293,6 +303,10 @@ class ImportExport(ImportTest):
         for (t, g), (t0, g0) in zip(dialog.deviation, before):
             self.assertTrue((t == t0).all() and (g == g0).all())
 
+    def test_the_graph_shows_its_aspect_ratio(self):
+        dialog = self.open(self.file("three.txt", THREE))
+        assert_ratio_corner(self, dialog.graph, dialog.graph.axis.titles[0][0])   # the dB axis draws its own titles
+
     def test_the_legend_shows_and_hides(self):
         dialog = self.open(self.file("three.txt", THREE))
         visible = dialog.graph.visible
@@ -302,7 +316,75 @@ class ImportExport(ImportTest):
         self.assertEqual((visible["L"], visible["R"]), (True, False))
         dialog.legend.items["L"].double_clicked.emit()            # again: both
         self.assertEqual((visible["L"], visible["R"]), (True, True))
-        self.assertFalse(dialog.legend.items["BT"].isVisibleTo(dialog))   # no Bass/Treble in the outcome
+        self.assertEqual([dialog.legend.items[k].name.text() for k in ("L", "R")], ["Left", "Right"])
+        self.assertNotIn("BT", dialog.legend.items)               # Bass/Treble is no channel
+        item = dialog.legend.items["sections"]
+        self.assertTrue(item.isVisibleTo(dialog))                 # also without Bass/Treble: the EQ is the sum
+        self.assertTrue(item.toolTip().startswith("What the EQ adds"))
+        item.clicked.emit()
+        left = dialog.graph.items[0]
+        np.testing.assert_allclose(left["sections"].yData, left["sum"].yData)
+
+    def open_with_bass(self):
+        """The dialog for Line Out as exported, with Dual EQ and a Bass/Treble that does something."""
+        self.session.set((LEFT, P.BASS[0]), 6)
+        self.settle()
+        path = os.path.join(self.dir.name, "line out.txt")
+        self.win.export_file(path)
+        return self.open(path)
+
+    def test_bass_and_treble_drawn_once_for_both_channels(self):
+        dialog = self.open_with_bass()
+        graph = dialog.graph
+        drawn = lambda items: [i for i in items if i.yData is not None and len(i.yData) > 0]   # noqa: E731
+        self.assertEqual(len(drawn(graph.bt_items)), 2)
+        self.assertEqual([len(drawn(items["bands"])) for items in graph.items], [5, 5])   # the EQ only
+        self.assertTrue(dialog.legend.items["bands"].toolTip().startswith("Includes Bass and Treble"))
+        stops = lambda item: item.opts["pen"].brush().gradient().stops()                     # noqa: E731
+        alpha = lambda item: round(max(c.alphaF() for _, c in stops(item)), 2)               # noqa: E731
+        dialog.legend.point("L", True)                           # of every channel: they stay
+        self.assertEqual(alpha(graph.bt_items[0]), D.BAND_ALPHA)
+        self.assertEqual(alpha(graph.items[1]["bands"][0]), D.DIMMED)   # the right's step back
+        dialog.legend.point("L", False)
+        dialog.legend.point("bands", True)                       # the layer: full
+        self.assertEqual(alpha(graph.bt_items[0]), 1.0)
+        dialog.legend.point("bands", False)
+        dialog.legend.items["L"].clicked.emit()
+        dialog.legend.items["R"].clicked.emit()                  # no channel: no Bass/Treble either
+        self.assertEqual(drawn(graph.bt_items), [])
+
+    def test_sections_show_what_each_section_adds(self):
+        dialog = self.open_with_bass()
+        graph, item = dialog.graph, dialog.legend.items["sections"]
+        sections = [items["sections"] for items in graph.items] + [graph.bt_section]
+        drawn = lambda: [i.yData is not None and len(i.yData) > 0 for i in sections]             # noqa: E731
+        self.assertEqual(drawn(), [False, False, False])                                          # off at first
+        self.assertTrue(item.toolTip().startswith("What each EQ and Bass/Treble adds"))
+        item.clicked.emit()
+        self.assertEqual(drawn(), [True, True, True])
+        for section, channel in zip(sections, graph.channels):                                    # each EQ
+            np.testing.assert_allclose(section.yData, np.sum(channel[4], axis=0))
+            self.assertEqual(section.opts["pen"].color().rgb(), channel[1].rgb())
+        np.testing.assert_allclose(graph.bt_section.yData, np.sum(graph.bt, axis=0))              # Bass/Treble once
+        self.assertEqual(graph.bt_section.opts["pen"].color().rgb(), theme.BT.rgb())
+        self.assertEqual({s.opts["pen"].widthF() for s in sections}, {D.SECTION_W})
+        alpha = lambda i: round(i.opts["pen"].color().alphaF(), 2)                                 # noqa: E731
+        dialog.legend.point("L", True)                            # its own and Bass/Treble's stay
+        self.assertEqual([alpha(s) for s in sections], [1.0, D.DIMMED, 1.0])
+        dialog.legend.point("L", False)
+        dialog.legend.items["L"].clicked.emit()
+        dialog.legend.items["R"].clicked.emit()                   # no channel: no Bass/Treble either
+        self.assertEqual(drawn(), [False, False, False])
+
+    def test_one_eq_for_both_channels_is_left_equals_right(self):
+        self.session.set_dual(OUT, False, keep="left")
+        self.settle()
+        dialog = self.open(self.file("three.txt", THREE))
+        item = dialog.legend.items["L"]
+        self.assertEqual(item.name.text(), "Left = Right")
+        self.assertEqual(item.color.rgb(), theme.SHARED.rgb())
+        self.assertTrue(item.toolTip().startswith("Dual EQ off: the same for both channels"))
+        self.assertFalse(dialog.legend.items["R"].isVisibleTo(dialog))
 
     def test_the_deviation_an_area_once_for_both_channels(self):
         dialog = self.open(self.file("three.txt", THREE))       # the same EQ left and right

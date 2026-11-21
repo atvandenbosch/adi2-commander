@@ -7,6 +7,7 @@ A cell shows its state before any text does:
     red border   read-back differs from what was sent, until a later write verifies
     dimmed       the value has no effect now (B/T or Loudness off, gain of a High Pass / High Cut) or is not
                  writable
+A frame in a row: what the band's handle changes, while the handle leads (ParamModel.handled).
 """
 
 import time
@@ -25,6 +26,8 @@ FLASH_TIME = 0.6
 SPIN_WIDTH = 16                                  # the up/down buttons at the right of every cell
 CELL_FONT = 10.5                                 # pt: the values; 14 px at 96 dpi
 CHOSEN_ALPHA = 0.5                               # the chosen cell while its table has no focus: the focus colour
+FRAME_ALPHA = 0.5                                # the frame of what a handle changes: its band's colour this far
+                                                 # from the cell's
 
 
 class Cell:
@@ -143,6 +146,15 @@ class ParamModel(QAbstractTableModel):
         if cell.band in P.NO_GAIN_TYPES and i == P.BANDS[cell.band][1]:
             return s.get((a, P.BANDS[cell.band][0])) in P.NO_GAIN_TYPES[cell.band]
         return False
+
+    def handled(self, cell):
+        """What the band's handle in the graph changes: dragged, its frequency and gain (a High Pass or High Cut:
+        its frequency alone); the wheel, its Q."""
+        if cell.key is None or P.kind(P.spec(cell.key)) == "type":
+            return False
+        a, i = cell.key
+        return not (cell.band in P.NO_GAIN_TYPES and i == P.BANDS[cell.band][1]
+                    and self.session.state.get((a, P.BANDS[cell.band][0])) in P.NO_GAIN_TYPES[cell.band])
 
     def can_step(self, cell, direction):
         """Whether the up (+1) or down (-1) button does anything: editable and not at the band limit."""
@@ -270,10 +282,12 @@ class CellDelegate(QStyledItemDelegate):
             for d in (1, -1):
                 self._spinner(painter, r, d, self.model.can_step(cell, d),
                               self.hover == (index.row(), index.column(), d))
-        if cell.key and cell.key in self.marks.mismatch:
-            painter.setPen(QPen(theme.BAD, 2))
-            painter.drawRect(r.adjusted(1, 1, -2, -2))
         painter.restore()
+
+    def paint_mismatch(self, painter, rect):
+        """The red border of a cell whose read-back differs: drawn by the view, over a frame (ParamView)."""
+        painter.setPen(QPen(theme.BAD, 2))
+        painter.drawRect(rect.adjusted(1, 1, -2, -2))
 
     @staticmethod
     def spinner_at(rect, pos):
@@ -352,9 +366,13 @@ class ParamView(QTableView):
     HEADER_WIDTH = 80
     corner = None                                   # a widget above the row names, on the line of the column names
     chosen = False                                  # the table last worked in: its current cell stays coloured
+    handle_row = None                               # the row whose band's handle leads in the graph: the window sets it
+    handle_color = None                             # the colour it was drawn in
 
     def __init__(self, model, delegate, header_width=HEADER_WIDTH):
         super().__init__()
+        for head in (self.horizontalHeader(), self.verticalHeader()):
+            head.setHighlightSections(False)            # the marks are in the cells
         self.header_width = header_width
         self.setModel(model)
         self.setItemDelegate(delegate)
@@ -375,6 +393,37 @@ class ParamView(QTableView):
         self.setMouseTracking(True)
         self._spin = None                               # (index, direction, size) while a spinner is held
         self._repeat = QTimer(self, timeout=self._spin_repeat)
+
+    def paintEvent(self, e):
+        """The cells; while a handle in the graph leads, a frame around what it changes in its row, one per run of
+        such cells; then the red border of each cell whose read-back differs."""
+        super().paintEvent(e)
+        m = self.model()
+        painter = QPainter(self.viewport())
+        if self.handle_row is not None:
+            row, runs, run = self.handle_row, [], []
+            for c in range(m.columnCount()):
+                if self.model_.handled(m.cell(m.index(row, c))):
+                    run.append(c)
+                elif run:
+                    runs.append(run)
+                    run = []
+            if run:
+                runs.append(run)
+            # mixed with the cell beforehand: a translucent pen would draw each corner twice, brighter
+            color = QColor(*[round(b + (c - b) * FRAME_ALPHA)
+                             for b, c in zip(theme.CELL.getRgb()[:3], self.delegate.color.getRgb()[:3])])
+            painter.setPen(QPen(color, 1))
+            for run in runs:
+                r = self.visualRect(m.index(row, run[0])).united(self.visualRect(m.index(row, run[-1])))
+                painter.drawRect(r.adjusted(0, 0, -1, -1))
+        mismatch = self.delegate.marks.mismatch
+        for r in range(m.rowCount()):
+            for c in range(m.columnCount()):
+                cell = m.cell(m.index(r, c))
+                if cell.key is not None and cell.key in mismatch:
+                    self.delegate.paint_mismatch(painter, self.visualRect(m.index(r, c)))
+        painter.end()
 
     def _fade(self):
         self.viewport().update()

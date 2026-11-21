@@ -2,7 +2,8 @@
 
 The curve is dB at filters.FREQS. The device: five bands (a choice of type only on band 1 and 5), optionally Bass
 and Treble, each a biquad as filters.coefficients computes it, on the device's grid. The error is the RMS difference
-over FREQS, every point alike; a constant difference does not count, since the volume takes it.
+over FREQS, every point alike; with a free level (the default) a constant difference does not count, since the
+volume takes it; with a fixed level it does, and the bands have to make the curve at its own level.
 
 Which filter sits on which band does not change the curve, so the filters are fitted as a set: a set is possible when
 every filter has a band of its own that takes its kind, frequency and Q. After every refinement the bands are chosen
@@ -60,7 +61,7 @@ Slot = namedtuple("Slot", "name kinds flo fhi fi qlo qhi rest")
 # One band set: kind PK, LS, HS, HP or LP; freq in Hz, gain in dB, Q as the device shows them
 Setting = namedtuple("Setting", "name kind freq gain q")
 # settings: one per band, in the order of the bands. level: how much louder the setting is than the curve, a
-# constant in dB. rms and peak: what is left after that, in dB.
+# constant in dB (0 with a fixed level). rms and peak: what is left after that, in dB.
 Result = namedtuple("Result", "settings rms peak level")
 
 
@@ -84,6 +85,13 @@ def slots(tone):
     return out
 
 
+def kind_groups(code):
+    """The filters of each kind in code (a flat array of codes): (code, their indices), or (code, a slice of all)
+    when there is one kind."""
+    cs = sorted(set(code.tolist()))
+    return [(cs[0], slice(None))] if len(cs) == 1 else [(c, np.flatnonzero(code == c)) for c in cs]
+
+
 class Model:
     """Responses at FREQS for one fs, of many filters at once."""
 
@@ -96,20 +104,21 @@ class Model:
         return self.mixed(np.array([CODES[kind]]), np.array([f], float), np.array([g], float),
                           np.array([q], float))[0]
 
-    def mixed(self, code, f, g, q):
+    def mixed(self, code, f, g, q, groups=None):
         """Responses of filters of mixed kinds (code per filter, broadcast against f, g, q), shape f.shape +
-        (len(FREQS),): filters.terms for all filters of a kind together."""
+        (len(FREQS),): filters.terms for all filters of a kind together. groups: kind_groups of code, when the
+        caller has them."""
         shape = np.shape(f)
         f, g, q = (np.asarray(x, float).ravel() if np.shape(x) == shape else np.broadcast_to(x, shape).ravel()
                    for x in (f, g, q))
         code = np.asarray(code)
         b = np.empty((len(f), 3))
         a = np.empty((len(f), 3))
-        if code.size == 1:
-            groups = [(int(code.flat[0]), slice(None))]
-        else:
-            code = (code if code.shape == shape else np.broadcast_to(code, shape)).ravel()
-            groups = [(c, code == c) for c in set(code.tolist())]
+        if groups is None:
+            if code.size == 1:
+                groups = [(int(code.flat[0]), slice(None))]
+            else:
+                groups = kind_groups((code if code.shape == shape else np.broadcast_to(code, shape)).ravel())
         for c, i in groups:
             bi, ai = terms(KINDS[c], f[i], g[i], q[i], self.fs)
             for k in range(3):
@@ -135,7 +144,7 @@ class Candidates:
                     shape = model.mixed(np.array(CODES[kind]), F, np.zeros_like(F), Q)
                 else:
                     shape = model.mixed(np.array(CODES[kind]), F, np.full_like(F, 6.0), Q) / 6
-                self.table[(s.name, kind)] = (F, Q, shape)
+                self.table[(s.name, kind)] = (F, Q, shape, (shape * shape).sum(1))
                 c = shape - shape.mean(1, keepdims=True)
                 self.centred[(s.name, kind)] = (c, (c * c).sum(1))
 
@@ -144,12 +153,12 @@ class Candidates:
         gain g, without forming the residuals: |r|² - 2g S·r + g² |S|²."""
         best = None
         for kind in s.kinds:
-            F, Q, S = self.table[(s.name, kind)]
+            F, Q, S, SS = self.table[(s.name, kind)]
             if offset:
                 S, SS = self.centred[(s.name, kind)]
                 rr = r - r.mean()
             else:
-                SS, rr = (S * S).sum(1), r
+                rr = r
             Sr = S @ rr
             if kind in NO_GAIN:
                 G = np.zeros(len(F))
@@ -191,6 +200,7 @@ class Problem:
             i += n
         self.fi, self.gi, self.qi = np.array(fi), np.array(gi), np.array(qi)
         self.owner = np.repeat(np.arange(len(sl)), self.sizes)          # the band of each parameter
+        self.groups, self.pgroups = kind_groups(self.code), kind_groups(self.code[self.owner])
 
     def fgq(self, p):
         """f, g, q per band from one parameter vector."""
@@ -204,7 +214,7 @@ class Problem:
         f, q = 2 ** P_[np.arange(M), self.fi[self.owner]], 2 ** P_[np.arange(M), self.qi[self.owner]]
         gidx = self.gi[self.owner]
         g = np.where(gidx >= 0, P_[np.arange(M), np.maximum(gidx, 0)], 0.0)
-        pert = self.m.mixed(self.code[self.owner], f, g, q)
+        pert = self.m.mixed(self.code[self.owner], f, g, q, self.pgroups)
         return ((pert - parts[self.owner]) / h).T
 
     def vector(self, values):
@@ -226,9 +236,10 @@ class Problem:
         return r - r.mean(-1, keepdims=True) if self.offset else r
 
     def lm(self, p, iters=60):
-        """Levenberg-Marquardt within the bounds (steps clipped onto them)."""
+        """Levenberg-Marquardt within the bounds: a parameter on a bound whose gradient points out stays out of the
+        step, the others are solved for without it (steps clipped onto the bounds)."""
         p = np.clip(np.asarray(p, float), self.lo, self.hi)
-        parts = self.m.mixed(self.code, *self.fgq(p))
+        parts = self.m.mixed(self.code, *self.fgq(p), self.groups)
         r = self.residual(parts.sum(0))
         cost = r @ r
         lam, M = 1e-2, len(p)
@@ -236,11 +247,17 @@ class Problem:
             J = self.jacobian(p, parts)
             if self.offset:
                 J = J - J.mean(0, keepdims=True)
-            A, g = J.T @ J, J.T @ r
+            g = J.T @ r
+            free = ~(((p <= self.lo + 1e-12) & (g > 0)) | ((p >= self.hi - 1e-12) & (g < 0)))
+            if not free.any():
+                return p, cost
+            Jf = J[:, free]
+            A, gf, n = Jf.T @ Jf, g[free], int(free.sum())
             while True:
-                step = np.linalg.solve(A + lam * (np.diag(np.diag(A)) + 1e-9 * np.eye(M)), -g)
+                step = np.zeros(M)
+                step[free] = np.linalg.solve(A + lam * (np.diag(np.diag(A)) + 1e-9 * np.eye(n)), -gf)
                 pn = np.clip(p + step, self.lo, self.hi)
-                pparts = self.m.mixed(self.code, *self.fgq(pn))
+                pparts = self.m.mixed(self.code, *self.fgq(pn), self.groups)
                 rn = self.residual(pparts.sum(0))
                 cn = rn @ rn
                 if cn < cost:
@@ -266,36 +283,42 @@ def margin(s, f, q):
     return min(max(m, 0.0), 1.0)
 
 
-def assign(sl, kinds, vals, free=None):
-    """The band of each filter (indices into sl, all different) among those it fits, keeping the filters furthest
-    from their band's limits (the smallest margin first, then the next); None when there is no assignment. free:
-    the bands to use (all by default)."""
+def assignments(sl, kinds, vals, free=None):
+    """Each way to give every filter a band it fits (indices into sl, all different), as a tuple. free: the bands to
+    use (all by default)."""
     free = range(len(sl)) if free is None else free
     ok = [[j for j in free if fits(sl[j], k, v[0], v[2])] for k, v in zip(kinds, vals)]
     order = sorted(range(len(kinds)), key=lambda i: len(ok[i]))
-    cur, used, best = [None] * len(kinds), set(), [None, None]
+    cur, used = [None] * len(kinds), set()
 
     def rec(n):
         if n == len(order):
-            score = sorted(margin(sl[cur[i]], vals[i][0], vals[i][2]) for i in range(len(kinds)))
-            if best[0] is None or score > best[0]:
-                best[0], best[1] = score, list(cur)
+            yield tuple(cur)
             return
         i = order[n]
         for j in ok[i]:
             if j not in used:
                 used.add(j)
                 cur[i] = j
-                rec(n + 1)
+                yield from rec(n + 1)
                 used.discard(j)
 
-    rec(0)
-    return best[1]
+    return rec(0)
+
+
+def assign(sl, kinds, vals, free=None):
+    """The band of each filter (indices into sl, all different) among those it fits, keeping the filters furthest
+    from their band's limits (the smallest margin first, then the next); None when there is no assignment. free:
+    the bands to use (all by default)."""
+    best = max(assignments(sl, kinds, vals, free), default=None,
+               key=lambda a: sorted(margin(sl[a[i]], vals[i][0], vals[i][2]) for i in range(len(kinds))))
+    return None if best is None else list(best)
 
 
 def available(sl, kinds, vals):
     """The bands a further filter can take: those the filters there are can do without."""
-    return [j for j in range(len(sl)) if assign(sl, kinds, vals, [x for x in range(len(sl)) if x != j]) is not None]
+    return [j for j in range(len(sl))
+            if next(assignments(sl, kinds, vals, [x for x in range(len(sl)) if x != j]), None) is not None]
 
 
 def place(model, cands, sl, kinds, vals, r, offset, bands=None, only=None):
@@ -361,19 +384,19 @@ class State:
         return [Setting(self.sl[self.bands[i]].name, self.kinds[i], *self.vals[i]) for i in order]
 
 
-def fill(model, cands, sl, target, refine, first=None):
+def fill(model, cands, sl, target, refine, first=None, offset=True):
     """Fill the bands one filter at a time with the candidate, on any band still free for it, that takes most off
     what is left. refine: after each, refine all filters so far. first: the band of the first filter, for another
-    start than the greedy one."""
+    start than the greedy one. offset: a constant does not count (a free level)."""
     kinds, vals = [], []
     r = target.copy()
     while len(kinds) < len(sl):
         bands = [first] if first is not None and not kinds else None
-        _, kind, f, g, q, resp = place(model, cands, sl, kinds, vals, r, True, bands)
+        _, kind, f, g, q, resp = place(model, cands, sl, kinds, vals, r, offset, bands)
         kinds.append(kind)
         vals.append((f, g, q))
         if refine:
-            prob = Problem(model, [sl[j] for j in assign(sl, kinds, vals)], kinds, target, True)
+            prob = Problem(model, [sl[j] for j in assign(sl, kinds, vals)], kinds, target, offset)
             p, _ = prob.lm(prob.vector(vals), 25)
             vals = prob.values(p)
             r = target - prob.totals(p)[0]
@@ -400,22 +423,23 @@ def wild_fill(rng, sl):
     return kinds, vals
 
 
-def random_fill(rng, model, cands, sl, target):
+def random_fill(rng, model, cands, sl, target, offset=True):
     """As fill, refining along the way, but each filter one of the TOP best candidates at random."""
     kinds, vals = [], []
     r = target.copy()
     while len(kinds) < len(sl):
         options, seen = [], set()
-        rr = r - r.mean()
+        rr = r - r.mean() if offset else r
         for j in available(sl, kinds, vals):
             s = sl[j]
-            sig = (s.kinds, s.flo, s.fhi, s.qlo, s.qhi)
-            if sig in seen:
-                continue
-            seen.add(sig)
             for kind in s.kinds:
-                F, Q, _ = cands.table[(s.name, kind)]
-                S, SS = cands.centred[(s.name, kind)]
+                sig = (kind, s.flo, s.fhi, s.qlo, s.qhi)       # the same candidates: Peak on 1 and 2, on 4 and 5
+                if sig in seen:
+                    continue
+                seen.add(sig)
+                F, Q, S, SS = cands.table[(s.name, kind)]
+                if offset:
+                    S, SS = cands.centred[(s.name, kind)]
                 Sr = S @ rr
                 if kind in NO_GAIN:
                     G = np.zeros(len(F))
@@ -429,7 +453,7 @@ def random_fill(rng, model, cands, sl, target):
         _, kind, f, g, q = rng.choice(options[:TOP])
         kinds.append(kind)
         vals.append((f, g, q))
-        prob = Problem(model, [sl[j] for j in assign(sl, kinds, vals)], kinds, target, True)
+        prob = Problem(model, [sl[j] for j in assign(sl, kinds, vals)], kinds, target, offset)
         p, _ = prob.lm(prob.vector(vals), 25)
         vals = prob.values(p)
         r = target - prob.totals(p)[0]
@@ -518,12 +542,13 @@ def freq_neighbours(slot, f):
     return [x for x in out if slot.flo <= x <= slot.fhi and x != f]
 
 
-def grid_search(model, sl, kinds, settings, target):
-    """From the rounded fit, move one value at a time to a neighbouring grid value while that helps."""
+def grid_search(model, sl, kinds, settings, target, offset=True):
+    """From the rounded fit, move one value at a time to a neighbouring grid value while that helps. offset: a
+    constant does not count (a free level)."""
     cur = [list(x) for x in settings]
     parts = [model.db(k, *x) for k, x in zip(kinds, cur)]
     total = sum(parts)
-    best = _cost(total, target)
+    best = _cost(total, target, offset)
     for _ in range(40):
         better = False
         for k, s in enumerate(sl):
@@ -536,7 +561,8 @@ def grid_search(model, sl, kinds, settings, target):
             C = np.array(cands, float)
             resp = model.mixed(np.array(CODES[kinds[k]]), C[:, 0], C[:, 1], C[:, 2])
             R = total - parts[k] + resp - target
-            R = R - R.mean(1, keepdims=True)
+            if offset:
+                R = R - R.mean(1, keepdims=True)
             costs = (R ** 2).sum(1)
             j = int(np.argmin(costs))
             if costs[j] < best - 1e-12:
@@ -549,16 +575,17 @@ def grid_search(model, sl, kinds, settings, target):
     return [tuple(x) for x in cur]
 
 
-def _cost(total, target):
+def _cost(total, target, offset=True):
     r = total - target
-    r = r - r.mean()
+    if offset:
+        r = r - r.mean()
     return float(r @ r)
 
 
-def result(settings, target, fs):
-    """A Result for settings against target (dB at FREQS)."""
+def result(settings, target, fs, free_level=True):
+    """A Result for settings against target (dB at FREQS); with a fixed level, its level is 0."""
     diff = response(settings, fs) - target
-    level = float(diff.mean())
+    level = float(diff.mean()) if free_level else 0.0
     diff = diff - level
     return Result(list(settings), float(np.sqrt((diff ** 2).mean())), float(np.abs(diff).max()), level)
 
@@ -583,17 +610,19 @@ def _start(sl, settings):
     return kinds, vals
 
 
-def fit(target, fs=FS, tone=False, starts=(), progress=None, cancel=None, candidate=None):
+def fit(target, fs=FS, tone=False, starts=(), progress=None, cancel=None, candidate=None, free_level=True):
     """The device setting closest to target (dB at FREQS): a Result with a setting for every band.
 
-    tone: Bass and Treble take part. starts: settings to start from as well, each a list of Setting by band name
+    free_level: a constant difference does not count, the volume takes it; else the bands make target at its own
+    level. tone: Bass and Treble take part. starts: settings to start from as well, each a list of Setting by band name
     (for instance the filters of a file put on the bands one by one); the result is never worse than any of them.
     progress(fraction, result): called as the search goes on, with the best so far (not yet on the grid).
     candidate(result): called with a setting the search is trying now, better or not, at most every CANDIDATE_S
     seconds. cancel(): asked now and then; when it says True, fit raises Cancelled."""
     model = Model(fs)
     curve = np.asarray(target, float)
-    target = np.round(curve - curve.mean(), 9)                 # the search sees the shape only, to the last bit
+    free = free_level
+    target = np.round(curve - curve.mean() if free else curve, 9)   # free: the shape only, to the last bit
     sl = slots(tone)
     cands = Candidates(model, sl)
     five = sl[:5]
@@ -617,7 +646,7 @@ def fit(target, fs=FS, tone=False, starts=(), progress=None, cancel=None, candid
     def report(st):
         done[0] += 1
         if progress is not None:
-            progress(done[0] / steps, result(st.settings(), curve, fs))
+            progress(done[0] / steps, result(st.settings(), curve, fs, free))
 
     last = [0.0]
 
@@ -625,23 +654,27 @@ def fit(target, fs=FS, tone=False, starts=(), progress=None, cancel=None, candid
         now = time.perf_counter()
         if now - last[0] >= CANDIDATE_S:
             last[0] = now
-            candidate(result(st.settings(), curve, fs))
+            candidate(result(st.settings(), curve, fs, free))
 
     seen = seen if candidate is not None else None
 
     def interim(st, pool):
         """Within a start, as it gets better: the best so far of this phase, the start included."""
         if progress is not None:
-            progress(done[0] / steps, result(min(pool + [st], key=lambda s: s.cost).settings(), curve, fs))
+            progress(done[0] / steps, result(min(pool + [st], key=lambda s: s.cost).settings(), curve, fs, free))
 
-    found = []
+    found, filled = [], []
     for refine, first in plans:
         tick()
-        kinds, vals = fill(model, cands, five, target, refine, first)
-        st = State(model, five, target, True, kinds, vals, seen)
-        interim(st, found)
-        st = backfit(st, cands, tick, improved=lambda st: interim(st, found))
-        found.append(drop_passes(st, cands, tick))
+        kinds, vals = fill(model, cands, five, target, refine, first, free)
+        if (kinds, vals) in filled:                             # the search from there is the same: so is its end
+            found.append(found[filled.index((kinds, vals))])
+        else:
+            st = State(model, five, target, free, kinds, vals, seen)
+            interim(st, found)
+            st = backfit(st, cands, tick, improved=lambda st: interim(st, found))
+            found.append(drop_passes(st, cands, tick))
+        filled.append((kinds, vals))
         report(min(found, key=lambda s: s.cost))
 
     # The random starts, searched to the end the same way, while there is something left to gain.
@@ -650,8 +683,9 @@ def fit(target, fs=FS, tone=False, starts=(), progress=None, cancel=None, candid
         if math.sqrt(min(s.cost for s in found) / len(target)) < FLOOR:
             break
         tick()
-        kinds, vals = wild_fill(rng, five) if rng.random() < WILD else random_fill(rng, model, cands, five, target)
-        st = State(model, five, target, True, kinds, vals, seen)
+        kinds, vals = (wild_fill(rng, five) if rng.random() < WILD else
+                       random_fill(rng, model, cands, five, target, free))
+        st = State(model, five, target, free, kinds, vals, seen)
         interim(st, found)
         st = backfit(st, cands, tick, improved=lambda st: interim(st, found))
         found.append(drop_passes(st, cands, tick))
@@ -668,29 +702,30 @@ def fit(target, fs=FS, tone=False, starts=(), progress=None, cancel=None, candid
              for b in found[:EXTEND]] if tone else []
     for kinds, vals in bases + given:
         tick()
-        st = State(model, sl, target, True, kinds, vals, seen)
+        st = State(model, sl, target, free, kinds, vals, seen)
         interim(st, ext)
         st = backfit(st, cands, tick, improved=lambda st: interim(st, ext))
         ext.append(drop_passes(st, cands, tick))
         report(min(ext, key=lambda s: s.cost))
 
     # Rounding costs each a little differently: the one best on the grid wins.
-    out = result(min((to_grid(st.settings(), target, fs) for st in ext), key=lambda r: r.rms).settings, curve, fs)
+    out = result(min((to_grid(st.settings(), target, fs, free) for st in ext), key=lambda r: r.rms).settings,
+                 curve, fs, free)
     for kinds, vals in given:                                   # a start as it was may still be better on the grid
-        start = result([Setting(s.name, k, *v) for s, k, v in zip(sl, kinds, vals)], curve, fs)
+        start = result([Setting(s.name, k, *v) for s, k, v in zip(sl, kinds, vals)], curve, fs, free)
         if start.rms < out.rms:
             out = start
     return out
 
 
-def to_grid(settings, target, fs=FS):
+def to_grid(settings, target, fs=FS, free_level=True):
     """Settings off the grid (a best so far that progress reported) onto it, then to neighbouring grid values one at
-    a time while that helps: a Result, as fit ends."""
+    a time while that helps: a Result, as fit ends (free_level as there)."""
     by_name = {s.name: s for s in slots(True)}
     rounded = [on_grid(by_name[x.name], x.kind, x.freq, x.gain, x.q) for x in settings]
     rounded = grid_search(Model(fs), [by_name[x.name] for x in settings], [x.kind for x in settings], rounded,
-                          np.asarray(target, float))
-    return result([Setting(x.name, x.kind, *v) for x, v in zip(settings, rounded)], target, fs)
+                          np.asarray(target, float), free_level)
+    return result([Setting(x.name, x.kind, *v) for x, v in zip(settings, rounded)], target, fs, free_level)
 
 
 def response(settings, fs=FS):

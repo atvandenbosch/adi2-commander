@@ -5,8 +5,8 @@ import math
 import unittest
 
 import numpy as np
-from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
-from PySide6.QtGui import QHelpEvent, QMouseEvent, QWheelEvent
+from PySide6.QtCore import QAbstractAnimation, QEvent, QPoint, QPointF, QRect, Qt
+from PySide6.QtGui import QColor, QHelpEvent, QMouseEvent, QWheelEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QToolTip
 from pyqtgraph.graphicsItems.ScatterPlotItem import renderSymbol
@@ -14,9 +14,9 @@ from pyqtgraph.graphicsItems.ScatterPlotItem import renderSymbol
 from commander.device import filters as F
 from commander.device import params as P
 from commander.ui import graph as G
+from commander.ui import tables as T
 from commander.ui import theme
-from commander.ui.legend import ITEM_PAD
-from tests.gui import WindowTest, app, tab
+from tests.gui import WindowTest, app, assert_ratio_corner, tab
 
 
 class Graph(WindowTest):
@@ -44,7 +44,7 @@ class Graph(WindowTest):
         self.assertFalse(self.graph.sum_items[1].isVisible())
         np.testing.assert_allclose(self.sum_curve(0), F.total_db(right, self.graph.freqs))   # the right set, for both
         self.assertEqual(self.graph.sum_items[0].opts["pen"].color().rgb(), theme.SHARED.rgb())
-        self.assertEqual(self.win.legend.items["L"].name.text(), "EQ (shared)")
+        self.assertEqual(self.win.legend.items["L"].name.text(), "Left = Right")
         self.assertEqual(self.win.legend.items["L"].color.rgb(), theme.SHARED.rgb())
         self.assertFalse(self.win.legend.items["R"].isVisible())
         self.settle()
@@ -176,8 +176,8 @@ class Graph(WindowTest):
         right = self.win.band_views[1]
         right.setCurrentIndex(right.model().index(0, 1))
         self.assertEqual(self.graph.point_at(view, pos).side, 1)
-        self.graph.pick(self.graph.point_at(view, pos))      # and taking it selects its row in the table
-        self.assertTrue(right.hasFocus())
+        self.graph.pick(self.graph.point_at(view, pos))      # and taking it chooses its row in the table
+        self.assertEqual((right.handle_row, self.win.band_views[0].handle_row), (2, None))
         self.assertEqual((right.currentIndex().row(), right.currentIndex().column()), (2, 1))
 
     def test_with_dual_eq_off_a_point_belongs_to_both_tables(self):
@@ -190,12 +190,128 @@ class Graph(WindowTest):
         right.setCurrentIndex(right.model().index(1, 1))            # band 2 in the right table: its curve
         self.spin(50)
         self.assertEqual(filled(), [(0, "2")])
-        self.graph.pick(self.point("4", 0))                  # taken in the graph: in the table last worked on
-        self.assertEqual((right.hasFocus(), right.currentIndex().row()), (True, 3))
+        self.graph.pick(self.point("4", 0))                  # taken in the graph: its row in both tables
+        self.assertEqual([(v.handle_row, v.currentIndex().row()) for v in (left, right)], [(3, 3), (3, 3)])
         left.setFocus()
         left.setCurrentIndex(left.model().index(0, 1))
+        self.assertEqual((left.handle_row, right.handle_row), (None, None))         # the table leads
         self.graph.pick(self.point("4", 0))
-        self.assertEqual((left.hasFocus(), left.currentIndex().row()), (True, 3))
+        self.assertEqual([(v.handle_row, v.currentIndex().row()) for v in (left, right)], [(3, 3), (3, 3)])
+        self.settle()
+
+    def test_while_a_handle_leads_the_tables_frame_what_it_changes(self):
+        left = self.win.band_views[0]
+        left.setFocus()
+        left.setCurrentIndex(left.model().index(1, 2))       # band 2, dB: the table leads, its cell is the mark
+        self.spin(50)
+        self.assertEqual((left.chosen, left.handle_row), (True, None))
+        self.graph.pick(self.point("3", 0))                  # the handle leads
+        self.spin(50)
+        self.assertEqual((left.hasFocus(), left.chosen, left.handle_row), (False, False, 2))
+        self.assertEqual((left.currentIndex().row(), left.currentIndex().column()), (2, 2))    # in its column
+
+        def corners(row):                                    # a pixel on the top edge of each cell: framed or not
+            out = []
+            for c in range(4):
+                p = left.visualRect(left.model().index(row, c)).topLeft() + QPoint(3, 0)
+                out.append(left.viewport().grab(QRect(p, p)).toImage().pixelColor(0, 0).name())
+            return out
+        cell = theme.CELL.name()
+        framed = corners(2)
+        self.assertEqual((framed[0], framed[2:]), (theme.BACKGROUND.name(), [framed[1]] * 2))   # Hz, dB, Q; PK fixed
+        mixed = QColor(*[round(b + (c - b) * T.FRAME_ALPHA)                                   # the band's, softened
+                         for b, c in zip(theme.CELL.getRgb()[:3], left.delegate.color.getRgb()[:3])])
+        self.assertEqual(framed[1], mixed.name())
+        self.assertEqual(corners(1)[1:], [cell] * 3)
+        self.sim.front_panel([(4, 3, 2)])                    # band 1 left: High Pass, the handle has no gain
+        self.spin(300)
+        self.graph.pick(self.point("1", 0))
+        self.spin(50)
+        self.assertEqual(corners(0)[1:], [framed[1], cell, framed[1]])                         # two frames: Hz, Q
+        key = left.model().cell(left.model().index(0, 1)).key
+        self.win.marks.mismatch[key] = (30, 40)              # a read-back that differs, in a frame: red on top
+        left.viewport().update()
+        self.spin(50)
+        self.assertEqual(corners(0)[1], theme.BAD.name())
+        del self.win.marks.mismatch[key]
+        self.graph.pick(self.point("B", None))               # Bass: its own table
+        self.assertEqual((left.handle_row, self.win.bt_view.handle_row), (None, 0))
+        left.setFocus()                                      # into the table: it leads again
+        self.assertEqual(self.win.bt_view.handle_row, None)
+        self.settle()
+
+    def test_the_wheel_on_the_band_of_the_table_hands_the_lead_to_its_handle(self):
+        bt = self.win.bt_view
+        bt.setFocus()
+        bt.setCurrentIndex(bt.model().index(1, 1))           # Treble dB: the table leads, on the band of the point
+        self.spin(50)
+        self.assertEqual(self.graph.current, self.point("T", None).key)
+        pt = self.point("T", None)
+        vp = self.graph.viewport()
+        p = self.graph.mapFromScene(self.graph.view.mapToScene(self.graph.view.mapFromView(QPointF(pt.x, pt.y))))
+        app.sendEvent(vp, QWheelEvent(QPointF(p), QPointF(vp.mapToGlobal(p)), QPoint(0, 0), QPoint(0, 120),
+                                      Qt.NoButton, Qt.NoModifier, Qt.NoScrollPhase, False))
+        self.spin(50)
+        self.assertEqual((bt.hasFocus(), bt.chosen, bt.handle_row), (False, False, 1))   # the handle leads
+        self.assertTrue(self.graph.hasFocus())
+        self.settle()
+
+    def test_tab_goes_into_the_framed_row_after_dual_eq_off_or_another_output(self):
+        left, right = self.win.band_views
+        right.setFocus()
+        right.setCurrentIndex(right.model().index(0, 2))     # the right table elsewhere: band 1, dB
+        self.spin(50)
+        self.click(self.point("2", 0))                       # left band 2: no right point on it
+        self.session.set_dual(3, False)                      # the band now in both tables
+        self.spin(100)
+        self.assertEqual((left.handle_row, right.handle_row), (1, 1))
+        QTest.keyClick(self.graph, Qt.Key_Backtab)
+        self.assertEqual((right.hasFocus(), right.currentIndex().row(), right.currentIndex().column()), (True, 1, 2))
+        self.click(self.point("2", 0))
+        self.win.tabs.setCurrentIndex(tab(6))                # another output and back: the tables are rebuilt
+        self.spin(100)
+        self.win.tabs.setCurrentIndex(tab(3))
+        self.spin(100)
+        self.assertEqual(left.handle_row, 1)
+        QTest.keyClick(self.graph, Qt.Key_Tab)
+        self.assertEqual((left.hasFocus(), left.currentIndex().row(), left.currentIndex().column()), (True, 1, 1))
+        self.settle()
+
+    def test_the_edit_stand_ends_the_lead_of_a_handle(self):
+        views = self.win.band_views + [self.win.bt_view, self.win.loudness_view]
+        bt = self.win.bt_view
+        bt.setFocus()
+        bt.setCurrentIndex(bt.model().index(1, 1))
+        self.spin(50)
+        self.click(self.point("3", 0))
+        for _ in range(100):                                 # the preset read, and nothing else under way
+            if 2 in self.session.slots and not self.session.operating():
+                break
+            self.spin(100)
+        self.win.edit_preset(2)
+        self.spin(50)
+        self.assertIsNotNone(self.win.draft)
+        self.assertEqual([v.handle_row for v in views], [None] * 4)
+        QTest.mouseClick(self.win.presets.rows[3].cancel, Qt.LeftButton)
+        self.spin(50)
+        self.assertEqual([v.handle_row for v in views], [None] * 4)
+        self.assertIsNone(self.graph.current)
+
+    def test_tab_goes_from_a_taken_point_into_its_row(self):
+        left, right = self.win.band_views
+        self.click(self.point("3", 0))
+        self.assertTrue(self.graph.hasFocus())               # the graph has the keys, Tab included
+        QTest.keyClick(self.graph, Qt.Key_Tab)
+        self.assertEqual((left.hasFocus(), left.currentIndex().row(), left.currentIndex().column()), (True, 2, 1))
+        self.assertEqual(left.handle_row, None)              # the table leads: its cell is the mark
+        freq = self.session.state[left.model().cell(left.currentIndex()).key]
+        QTest.keyClick(left, Qt.Key_Up)                      # the arrows on the cell Tab went into
+        self.assertGreater(self.session.state[left.model().cell(left.currentIndex()).key], freq)
+        self.session.set_dual(3, False)
+        self.spin(100)
+        self.click(self.point("2", 0))
+        QTest.keyClick(self.graph, Qt.Key_Backtab)           # with Dual EQ off: Shift+Tab into the right table
+        self.assertEqual((right.hasFocus(), right.currentIndex().row()), (True, 1))
         self.settle()
 
     def click(self, pt):
@@ -214,7 +330,7 @@ class Graph(WindowTest):
         self.click(self.point("1", 1))                      # right band 1, 40 Hz: no left point on it
         self.assertEqual(filled(), [(1, "1")])
         right = self.win.band_views[1]
-        self.assertEqual((right.hasFocus(), right.currentIndex().row()), (True, 0))
+        self.assertEqual((right.handle_row, right.currentIndex().row()), (0, 0))
         self.click(self.point("T", None))
         self.assertEqual(filled(), [(None, "T")])
 
@@ -332,13 +448,17 @@ class Graph(WindowTest):
         legend = self.win.legend
         QTest.mouseDClick(legend.items["R"], Qt.LeftButton)
         v = self.graph.visible
-        self.assertEqual((v["L"], v["R"], v["BT"], v["sum"], v["bands"]), (False, True, False, True, True))
-        self.assertEqual({side for side, _ in self.shown()[2]}, {1})
-        QTest.mouseDClick(legend.items["R"], Qt.LeftButton)                      # again: the whole group
-        self.assertEqual((v["L"], v["R"], v["BT"]), (True, True, True))
+        self.assertEqual((v["L"], v["R"], v["sum"], v["bands"]), (False, True, True, True))
+        self.assertEqual({side for side, _ in self.shown()[2]}, {1, 9})        # Bass/Treble belongs to both
+        legend.items["R"].clicked.emit()                                        # no channel: no Bass/Treble either
+        self.assertEqual(self.shown()[2], [])
+        legend.items["R"].clicked.emit()                                        # only Right again
+        legend.items["R"].clicked.emit()                                        # a double-click: the whole group
+        legend.items["R"].double_clicked.emit()
+        self.assertEqual((v["L"], v["R"]), (True, True))
         QTest.mouseDClick(legend.items["sum"], Qt.LeftButton)
-        self.assertEqual((v["sum"], v["bands"]), (True, False))
-        self.assertEqual((v["L"], v["R"], v["BT"]), (True, True, True))          # the other group stays
+        self.assertEqual((v["sum"], v["sections"], v["bands"]), (True, False, False))
+        self.assertEqual((v["L"], v["R"]), (True, True))                        # the other group stays
 
     def test_legend_handles_off_keeps_the_labels_but_not_the_mouse(self):
         g = self.graph
@@ -368,6 +488,9 @@ class Graph(WindowTest):
         self.assertEqual(items["bands"].toolTip().split("\n"),
                          ["Includes Bass and Treble",
                           "Click: show or hide · Double-click: only this layer; again: all layers"])
+        self.assertEqual(items["sum"].toolTip().split("\n")[0],
+                         "What the device does to the channel: EQ and Bass/Treble together")
+        self.assertEqual(items["sections"].toolTip().split("\n")[0], "What each EQ and Bass/Treble adds")
 
     def test_the_head_gives_way_in_three_steps(self):
         head, legend, controls = self.win.graph_head, self.win.legend, self.win.graph_head.controls
@@ -383,7 +506,7 @@ class Graph(WindowTest):
             right = controls.geometry().right() == width - 1
             if how == "above":
                 self.assertTrue(right and y(controls) == 0 and y(legend) > y(controls))   # the rates on top
-                self.assertEqual(legend.geometry().right() - ITEM_PAD, width - 1)       # the names end where kHz ends
+                self.assertEqual(legend.geometry().right(), width - 1)                  # it ends where kHz ends
             else:
                 self.assertTrue(right and y(controls) < y(legend) + legend.first_row_height())   # beside the first
 
@@ -391,19 +514,18 @@ class Graph(WindowTest):
         item = self.win.legend.items["L"]
         self.win.resize(1600, 900)                                              # room for the whole legend
         self.spin(50)
-        QTest.mouseClick(self.win.dual_actions[0], Qt.LeftButton)               # EQ Left -> EQ (shared)
-        self.assertEqual(item.name.text(), "EQ (shared)")
+        QTest.mouseClick(self.win.dual_actions[0], Qt.LeftButton)               # Left -> Left = Right
+        self.assertEqual(item.name.text(), "Left = Right")
         self.assertEqual(item.width(), item.sizeHint().width())                 # not cut off until a next refresh
         self.settle()
 
     def test_legend_with_dual_eq_off(self):
         self.session.set_dual(3, False)
         self.spin(100)
-        QTest.mouseDClick(self.win.legend.items["L"], Qt.LeftButton)            # RIGHT is not there to count
-        v = self.graph.visible
-        self.assertEqual((v["L"], v["BT"]), (True, False))
-        QTest.mouseDClick(self.win.legend.items["L"], Qt.LeftButton)
-        self.assertEqual((v["L"], v["BT"]), (True, True))
+        QTest.mouseDClick(self.win.legend.items["L"], Qt.LeftButton)            # Right is not there to count: Left =
+        v = self.graph.visible                                                  # Right is all of the group already
+        self.assertEqual((v["L"], v["R"]), (True, True))
+        self.assertEqual(self.win.legend.items["L"].toolTip().split("\n")[0], "Dual EQ off: the same for both channels")
         self.settle()
 
     def test_pointing_at_a_legend_item_sets_the_rest_back(self):
@@ -422,6 +544,64 @@ class Graph(WindowTest):
         self.assertTrue(all(a == 1 for a in rings()))
         self.assertEqual(alphas(sums), [G.DIMMED, G.DIMMED])
         self.win.legend.point("handles", False)
+
+    def band_alpha(self, key):
+        """The opacity of a band's curve where it is fullest."""
+        return round(max(c.alphaF() for _, c in self.graph.band_items[key].opts["pen"].brush().gradient().stops()), 2)
+
+    def test_sections_show_what_each_section_adds(self):
+        g, items = self.graph, self.graph.section_items
+        shown = lambda: [k for k, i in items.items() if i.isVisible()]          # noqa: E731
+        self.assertEqual(shown(), [])                                           # off at first
+        QTest.mouseClick(self.win.legend.items["sections"], Qt.LeftButton)
+        self.assertEqual(shown(), ["eqL", "eqR", "BT"])                         # Loudness is in no sum
+        np.testing.assert_allclose(items["eqR"].getData()[1],
+                                   F.total_db(F.band_filters(self.session.state, 5, 4), g.freqs))
+        self.assertEqual(items["eqL"].opts["pen"].widthF(), G.SECTION_W)
+        self.assertEqual(items["BT"].opts["pen"].color().rgb(), theme.OFF.rgb())   # off: grey, what it would add
+        QTest.mouseClick(self.win.legend.items["L"], Qt.LeftButton)             # with its channel
+        self.assertEqual(shown(), ["eqR", "BT"])
+
+    def test_pointing_at_a_section_switch_shows_what_it_adds(self):
+        g, switch, eq = self.graph, self.win.eq_switches[1], self.graph.section_items["eqR"]
+        alpha = lambda item: round(item.opts["pen"].color().alphaF(), 2)        # noqa: E731
+        self.assertEqual(switch.toolTip().split("\n")[-1], "Pointed at: what it adds, in the graph")
+        switch.pointed.emit(True)
+        self.assertTrue(eq.isVisible() and alpha(eq) == 1.0)
+        self.assertEqual([alpha(i) for i in g.sum_items], [G.DIMMED, G.DIMMED])   # a section is a part of a sum
+        # its own bands as they are, the other channel's step back
+        self.assertEqual((self.band_alpha((1, "2")), self.band_alpha((0, "2"))), (G.BAND_ALPHA, G.DIMMED))
+        switch.pointed.emit(False)
+        self.assertFalse(eq.isVisible())
+        self.assertEqual([alpha(i) for i in g.sum_items], [1.0, 1.0])
+
+    def test_loudness_only_while_its_switch_is_pointed_at(self):
+        g, win, s = self.graph, self.win, self.session.state
+        win.toggle_loudness()
+        self.settle()
+        bands, loudness = F.band_filters(s, 4, 4), F.loudness_filters(s, win.output[1])
+        self.assertIs(win.stage.currentWidget(), g)                             # turned on: the stage stays
+        np.testing.assert_allclose(self.sum_curve(0), F.total_db(bands, g.freqs))   # in no sum
+        win.loudness_switch.pointed.emit(True)
+        np.testing.assert_allclose(self.sum_curve(0), F.total_db(bands + loudness, g.freqs))   # at the volume
+        self.assertGreater(np.abs(self.sum_curve(0) - F.total_db(bands, g.freqs)).max(), 1)
+        np.testing.assert_allclose(g.section_items["LD"].getData()[1], F.total_db(loudness, g.freqs))
+        self.assertEqual(round(g.sum_items[0].opts["pen"].color().alphaF(), 2), 1.0)   # what it changes: lit
+        win.loudness_switch.pointed.emit(False)
+        np.testing.assert_allclose(self.sum_curve(0), F.total_db(bands, g.freqs))
+        self.assertFalse(g.section_items["LD"].isVisible())
+
+    def test_a_bands_marks_share_one_opacity(self):
+        g = self.graph
+        i = next(n for n, p in enumerate(g.points) if p.key == (4, "2"))
+        ring, label = g.scatter.points()[i], g.labels[i]
+        self.assertEqual((self.band_alpha((0, "2")), round(ring.pen().color().alphaF(), 2),
+                          round(label.color.alphaF(), 2)), (G.BAND_ALPHA,) * 3)
+        g.current = (4, "2")                                                    # chosen: full, a fill, as thin
+        g.redraw()
+        item = g.band_items[(0, "2")]
+        self.assertEqual((self.band_alpha((0, "2")), item.opts["pen"].widthF()), (1.0, G.BAND_W))
+        self.assertIsNotNone(item.opts["fillLevel"])
 
     def test_chosen_and_attention_are_two_marks(self):
         g, vp = self.graph, self.graph.viewport()
@@ -518,6 +698,143 @@ class Graph(WindowTest):
         self.assertFalse(QToolTip.isVisible() and QToolTip.text() in G.AXIS_TIPS.values())  # the grid takes none
         self.graph.reset_view()
 
+    def test_the_aspect_ratio_in_the_corner_of_the_axes(self):
+        icon, view, vp = self.graph.ratio.icon, self.graph.view, self.graph.viewport()
+
+        def ratio():
+            (x0, x1), (y0, y1) = view.viewRange()
+            return (y1 - y0) / (x1 - x0) * view.width() / view.height()          # dB as long as one decade
+
+        self.graph.reset_view()
+        self.spin(50)
+        assert_ratio_corner(self, self.graph, self.graph.getPlotItem().getAxis("left").label, choose=True)
+        self.assertTrue(icon.isVisible())
+        self.win.show_stage(loudness=True)
+        self.assertFalse(icon.isVisible())                                     # with the response graph only
+        self.win.show_stage(loudness=False)
+        self.assertTrue(icon.isVisible())
+        before = icon.ratio
+        p = self.graph.mapFromScene(view.sceneBoundingRect().center())
+        app.sendEvent(vp, QWheelEvent(QPointF(p), QPointF(vp.mapToGlobal(p)), QPoint(0, 0), QPoint(0, 120),
+                                      Qt.NoButton, Qt.NoModifier, Qt.NoScrollPhase, False))
+        self.spin(50)
+        self.assertNotEqual(view.viewRange()[0], [G.X_LO - G.X_PAD, G.X_HI + G.X_PAD])
+        self.assertAlmostEqual(icon.ratio, before, places=6)                   # in the view both axes zoom alike
+        view.setRange(yRange=(-30, 30), padding=0)                             # one axis on its own
+        self.spin(50)
+        self.assertAlmostEqual(icon.ratio, ratio(), places=9)
+        self.win.resize(1000, 700)
+        self.spin(100)
+        self.assertAlmostEqual(icon.ratio, ratio(), places=9)
+        self.graph.reset_view()
+
+    def test_the_aspect_ratio_in_whole_db_per_decade(self):
+        self.assertEqual([G.ratio_text(r) for r in (0.49, 0.5, 1.49, 24.5, 99.49, 99.5)],
+                         [G.RATIO_LOW, "1", "1", "25", "99", G.RATIO_HIGH])
+
+    def flag(self):
+        """The aspect ratio's flag, open: per ratio as it shows its text, dB range or None, and whether in view."""
+        icon = self.graph.ratio.icon
+        icon.open_flag()
+        self.assertEqual(icon.width(), math.ceil(icon.flag.right()) + icon.PAD)
+        return [(G.ratio_text(r), to, current) for _, r, to, current in icon.cells]
+
+    def choose_ratio(self, text, double=False):
+        """A click on the ratio text in the open flag; double: as the second click of two quick ones."""
+        icon = self.graph.ratio.icon
+        at = next(box for box, r, *_ in icon.cells if G.ratio_text(r) == text).center().toPoint()
+        if double:
+            QTest.mouseDClick(icon, Qt.LeftButton, Qt.NoModifier, at)          # the second press, as Qt gives it
+            QTest.mouseRelease(icon, Qt.LeftButton, Qt.NoModifier, at)
+        else:
+            QTest.mouseClick(icon, Qt.LeftButton, Qt.NoModifier, at)
+        self.spin(20)
+
+    def test_the_aspect_ratio_from_its_flag(self):
+        corner, icon, view = self.graph.ratio, self.graph.ratio.icon, self.graph.view
+        view.setRange(xRange=(2.5, 3.5), yRange=(-12, 12), padding=0)          # room for all of them around 0 dB
+        self.spin(50)
+        start, now = view.viewRange(), corner.ratio()
+        self.assertFalse(any(G.ratio_text(r) == G.ratio_text(now) for r in G.RATIOS))
+        self.assertEqual(icon.toolTip(), "Aspect ratio: %.1f dB/dec\n%s" % (now, G.RATIO_HINT))
+        self.assertEqual(icon.width(), icon.SIDE)                              # closed
+        ratios = sorted(G.RATIOS + (now,))
+        self.assertEqual(self.flag(), [(G.ratio_text(r), corner.db_range(r) if r in G.RATIOS else tuple(start[1]),
+                                        r == now) for r in ratios])
+        cell = icon.cells[0][0].center()
+        app.sendEvent(icon, QMouseEvent(QEvent.MouseMove, cell, icon.mapToGlobal(cell), Qt.NoButton, Qt.NoButton,
+                                        Qt.NoModifier))
+        self.assertEqual(icon.cursor().shape(), Qt.PointingHandCursor)
+        zero = start[1][0] / (start[1][1] - start[1][0])                       # where 0 dB is, of the height
+        for r in G.RATIOS[::-1] + (now,):
+            self.choose_ratio(G.ratio_text(r))
+            (x0, x1), (y0, y1) = view.viewRange()
+            self.assertAlmostEqual(corner.ratio(), r, places=9)
+            self.assertEqual([x0, x1], start[0])                               # the gain gives
+            self.assertAlmostEqual(y0 / (y1 - y0), zero, places=9)             # around 0 dB
+            self.assertTrue(corner.timer.isActive())
+            self.assertEqual(icon.toolTip().splitlines()[0], "Aspect ratio: %.1f dB/dec" % corner.ratio())
+            self.assertEqual([G.ratio_text(c) for _, c, _, bold in icon.cells if bold], [G.ratio_text(r)])
+            self.assertEqual(len(icon.cells), len(ratios))                     # the view's own stays in the round
+        self.assertEqual(view.viewRange(), start)                              # the view as it was
+        self.assertEqual(corner.timer.interval(), G.RATIO_CONFIRM)
+        icon.close_flag()
+        self.assertEqual(icon.width(), icon.SIDE)
+
+        # near one of them: it counts once, and comes back whole
+        view.setRange(yRange=corner.db_range(24.97), padding=0)
+        self.spin(20)
+        self.assertEqual([(t, current) for t, _, current in self.flag()], [("10", False), ("25", True), ("50", False)])
+        self.choose_ratio("10")                                                # two quick clicks: two choices
+        self.choose_ratio("25", double=True)
+        self.assertAlmostEqual(corner.ratio(), 25, places=9)
+        corner.time_up()                                                       # the time passed: a new round
+        self.assertEqual(icon.flashing.state(), QAbstractAnimation.Running)    # confirmed, to see
+        self.assertEqual(icon.glow, 1.0)                                       # at once full
+        icon.flashing.stop()
+        self.choose_ratio("50")
+        self.assertAlmostEqual(corner.ratio(), 50, places=9)
+
+        # another change of the view ends the round, without a flash
+        view.setRange(xRange=(2, 3), padding=0)
+        self.spin(20)
+        self.assertIsNone(corner.round)
+        self.assertFalse(corner.timer.isActive())
+        self.assertEqual(icon.flashing.state(), QAbstractAnimation.Stopped)
+        icon.close_flag()
+        self.graph.reset_view()
+
+    def test_out_of_reach_grey_with_the_nearest_in_reach(self):
+        corner, icon, view = self.graph.ratio, self.graph.ratio.icon, self.graph.view
+        self.win.resize(1800, 700)                                             # a wide graph
+        self.spin(100)
+        view.setRange(xRange=(3, 3.3), yRange=(-6, 6), padding=0)              # as close as the frequencies come
+        self.spin(50)
+        least = corner.ratio_of((0, 3))                                        # the least gain in view: 3 dB
+        self.assertGreater(least, 10.5)
+        flag = self.flag()
+        self.assertIn(("10", None, False), flag)                              # grey
+        nearest = next(to for t, to, _ in flag if t == G.ratio_text(least))
+        self.assertAlmostEqual(nearest[1] - nearest[0], 3)
+        self.assertEqual([t for t, *_ in flag], sorted([t for t, *_ in flag], key=float))   # from small to large
+        before = view.viewRange()
+        self.choose_ratio("10")
+        self.assertEqual(view.viewRange(), before)                            # takes no click
+        self.choose_ratio(G.ratio_text(least))
+        self.assertAlmostEqual(corner.ratio(), least, places=9)
+        icon.close_flag()
+        self.graph.reset_view()
+
+    def test_the_aspect_ratio_as_close_as_the_limits_allow(self):
+        corner, view = self.graph.ratio, self.graph.view
+        view.setRange(xRange=(2, 2.3), yRange=(-1, 2), padding=0)
+        self.spin(20)
+        lo, hi = corner.db_range(1)
+        self.assertAlmostEqual(hi - lo, 3)                                     # the least gain in view
+        self.assertAlmostEqual(lo / (hi - lo), -1 / 3)
+        self.assertEqual(corner.db_range(1000), (-60, 40))
+        self.graph.reset_view()
+
     def test_a_faint_line_per_db(self):
         left = self.graph.getPlotItem().getAxis("left")
         self.assertEqual(left.tickSpacing(G.Y_LO, G.Y_HI, 600), [(6, 0), (3, 0), (1, 0)])
@@ -528,7 +845,7 @@ class Graph(WindowTest):
         self.sim.front_panel([(4, 18, 12000)])               # band 5 left in the high, where fs matters
         self.spin(300)
         left = F.band_filters(self.session.state, 4, 4)
-        cmp, item = self.graph.compare_items[0], self.win.legend.items["compare"]     # the dashed sums, their item
+        cmp, item = self.graph.compare_items[0], self.win.legend.items["compare"]     # the dotted sums, their item
         self.assertFalse(cmp.isVisible() or item.isVisible())                 # the device runs at the chosen 48
         self.win.fs_box.setCurrentIndex(G.SAMPLE_RATES.index(44100))
         np.testing.assert_allclose(self.sum_curve(0), F.total_db(left, self.graph.freqs, 44100))
@@ -536,7 +853,9 @@ class Graph(WindowTest):
         self.assertFalse(cmp.isVisible())                                     # off at first
         QTest.mouseClick(item, Qt.LeftButton)
         self.assertTrue(cmp.isVisible())
-        self.assertEqual(cmp.opts["pen"].style(), Qt.DashLine)
+        pen = cmp.opts["pen"]                                                 # a sum: as thick, round dots
+        self.assertEqual((pen.widthF(), pen.capStyle(), pen.color().alphaF()), (G.SUM_W, Qt.RoundCap, 1.0))
+        self.assertAlmostEqual(sum(pen.dashPattern()) * G.SUM_W, G.COMPARE_DOTS)
         np.testing.assert_allclose(cmp.getData()[1], F.total_db(left, self.graph.freqs, 48000))
         self.assertGreater(np.abs(cmp.getData()[1] - self.sum_curve(0)).max(), 0.01)
         QTest.mouseClick(self.win.legend.items["sum"], Qt.LeftButton)        # a layer of its own

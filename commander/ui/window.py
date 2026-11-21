@@ -1,8 +1,8 @@
-"""The main window: output tabs; on the left edge the input, the output's other settings, the presets and the settings
-of the device, each opened and closed by its tab, as many as the screen has room for; the response graph, which takes
-the room left; beside it, one under the other, what shapes the sound: the parametric EQ (a table per channel; with
-Dual EQ off both show the one EQ of both channels, in the shared colour), Bass/Treble, and Loudness with a graph of
-what it does; and a status bar with the connection.
+"""The main window: output tabs, beside them the level of the output shown (VolumeSection); on the left edge the
+input, the output's other settings, the presets and the settings of the device, each opened and closed by its tab, as
+many as the screen has room for; the response graph, which takes the room left; beside it, one under the other, what
+shapes the sound: the parametric EQ (a table per channel; with Dual EQ off both show the one EQ of both channels, in
+the shared colour), Bass/Treble, and Loudness with a graph of what it does; and a status bar with the connection.
 
 One title, EQ, over the column, with what the EQ was loaded from and, on the right, Import and Export of the EQ of
 this output as a file. Close above the tables Dual EQ: Share L > R and Share R > L, or Split L <> R. Below that each
@@ -10,12 +10,11 @@ part is a table headed by its own switch, in the corner above the row names, on 
 a state is shown once, where it is set. Room between the parts groups them: less between the two channels than
 between the EQ, Bass/Treble and Loudness.
 
-A preset's row, Clear or Rumble under the mouse opens its preview (PresetPreview) just past the names in the presets
-panel, joined to the row as its tab, with Select, Edit and Store; the row of its actions lies level with the row where
-there is room. It stays open while the mouse is on the row, on the preview, or between them, follows the mouse to
-another such row, and closes when an action is clicked.
+A row of the presets panel under the mouse shows its actions: Select, and for a slot Edit and Store. A slot's row,
+Clear or Rumble also opens its preview (PresetPreview) over the left of the graph, level with the row where there is
+room. Both follow the mouse to another row and go when it leaves the rows, or an action is clicked.
 
-Edit in a preset's preview opens the edit stand: the stage and the column show the preset (a Draft) instead of the
+Edit in a preset's row opens the edit stand: the stage and the column show the preset (a Draft) instead of the
 output's EQ, and all else lies under a veil (Scrim), out of reach, with the row joined to them as their tab. The title
 is PRESET, with the number and the name, which can be typed; the switches are titles, as a preset has none; Loudness,
 no part of a preset, is gone. Import and Export work on the preset; nothing goes to the device. Nothing is chosen at the
@@ -28,7 +27,7 @@ import datetime
 import os
 
 from PySide6.QtCore import (QEvent, QModelIndex, QPoint, QRect, QRectF, QSettings, QSize, QStandardPaths, Qt,
-                            QTimer, QUrl)
+                            QTimer, QUrl, Signal)
 from PySide6.QtGui import (QColor, QCursor, QDesktopServices, QFont, QIcon, QKeySequence, QPainter, QPalette,
                            QShortcut)
 from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
@@ -47,23 +46,28 @@ from ..draft import Draft
 from . import theme
 from .about import AboutDialog
 from .device import DevicePanel
-from .graph import LEGEND_GAP, SAMPLE_RATES, TITLE_ROOM, ZONE_INK, ResponseGraph, side_color
+from .graph import LEGEND_GAP, SAMPLE_RATES, SECTION, TITLE_ROOM, ZONE_INK, ResponseGraph, side_color
 from .inputs import InputPanel
-from .legend import ITEM_PAD, Legend
+from .legend import Legend
 from .importdialog import ImportDialog, read_file
 from .loudness import LoudnessGraph
 from .output import OutputPanel, shared_tip
-from .presets import INPUT_TAG, ChosenRow, NameEditor, PresetPanel, SideTab
+from .volume import VolumeSection
+from .presets import INPUT_TAG, ChosenRow, NameEditor, PresetPanel, SideTab, actions
 from .preview import PresetPreview
-from .scrim import RISE, Scrim
+from .scrim import Scrim
+from .traffic import Grip, TrafficPanel
 from . import simulated as simulated_choice
 from . import untested
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, LOUDNESS_COLUMNS, CellDelegate, Marks,
                      ParamModel, ParamView, band_address, band_rows, bt_rows, loudness_rows)
 from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, DSD_BYPASS, FRAME, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE,
                       Action, MoreButton, Option, Switch, Choice, dot_icon, dot_pixmap, dropped_file, head,
-                      input_eq_bypass, label_color, pulse, switch_tip)
+                      input_eq_bypass, label_color, pulse, show_on_screen, switch_tip)
 
+GEOMETRY = "window/geometry"                    # the setting: where the window was when it closed, and how large
+MAXIMIZED = "window/maximized"                  # and whether it was maximized
+TRAFFIC_WIDTH = "traffic/width"                 # how wide the MIDI traffic was made
 FS_TIP = "Sample rate the curves are computed at"
 ACTIVE_TIP = "Active on the device: its display and volume knob are on this output."
 ACTIVE = "Active on the device"                 # the ADI-2 Pro and ADI-2/4 Pro
@@ -94,17 +98,35 @@ SHARE = ("Share L > R", "Share R > L")
 SPLIT = "Split L <> R"
 
 BT_IN_PRESET = "Bass/Treble of this preset: it comes along only where Load Bass/Treble with preset is on."
-PREVIEW_GAP = 16                                 # px from the end of the longest name to a preset's preview
-PREVIEW_INSET = 8                                # px in from the graph's zone: the preview no further right, nor higher
+# a section's switch pointed at, while the response graph is on the stage (point_section)
+POINTED = "Pointed at: what it adds, in the graph"
+LOUDNESS_POINTED = "Pointed at: what it adds, in the graph, and the sums with it at the current volume"
+PREVIEW_INSET = 8                                # px in from the graph's zone: the preview's left edge, and no higher
+
+
+def presets_named(numbers):
+    """'Preset 1', 'Presets 1 and 4', 'Presets 1, 4 and 7'; more than three by their number: '5 presets'."""
+    if len(numbers) == 1:
+        return "Preset %d" % numbers[0]
+    if len(numbers) > 3:
+        return "%d presets" % len(numbers)
+    return "Presets %s and %d" % (", ".join(map(str, numbers[:-1])), numbers[-1])
 
 
 class Lamp(QWidget):
-    """A coloured dot, the state of the connection; while writes are on their way it pulses in amber."""
+    """A coloured dot, the state of the connection; while writes are on their way it pulses in amber. Ctrl+click
+    opens the MIDI traffic."""
+
+    ctrl_clicked = Signal()
 
     def __init__(self):
         super().__init__()
         self.setFixedSize(14, 14)
         self.color, self.busy, self.phase = theme.SECONDARY, False, 0
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton and e.modifiers() & Qt.ControlModifier:
+            self.ctrl_clicked.emit()
 
     def paintEvent(self, e):
         p = QPainter(self)
@@ -117,11 +139,18 @@ class Lamp(QWidget):
         p.drawEllipse(QRectF((self.width() - DOT) / 2, (self.height() - DOT) / 2, DOT, DOT))   # as every dot
 
 
+class Column(QScrollArea):
+    """Asks for the whole height of what it holds, so a window at its size hint shows it all; scrolls with less."""
+
+    def sizeHint(self):
+        return QSize(super().sizeHint().width(), self.widget().sizeHint().height())
+
+
 class GraphHead(QWidget):
     """The line above the graph: the legend of the graph shown in the middle, the sample rates on the right. When
     both do not fit on one line, the legend's groups go one under the other, the sample rates beside the first; when
     that does not fit either, the sample rates go on a line of their own, above the legend, and all of it on the
-    right: the names end where kHz ends. As high as the highest of the legends needs, so the graph does not move
+    right: the legend ends where kHz ends. As high as the highest of the legends needs, so the graph does not move
     when the other one takes the stage."""
 
     GAP = 24
@@ -190,7 +219,7 @@ class GraphHead(QWidget):
                      max([l.size_for(False).height() for l in self.legends] + [c.height()]))
 
     def minimumSizeHint(self):
-        """Not the legend's width: it changes with what the graph shows (EQ Right only with Dual EQ), and the
+        """Not the legend's width: it changes with what the graph shows (Right only with Dual EQ), and the
         window would grow while one works in it. The graph's own minimum is wider than the legend."""
         c = self.controls.sizeHint()
         return QSize(c.width(), max([l.size_for(False).height() for l in self.legends] + [c.height()]))
@@ -205,7 +234,7 @@ class GraphHead(QWidget):
         l, c = self.legend.size_for(stacked), self.controls.sizeHint()
         if how == "above":
             self.controls.setGeometry(w - c.width(), 0, c.width(), c.height())
-            x = w - l.width() + ITEM_PAD                 # the room after the last name over the edge
+            x = w - l.width()
             self.legend.setGeometry(x, c.height() + self.ABOVE_GAP, l.width(), l.height())
             return
         legend_y, controls_y = self._lead(self.legend)
@@ -230,7 +259,8 @@ class MainWindow(QMainWindow):
         self.simulation = simulation
         self.simulated = simulated or simulation is not None
         self.backups = backups
-        self.taken = None                            # the state as connected, (state, model), until saved
+        self.taken = None                            # the state as connected, (state, model, serial), until saved
+        self.backup_waits = None                     # the note that the backup waits for slots not read
         self.settings = settings if settings is not None else QSettings(untested.ORGANIZATION, untested.APPLICATION)
         self.warned = set()                          # the untested models the notice was shown for in this run
         self.marks = Marks()
@@ -239,11 +269,11 @@ class MainWindow(QMainWindow):
         self.before_edit = None                      # where the work was when it opened: see leave_edit
         self.draft_marks = Marks()                   # its flashes; nothing of it is read back
         self.draft_marks.on_flash = self.marks.on_flash
-        self.preview_row = None                      # the row whose preview is open
+        self.hovered_row = None                      # the row under the mouse: its actions, and its preview if any
         self.pointer = QCursor.pos                   # where the mouse is, on the screen
         self.setWindowTitle("ADI-2 Commander")
 
-        # top: output tabs; the connection is in the status bar
+        # top: output tabs and the volume section; the connection is in the status bar
         self.model = models.DAC                          # the model the window is laid out for: the last connected
         self.status_shown = None                         # the device's status message the tabs show: show_tabs
         self.tabs = QTabBar()                            # a tab per channel of P.CHANNELS: Analog In, then the outputs
@@ -252,13 +282,19 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentIndex(P.CHANNELS.index(P.OUTPUTS[0]))
         self.tabs.setTabVisible(P.CHANNELS.index(P.INPUT_CHANNEL), False)  # on a model with an analog input
         self.tabs.currentChanged.connect(self.set_output)
+        self.tabs.setUsesScrollButtons(False)            # every tab in full: the volume section gives way
         self.tabs.setIconSize(QSize(DOT + DOT_GAP, DOT))
         self.no_dot = QIcon(dot_pixmap(theme.GOOD, True, alpha=0, gap=DOT_GAP))   # a dot's room, so no tab moves
         self.dot = dot_icon(theme.GOOD, True)
         self.dot.addPixmap(dot_pixmap(theme.GOOD, True, gap=DOT_GAP), QIcon.Disabled)   # a fact: not greyed out
         top = QHBoxLayout()
-        top.addWidget(self.tabs)
-        top.addStretch()
+        top.addWidget(self.tabs, 0, Qt.AlignBottom)
+        top.addSpacing(SECTION_GAP)
+        self.volume_section = VolumeSection(session, self.marks)
+        self.volume_section.rearranged.connect(self.fit_tabs)
+        self.fit_tabs()
+        top.addWidget(self.volume_section, 1, Qt.AlignVCenter)
+        top.addSpacing(INNER_GAP)
         self.more = MoreButton(self.tabs)                # the backups folder and About; About on F1 too
         self.more.setToolTip("More options")
         self.more.clicked.connect(self.show_more)
@@ -312,6 +348,8 @@ class MainWindow(QMainWindow):
         self.dual_actions = [Action(), Action()]
         for side in (0, 1):
             self.eq_switches[side].clicked.connect(lambda _=False, side=side: self.toggle_eq(side))
+            self.eq_switches[side].pointed.connect(           # with Dual EQ off both are the one EQ, the left's
+                lambda on, side=side: self.point_section(SECTION[side if self.eq().dual(self.output[1]) else 0], on))
             self.dual_actions[side].clicked.connect(lambda _=False, side=side: self.dual_action(side))
             self.band_views[side].set_corner(self.eq_switches[side])
 
@@ -323,18 +361,22 @@ class MainWindow(QMainWindow):
         self.bt_view = ParamView(self.bt_model, self.bt_delegate, under_bands)
         self.bt_switch = Switch("BASS/TREBLE", theme.BT)
         self.bt_switch.clicked.connect(self.toggle_bt)
+        self.bt_switch.pointed.connect(lambda on: self.point_section("BT", on))
         self.bt_view.set_corner(self.bt_switch)
 
-        # Loudness: on the output address, for both channels; volume dependent, so not in the response graph,
-        # but in its own in the response graph's place while one works in the table: the boost against the volume
+        # Loudness: on the output address, for both channels; volume dependent, so in the response graph only while its
+        # switch is pointed at, and in a graph of its own in the response graph's place while one works in the table:
+        # the boost against the volume
         self.loudness_model = ParamModel(session, self.marks, loudness_rows, LOUDNESS_COLUMNS)
         self.loudness_delegate = CellDelegate(self.loudness_model, self.marks, theme.LOUDNESS)
         self.loudness_view = ParamView(self.loudness_model, self.loudness_delegate, under_bands)
         self.loudness_graph = LoudnessGraph()
         self.loudness_graph.edited.connect(self.write)
         self.loudness_graph.picked.connect(self.select_cell)
+        self.loudness_graph.tabbed.connect(self.tab_from_graph)
         self.loudness_switch = Switch("LOUDNESS", theme.LOUDNESS)
         self.loudness_switch.clicked.connect(self.toggle_loudness)
+        self.loudness_switch.pointed.connect(lambda on: self.point_section("LD", on))
         self.loudness_view.set_corner(self.loudness_switch)
 
         # the response graph, with what it shows spelled out above it
@@ -342,6 +384,7 @@ class MainWindow(QMainWindow):
         self.graph.setMinimumSize(360, 300)
         self.graph.edited.connect(self.write)
         self.graph.picked.connect(self.select_cell)
+        self.graph.tabbed.connect(self.tab_from_graph)
         self.legend = Legend(self.graph)
         self.graph_note = QLabel()
         self.graph_note.setStyleSheet("color: %s;" % theme.SECONDARY.name())
@@ -354,6 +397,8 @@ class MainWindow(QMainWindow):
         self.fs_box.setToolTip(FS_TIP)
         self.live_shown = None                           # see show_live_rate
         self.before_switch = None                        # where the focus was before a switch took it: see on_focus
+        self.following = False                           # the tables follow a point taken in a graph: select_cell
+        self.handle_leads = False                        # a point taken in a graph leads until a table has the focus
         self.fs_label = QLabel("<i>f</i><sub>s</sub>")
         self.fs_label.setTextFormat(Qt.RichText)
         self.fs_label.setStyleSheet("color: %s;" % theme.LABEL.name())
@@ -406,7 +451,7 @@ class MainWindow(QMainWindow):
         sound.addStretch(1)
         sound_widget = QWidget()
         sound_widget.setLayout(sound)
-        self.sound = QScrollArea()
+        self.sound = Column()
         self.sound.setWidget(sound_widget)
         self.sound.setWidgetResizable(True)
         self.sound.setFrameShape(QFrame.NoFrame)
@@ -435,9 +480,12 @@ class MainWindow(QMainWindow):
         self.load_bt = Option("Load Bass/Treble with preset")      # RME's name for it, in full
         self.load_bt.clicked.connect(self.toggle_load_bt)
         self.presets = PresetPanel(self.load_bt)
-        self.presets.selected.connect(self.select_preset)
+        self.presets.selected.connect(lambda value: self.from_row(self.select_preset, value))
         self.presets.finished.connect(self.finish_edit)
-        self.presets.peeked.connect(self.open_preview)
+        self.presets.entered.connect(self.enter_row)
+        self.presets.aimed.connect(self.aim)
+        self.presets.edited.connect(lambda slot: self.from_row(self.edit_preset, slot))
+        self.presets.stored.connect(lambda slot: self.from_row(self.store_preset, slot))
         self.presets_area = QScrollArea()
         self.presets_area.setWidget(self.presets)
         self.presets_area.setWidgetResizable(True)
@@ -479,9 +527,30 @@ class MainWindow(QMainWindow):
         self.device_area.setFixedWidth(self.PRESETS_WIDTH)
         self.device_area.hide()
         self.device_tab = SideTab("DEVICE")
+        # the MIDI traffic: its tab under the others, shown only while it is open; its panel always the first, with
+        # the grip against its right edge
+        self.traffic_panel = TrafficPanel(session.traffic, self.note, lambda: self.folder)
+        self.traffic_panel.setFixedWidth(max(self.PRESETS_WIDTH, int(self.settings.value(TRAFFIC_WIDTH, 0))))
+        self.traffic_grip = Grip(self.traffic_panel)
+        self.traffic_grip.dragged.connect(self.widen_traffic)
+        self.traffic_grip.released.connect(self.keep_on_screen)
+        self.traffic_area = QWidget()
+        traffic_row = QHBoxLayout(self.traffic_area)
+        traffic_row.setContentsMargins(0, 0, 0, 0)
+        traffic_row.setSpacing(0)
+        traffic_row.addWidget(self.traffic_panel)
+        traffic_row.addWidget(self.traffic_grip)
+        self.traffic_area.hide()
+        self.traffic_tab = SideTab("MIDI")
+        self.traffic_tab.setToolTip("Hide the MIDI traffic.")
+        self.traffic_tab.hide()
+        self.traffic_tab.toggled.connect(self.traffic_tab.setVisible)
+        self.lamp.ctrl_clicked.connect(lambda: self.show_traffic(True))
+        QShortcut(QKeySequence("Ctrl+Shift+T"), self, lambda: self.show_traffic(not self.traffic_tab.open))
+        QShortcut(QKeySequence("Ctrl+Shift+M"), self, self.toggle_mute)
         # a line between two open panels: they stand on the same ground
         self.panel_lines = []
-        for _ in range(3):
+        for _ in range(4):
             line = QFrame()
             line.setFixedWidth(1)
             line.setStyleSheet("background: %s;" % theme.GRID.name())
@@ -489,7 +558,8 @@ class MainWindow(QMainWindow):
             self.panel_lines.append(line)
         self.opened = []                                 # the open panels' tabs, the one opened last at the end
         self.areas = {self.input_tab: self.input_area, self.output_tab: self.output_area,
-                      self.presets_tab: self.presets_area, self.device_tab: self.device_area}
+                      self.presets_tab: self.presets_area, self.device_tab: self.device_area,
+                      self.traffic_tab: self.traffic_area}
         for tab in self.areas:
             tab.toggled.connect(lambda on, tab=tab: self.panel_toggled(tab, on))
             tab.toggled.connect(self.show_panel_lines)
@@ -498,6 +568,7 @@ class MainWindow(QMainWindow):
         strip.addWidget(self.output_tab)
         strip.addWidget(self.presets_tab)
         strip.addWidget(self.device_tab)
+        strip.addWidget(self.traffic_tab)
         strip.addStretch()
 
         # the graph's zone, darker than the columns beside it, from the tabs down to the status bar; beside it
@@ -515,12 +586,14 @@ class MainWindow(QMainWindow):
         left.setContentsMargins(0, below_tabs, 0, above_status)
         left.setSpacing(16)
         left.addLayout(strip)
-        left.addWidget(self.input_area)
+        left.addWidget(self.traffic_area)
         left.addWidget(self.panel_lines[0])
-        left.addWidget(self.output_area)
+        left.addWidget(self.input_area)
         left.addWidget(self.panel_lines[1])
-        left.addWidget(self.presets_area)
+        left.addWidget(self.output_area)
         left.addWidget(self.panel_lines[2])
+        left.addWidget(self.presets_area)
+        left.addWidget(self.panel_lines[3])
         left.addWidget(self.device_area)
         right = QVBoxLayout()
         right.setContentsMargins(0, below_tabs, 0, above_status)
@@ -546,12 +619,6 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         self.scrim = Scrim(root)
         self.preview = PresetPreview(root)
-        self.preview.selected.connect(lambda value: self.from_preview(self.select_preset, value))
-        self.preview.edited.connect(lambda slot: self.from_preview(self.edit_preset, slot))
-        self.preview.stored.connect(lambda slot: self.from_preview(self.store_preset, slot))
-        self.peek = Scrim(root)                          # the preview's outline and tab
-        self.peek.veil = False
-        self.peek.margin = 0
 
         session.on_connection.append(self.on_connection)
         session.on_changed.append(self.on_changed)
@@ -581,7 +648,21 @@ class MainWindow(QMainWindow):
             e.ignore()                                   # back to the preset being edited
             return
         self.timer.stop()                                # a closed window no longer talks to the device
+        self.settings.setValue(GEOMETRY, self.saveGeometry())
+        self.settings.setValue(MAXIMIZED, self.isMaximized())
         super().closeEvent(e)
+
+    def show_as_before(self, screen):
+        """Show the window where it was when it last closed, as large, maximized if it was. The first time, and where
+        Qt cannot restore it (a screen of another width): on screen, maximized if it was, else as show_on_screen."""
+        geometry = self.settings.value(GEOMETRY)
+        if geometry is not None and self.restoreGeometry(geometry):
+            self.show()
+        elif self.settings.value(MAXIMIZED, False, type=bool):
+            self.move(screen.availableGeometry().topLeft())
+            self.showMaximized()
+        else:
+            show_on_screen(self, self.sizeHint(), screen)
 
     def discard_ok(self):
         """Closing while a changed preset is open: whether its changes may go."""
@@ -596,12 +677,12 @@ class MainWindow(QMainWindow):
     # -- session events -----------------------------------------------------------------------
     def tick(self):
         self.session.tick()
-        self.output_panel.volume.tick(self.session.clock())  # a held Volume arrow repeats on the session's clock
+        self.volume_section.tick(self.session.clock())  # held arrows repeat, Volume rises, on the session's clock
         self.lamp.busy = bool(self.session.pending or self.session.sent or self.session.operating())
         self.lamp.phase += 1
         self.lamp.update()
-        if self.preview_row is not None:
-            self.follow_preview(self.pointer())
+        if self.hovered_row is not None:
+            self.follow_mouse(self.pointer())
 
     def set_model(self, model):
         """Lay the window out for a model: the names of the outputs; the panel of the output's other settings, where
@@ -620,10 +701,12 @@ class MainWindow(QMainWindow):
             self.set_model(self.session.model)
         if status == "ready":
             if self.backups is not None and not self.simulated:     # before anything can be written
-                self.taken = (dict(self.session.state), self.session.model)
+                self.taken = (dict(self.session.state), self.session.model, self.session.port.serial)
             QTimer.singleShot(0, self.warn_untested)    # after this event: the notice is modal
         else:
             self.taken = None
+            if self.file_note.text() == self.backup_waits:
+                self.note("")                            # no backup waits now
         color, text = LAMP[status]
         if status == "unsupported":
             text %= self.session.model.name
@@ -641,12 +724,15 @@ class MainWindow(QMainWindow):
         self.refresh()                                   # DSD bypasses the DSP: the switches, curves and cells follow
 
     def show_title(self):
-        """The title names the connected model; in Simulated mode the simulated model."""
+        """The title names the connected model and its serial number; in Simulated mode the simulated model."""
         title = "ADI-2 Commander"
         if self.simulation is not None:
             title += " – SIMULATED " + self.simulation.name()
         elif self.session.ready() and self.session.model is not None:     # dropping, the model is gone first
             title += " – " + models.full_name(self.session.model, self.session.revision())
+            serial = getattr(self.session.port, "serial", None)
+            if serial:
+                title += " " + serial
         self.setWindowTitle(title)
 
     def show_tabs(self):
@@ -691,17 +777,38 @@ class MainWindow(QMainWindow):
             self.tabs.setCurrentIndex(next(P.CHANNELS.index(o) for o in P.OUTPUTS
                                            if self.open_tab(P.CHANNELS.index(o))))
 
+    def fit_tabs(self, *_):
+        """The tabs as high as the volume section, their names on the line of its names on one line."""
+        pad = (self.volume_section.bar_height() - self.tabs.fontMetrics().height()) // 2 - theme.TAB_LINE
+        self.tabs.setStyleSheet("QTabBar::tab { padding: %dpx 16px; }" % pad)
+
+    def sizeHint(self):
+        """With the volume section on one line, as it is at the width of the hint."""
+        hint, section = super().sizeHint(), self.volume_section
+        return QSize(hint.width(), hint.height() - section.bar_height() + section.bar_height(1))
+
     def open_tab(self, i):
         return self.tabs.isTabVisible(i) and self.tabs.isTabEnabled(i)
 
     def save_backup(self):
-        """The state as connected, with the preset slots once all are read, as a copy in the backups folder."""
-        if self.taken is None or any(n not in self.session.slots for n in setupfile.SLOTS):
+        """The state as connected, with the preset slots once all are read, as a copy in the backups folder. A copy
+        without a slot could put a wrong one back: while a slot that never came in full is missing, the status bar
+        says so, until the copy is saved after all."""
+        if self.taken is None:
             return
-        (state, model), self.taken = self.taken, None
+        missing = [n for n in setupfile.SLOTS if n not in self.session.slots]
+        unread = [n for n in missing if n in self.session.unread]
+        if unread:
+            self.backup_waits = "Backup not saved: %s could not be read" % presets_named(unread)
+            self.note(self.backup_waits, theme.WARN)
+        if missing:
+            return
+        if self.file_note.text() == self.backup_waits:
+            self.note("")
+        (state, model, serial), self.taken = self.taken, None
         try:
             text = setupfile.write(state, self.session.slots, model, self.session.revision())
-            backup.keep(self.backups, model, text)
+            backup.keep(self.backups, model, text, serial=serial)
         except (OSError, ValueError) as e:
             self.note("Backup not saved: %s" % e, theme.WARN)
 
@@ -808,6 +915,10 @@ class MainWindow(QMainWindow):
         done = {"store": "Stored in Preset %d", "write": "Stored Preset %d"}[kind] % slot
         if result is None:
             self.note("Not done: the device was disconnected (Preset %d)" % slot, theme.WARN)
+        elif "not read" in result:
+            self.note("Not done: Preset %d could not be read (see the preset)" % slot, theme.WARN)
+        elif "not read back" in result:
+            self.note("%s, but it could not be read back (see the preset)" % done, theme.WARN)
         elif result:
             self.slot_issues[slot] = result
             self.note("%s, but it reads back otherwise (see the preset)" % done, theme.BAD)
@@ -846,6 +957,7 @@ class MainWindow(QMainWindow):
         self.loudness_model.set_output(self.output)
         if P.has_bt(self.output[1]):
             self.output_panel.set_output(self.output)
+            self.volume_section.set_output(self.output)
         else:
             self.show_stage(loudness=False)
         self.refresh()
@@ -868,6 +980,27 @@ class MainWindow(QMainWindow):
         v = views[nxt[0]]
         v.setFocus()
         v.setCurrentIndex(v.model().index(nxt[1], nxt[2]))
+
+    def tab_from_graph(self, direction):
+        """Tab in a graph: into the table that frames what its handle changes, in the framed row, in the column the
+        table had (at first the first framed cell); with Dual EQ off Tab goes into the left table, Shift+Tab into
+        the right. With no frame on the tables, as into the tables at all: Tab the first, Shift+Tab the last."""
+        views = [v for v in self.band_views + [self.bt_view, self.loudness_view] if v.isVisible()]
+        framed = [v for v in views if v.handle_row is not None]
+        if not framed:
+            if views:
+                views[0 if direction > 0 else -1].take_focus()
+            return
+        v = framed[0 if direction > 0 else -1]
+        m, here, row = v.model(), v.currentIndex(), v.handle_row
+        column = here.column() if here.isValid() else next(
+            c for c in range(m.columnCount()) if v.model_.handled(m.cell(m.index(row, c))))
+        self.following = True                            # the row first: the focus then chooses that band
+        try:
+            v.setCurrentIndex(m.index(row, column))
+        finally:
+            self.following = False
+        v.setFocus()
 
     def walk_on(self, view, direction, column):
         """Alt+up/down past the first or last row: carry on in the table above or below, in the cell straight
@@ -950,8 +1083,10 @@ class MainWindow(QMainWindow):
 
     def export_dialog(self):
         what = "Preset %d" % self.draft.slot if self.draft is not None else self.output_name()
-        name = "%s %s %s.txt" % (self.model.name.replace("/", "-"), what.replace("·", "-").replace("/", "-"),
-                                 datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+        serial = getattr(self.session.port, "serial", None)
+        name = "%s %s%s %s.txt" % (self.model.name.replace("/", "-"), serial + " " if serial else "",
+                                   what.replace("·", "-").replace("/", "-"),
+                                   datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
         path, kind = QFileDialog.getSaveFileName(self, "Export EQ - %s" % what, os.path.join(self.folder, name),
                                                  ";;".join((APO_FILES, REMOTE_FILES)))
         if path and kind == REMOTE_FILES and not path.lower().endswith(REMOTE_SUFFIX):
@@ -1041,19 +1176,24 @@ class MainWindow(QMainWindow):
         """Bass/Treble Enable: shared by both channels, on the left address."""
         self.toggle_section((self.output[2], P.BT_ENABLE), self.bt_view)
 
-    def toggle_section(self, key, view):
-        """Turn a section on or off by its switch. Turning it on is work in it: its table takes the focus, and the
-        stage follows. Turning it off gives the focus back to where it was."""
+    def toggle_section(self, key, view, work=True):
+        """Turn a section on or off by its switch. Turning it on is work in it (work): its table takes the focus,
+        and the stage follows. Turning it off gives the focus back to where it was."""
         on = 0
         if self.draft is not None:                       # a title in the edit stand, no switch
             return
         if self.session.writable(key):
             on = 1 - self.session.state[key]
             self.write(key, on, False)
-        if on:
+        if on and work:
             view.take_focus()
         elif self.before_switch:
             self.before_switch.setFocus()
+
+    def toggle_mute(self):
+        """Mute of the output shown, from the keyboard."""
+        if P.has_bt(self.output[1]):
+            self.volume_section.toggle(self.volume_section.key(P.MUTE))
 
     def toggle_load_bt(self):
         """Load B/T with Preset: whether selecting a preset brings its Bass/Treble too; on the left address
@@ -1077,93 +1217,88 @@ class MainWindow(QMainWindow):
         self.note("Storing the EQ of %s in Preset %d …" % (self.output[0], slot))
         self.refresh()
 
-    # -- a preset's preview ------------------------------------------------------------------------
-    def previewable(self, row):
-        """A row that can show its preview now (a slot's, Clear, Rumble): not while it cannot be clicked."""
-        return row.previewable and row.isEnabled() and not row.edited
+    # -- the row under the mouse: its actions, a preset's preview --------------------------------------------------------------------
+    def actionable(self, row):
+        """A row that can show its actions now: not while it cannot be clicked, nor while the edit stand is open."""
+        return row.isEnabled() and not row.edited and self.draft is None
 
-    def open_preview(self, value):
-        """A slot's row, Clear or Rumble came under the mouse: its preview, beside it."""
+    def enter_row(self, value):
+        """A row came under the mouse: its actions; for a slot, Clear or Rumble also its preview."""
         row = self.presets.rows[value]
-        if row is self.preview_row or self.draft is not None or not self.previewable(row):
+        if row is self.hovered_row:
             return
-        self.preview_row = row
-        self.presets.peek(value)
-        self.refresh_preview()
-        self.place_preview()
-        self.preview.show()
-        self.preview.raise_()
-        self.peek.cover(self.preview.page(), row)
+        self.leave_row()
+        if not self.actionable(row):
+            return
+        self.hovered_row = row
+        self.refresh_hovered()
+        if row.previewable:
+            self.place_preview()
+            self.preview.show()
+            self.preview.raise_()
 
-    def close_preview(self):
-        if self.preview_row is None:
+    def leave_row(self):
+        if self.hovered_row is None:
             return
-        self.preview_row = None
+        self.hovered_row.show_actions(None)
+        self.hovered_row = None
         self.preview.hide()
-        self.peek.uncover()
-        self.presets.peek(None)
+        self.preview.show_graph(False)
 
-    def from_preview(self, act, value):
-        """An action in the preview: done with it."""
-        self.close_preview()
+    def aim(self, value, on):
+        """The mouse came on (on) or left the Select of the row of value: the preview shows what it loads, or what the
+        slot holds. Only for the row under the mouse: leaving one Select can come after entering the next."""
+        if self.hovered_row is not None and self.hovered_row.value == value:
+            self.preview.show_graph(on)
+
+    def from_row(self, act, value):
+        """An action in a row: done with its actions and preview."""
+        self.leave_row()
         act(value)
 
-    def refresh_preview(self):
-        row = self.preview_row
+    def refresh_hovered(self):
+        row = self.hovered_row
         if row is None:
             return
-        if self.draft is not None or not self.previewable(row) or not self.presets_area.isVisible():
-            self.close_preview()
+        if not self.actionable(row) or not self.presets_area.isVisible():
+            self.leave_row()
             return
-        s, (_, _, left, _), name = self.session.state, self.output, self.output_name()
-        others = [self.channel_name(out) for _, out, l, _ in P.CHANNELS
-                  if l != left and self.session.controls(out) and s.get((l, P.EQ_PRESET_SELECT)) == row.value]
-        self.preview.show_preset(row.value, self.session.slots.get(row.slot), name,
-                                 s.get(self.session.at((left, P.LOAD_BT))) == 1,
-                                 s.get((left, P.EQ_PRESET_SELECT)) == row.value, self.graph.fs, others,
-                                 P.has_bt(self.output[1]))
+        s, (_, out, left, _), name = self.session.state, self.output, self.output_name()
+        others = [self.channel_name(o) for _, o, l, _ in P.CHANNELS
+                  if l != left and self.session.controls(o) and s.get((l, P.EQ_PRESET_SELECT)) == row.value]
+        stored, load_bt = self.session.slots.get(row.slot), s.get(self.session.at((left, P.LOAD_BT))) == 1
+        row.show_actions(actions(row.value, stored, name, load_bt, s.get((left, P.EQ_PRESET_SELECT)) == row.value,
+                                 others, P.has_bt(out)))
+        if row.previewable:
+            self.preview.show_preset(row.value, stored, load_bt, self.graph.fs, P.has_bt(out))
 
     def place_preview(self):
-        """Just past the longest name in the panel, and past the tags of its own row, which stay in sight; the rest of
-        the panel lies under it, the graph's zone too where it reaches that far. An edge of the tab runs on as the
-        preview's, never nearly: its lower edge, so that the row of its actions lies level with the row; where the
-        preview would then rise above the graph's zone, its upper edge."""
-        root, row, preview = self.centralWidget(), self.preview_row, self.preview
+        """Over the left of the graph's zone. Its lower edge level with the row's; where the preview would then rise
+        above the graph's zone, its upper edge."""
+        root, row, preview = self.centralWidget(), self.hovered_row, self.preview
         preview.resize(preview.sizeHint())
         zone = QRect(self.display.mapTo(root, QPoint(0, 0)), self.display.size())
-        names = max(r.mapTo(root, QPoint(r.text_end(r is row), 0)).x() for r in self.presets.rows.values()
-                    if r.isVisible())
-        level = row.mapTo(root, QPoint(0, row.height())).y() + RISE - preview.height()
-        top = level if level >= zone.top() + PREVIEW_INSET else row.mapTo(root, QPoint(0, 0)).y() - RISE
-        at = QPoint(min(names + PREVIEW_GAP, zone.left() + PREVIEW_INSET), top)
+        level = row.mapTo(root, QPoint(0, row.height())).y() - preview.height()
+        top = level if level >= zone.top() + PREVIEW_INSET else row.mapTo(root, QPoint(0, 0)).y()
+        at = QPoint(zone.left() + PREVIEW_INSET, top)
         if preview.pos() != at:
             preview.move(at)
 
-    def follow_preview(self, pos):
-        """The mouse at pos (on the screen): on another such row, its preview; on the row, the preview or between
-        them, this one stays; elsewhere it closes."""
+    def follow_mouse(self, pos):
+        """The mouse at pos (on the screen): on another row, its actions and preview; on none, they go."""
         def rect(w):
             return QRect(w.mapToGlobal(QPoint(0, 0)), w.size())
 
-        shown, page = rect(self.presets_area.viewport()), rect(self.preview)
-        if page.contains(pos):                           # over rows too: the preview lies over them
-            self.place_preview()
-            return
+        shown = rect(self.presets_area.viewport())
         for row in self.presets.rows.values():
-            if self.previewable(row) and row.isVisible() and rect(row).contains(pos) and shown.contains(pos):
-                if row is not self.preview_row:
-                    self.open_preview(row.value)
-                break
-        row = self.preview_row
-        if row is None:
-            return
-        page, tab = rect(self.preview), rect(row)
-        beside = QRect(QPoint(tab.left(), tab.top() - RISE), QPoint(page.left(), tab.bottom() + RISE))
-        gap = QRect(QPoint(shown.right(), page.top()), QPoint(page.left(), page.bottom()))     # when it is beyond
-        if any(r.contains(pos) for r in (beside, gap)):
-            self.place_preview()                         # the row moves when the panel scrolls
-        else:
-            self.close_preview()
+            if row.isVisible() and rect(row).contains(pos) and shown.contains(pos):
+                if row is self.hovered_row:
+                    if row.previewable:
+                        self.place_preview()         # the row moves when the panel scrolls
+                else:
+                    self.enter_row(row.value)
+                return
+        self.leave_row()
 
     # -- the edit stand ---------------------------------------------------------------------------
     def eq(self):
@@ -1189,6 +1324,7 @@ class MainWindow(QMainWindow):
         self.draft.on_changed.append(lambda keys, origin: self.refresh())
         self.show_eq(self.draft, self.draft_marks)
         self.show_stage(loudness=False)
+        self.handle_leads = False
         for v in views:                                  # nothing chosen: no link with the work before
             v.setCurrentIndex(QModelIndex())
             v.chosen = False
@@ -1202,7 +1338,7 @@ class MainWindow(QMainWindow):
         for w in self.under_veil():
             w.setEnabled(False)
         self.refresh()
-        self.scrim.cover([self.display, self.sound], row)
+        self.scrim.cover([self.display, self.sound], row, clear=[self.volume_section])
 
     def finish_edit(self, ok):
         """OK: write the preset, when changed, and leave once the device has it. Cancel: leave."""
@@ -1255,6 +1391,7 @@ class MainWindow(QMainWindow):
         for d in self.band_delegates + [self.bt_delegate]:
             d.marks = marks
         self.graph.session = source
+        self.graph.loudness = source is self.session         # a preset has no Loudness
 
     def rename_draft(self, text):
         if self.draft is not None and not self.draft.locked:
@@ -1282,14 +1419,20 @@ class MainWindow(QMainWindow):
             lines.append("Preset %d was changed on the device meanwhile: OK writes this over it." % d.slot)
         return "\n".join(lines)
 
+    def point_section(self, key, on):
+        """A section's switch under the mouse: in the response graph what it adds, and the rest steps back."""
+        self.graph.emphasis = key if on else None
+        self.graph.redraw()
+
     def toggle_loudness(self):
-        """Loudness Enable: on the output address, for both channels."""
-        self.toggle_section((self.output[1], P.LOUDNESS_ENABLE), self.loudness_view)
+        """Loudness Enable: on the output address, for both channels. The stage stays: with the mouse on the switch,
+        the response graph shows what Loudness changes."""
+        self.toggle_section((self.output[1], P.LOUDNESS_ENABLE), self.loudness_view, work=False)
 
     def on_current(self, side, idx):
         """The table's current row is drawn highlighted in the graph; a left and a right point on the same
         spot go to the channel last worked on."""
-        if not idx.isValid():
+        if not idx.isValid() or self.following:
             return
         self.show_stage(loudness=False)
         if side is None:
@@ -1298,12 +1441,34 @@ class MainWindow(QMainWindow):
             self.graph.current = (band_address(self.output, side, self.eq()), str(idx.row() + 1))
             self.graph.prefer_side = side
         self.graph.update_from(self.output)
+        self.show_handles()
 
     def on_loudness_current(self, idx):
-        if idx.isValid():
+        if idx.isValid() and not self.following:
             self.show_stage(loudness=True)
             m = self.loudness_model
             self.loudness_graph.set_current(m.cell(m.index(idx.row(), 1)).key)   # the row's point, on any column
+            self.show_handles()
+
+    def handle_rows(self):
+        """Per table (left, right, Bass/Treble, Loudness) the row whose band's handle leads in the graph on the
+        stage, or None. With Dual EQ off a band is in both band tables."""
+        if not self.handle_leads:
+            return [None] * 4
+        if self.loudness_shown():
+            m, key = self.loudness_model, self.loudness_graph.current
+            return [None, None, None, next((r for r in range(m.rowCount()) if m.cell(m.index(r, 1)).key == key), None)]
+        key, eq = self.graph.current, self.eq()
+        bands = [next((r for r in range(len(P.BANDS)) if key == (band_address(self.output, side, eq), str(r + 1))),
+                      None) for side in (0, 1)]
+        return bands + [next((r for r in range(2) if key == (self.output[2], "BT"[r])), None), None]
+
+    def show_handles(self):
+        """While a handle leads, the tables frame what it changes (ParamView.paintEvent)."""
+        for v, row in zip(self.band_views + [self.bt_view, self.loudness_view], self.handle_rows()):
+            if (v.handle_row, v.handle_color) != (row, v.delegate.color.name()):
+                v.handle_row, v.handle_color = row, v.delegate.color.name()
+                v.viewport().update()
 
     def loudness_shown(self):
         return self.stage.currentWidget() is self.loudness_graph
@@ -1331,27 +1496,38 @@ class MainWindow(QMainWindow):
             self.before_switch = here and next((v for v in views + [self.loudness_view] if v.isAncestorOf(old)), old)
             return
         if new in views + [self.loudness_view]:
+            self.handle_leads = False                    # the table leads: its focused cell is the mark
             for v in views + [self.loudness_view]:      # the chosen row: shown in its table without focus too
                 v.chosen = v is new
                 v.viewport().update()
+            self.show_handles()
         if new in views:
             self.on_current((0, 1, None)[views.index(new)], new.currentIndex())
         elif new is self.loudness_view:
             self.on_loudness_current(new.currentIndex())
 
     def select_cell(self, key):
-        """A point in a graph was taken: its row in the table becomes current, on the frequency (a Loudness point:
-        on its gain). With Dual EQ off the point is in both tables: the one last worked on."""
-        first = self.graph.prefer_side
-        for v in [self.band_views[first], self.band_views[1 - first], self.bt_view, self.loudness_view]:
-            m = v.model()
-            for r in range(m.rowCount()):
-                for c in range(m.columnCount()):
-                    cell = m.cell(m.index(r, c))
-                    if cell.key == key and v.isVisible():
-                        v.setFocus()
-                        v.setCurrentIndex(m.index(r, c))
-                        return
+        """A point in a graph was taken: its handle leads, and the tables frame what it changes in its band's row
+        (show_handles). The graph takes the focus: a cell is coloured once one goes into a table. Each table's
+        current cell goes along to the row, in its column (at first the point's own: the frequency, a Loudness
+        point's gain). With Dual EQ off the point is in both band tables."""
+        views = self.band_views + [self.bt_view, self.loudness_view]
+        (self.loudness_graph if self.loudness_shown() else self.graph).setFocus()
+        self.handle_leads = True
+        self.following = True                            # the graph chose: the tables only follow
+        try:
+            for v in views:
+                v.chosen = False
+                m = v.model()
+                at = next((m.index(r, c) for r in range(m.rowCount()) for c in range(m.columnCount())
+                           if m.cell(m.index(r, c)).key == key), None)
+                if at is not None and v.isVisible():
+                    here = v.currentIndex()
+                    v.setCurrentIndex(m.index(at.row(), here.column() if here.isValid() else at.column()))
+                v.viewport().update()
+        finally:
+            self.following = False
+        self.show_handles()
 
     def panel_toggled(self, tab, on):
         """A panel opened or closed. Before one opens, the panels open longest close until the window fits on its
@@ -1359,19 +1535,38 @@ class MainWindow(QMainWindow):
         if tab in self.opened:
             self.opened.remove(tab)
         if on:
-            while self.opened and self.least_width() + self.panel_width() > self.room().width():
+            while self.opened and self.least_width() + self.panel_width(tab) > self.room().width():
                 self.opened[0].set_open(False)
             self.opened.append(tab)
         self.areas[tab].setVisible(on)
         if on:
             QTimer.singleShot(0, self.keep_on_screen)
 
-    def panel_width(self):
-        """What one more open panel adds to the window's width: the panel, and the line before it when another one
-        is open."""
+    def panel_width(self, tab):
+        """What opening the panel of tab adds to the window's width: the panel, and the line before it when another
+        one is open."""
         gap = self.side_row.spacing()
         line = 1 + gap if any(not a.isHidden() for a in self.areas.values()) else 0
-        return self.PRESETS_WIDTH + gap + line
+        width = (self.traffic_panel.maximumWidth() + Grip.WIDTH if tab is self.traffic_tab
+                 else self.areas[tab].maximumWidth())
+        return width + gap + line
+
+    def traffic_width(self, width):
+        """width for the MIDI traffic, shown: no narrower than the other panels, no wider than the screen allows."""
+        room = self.room().width() - (self.least_width() - self.traffic_panel.width())
+        return max(self.PRESETS_WIDTH, min(width, room))
+
+    def widen_traffic(self, width):
+        """The MIDI traffic as wide as dragged, and as wide the next time."""
+        width = self.traffic_width(width)
+        if width != self.traffic_panel.width():
+            self.traffic_panel.setFixedWidth(width)
+            self.settings.setValue(TRAFFIC_WIDTH, width)
+
+    def fit_traffic(self):
+        """The MIDI traffic as wide as it was made, as far as this screen allows; on a larger one it is again."""
+        made = max(self.PRESETS_WIDTH, int(self.settings.value(TRAFFIC_WIDTH, 0)))
+        self.traffic_panel.setFixedWidth(self.traffic_width(made))
 
     def room(self):
         """The part of the window's screen without the taskbar."""
@@ -1393,9 +1588,18 @@ class MainWindow(QMainWindow):
         if frame.right() > room.right():
             self.move(max(room.left(), frame.left() - (frame.right() - room.right())), frame.top())
 
+    def show_traffic(self, on):
+        """Open the MIDI traffic, its tab with it, or close both."""
+        if on:
+            self.traffic_tab.show()
+        if self.traffic_tab.open != on:
+            self.traffic_tab.set_open(on)
+        if on:
+            QTimer.singleShot(0, self.fit_traffic)       # once it is laid out
+
     def show_panel_lines(self):
         """A line before each open panel that has an open panel before it."""
-        areas = (self.input_area, self.output_area, self.presets_area, self.device_area)
+        areas = (self.traffic_area, self.input_area, self.output_area, self.presets_area, self.device_area)
         for n, line in enumerate(self.panel_lines):
             line.setVisible(not areas[n + 1].isHidden() and any(not a.isHidden() for a in areas[:n + 1]))
 
@@ -1414,15 +1618,16 @@ class MainWindow(QMainWindow):
         editing = None if d is None else (d.slot, d.name, ready and not d.locked and d.changed(), self.edit_warning(),
                                           "Nothing to write: the preset is unchanged." if not d.changed() else
                                           "" if ready else "OK waits for the device: it is not connected.")
-        tags = {o: tag for tag, (_, o, _, _) in zip(self.model.tags, P.OUTPUTS)
+        tags = {o: (tag, self.channel_name(o)) for tag, (_, o, _, _) in zip(self.model.tags, P.OUTPUTS)
                 if o in self.model.controlled or self.session.controls(o)}
         if self.model.input is not None:
-            tags = {P.INPUT_ADDRESS: INPUT_TAG, **tags}
+            tags = {P.INPUT_ADDRESS: (INPUT_TAG, self.channel_name(P.INPUT_ADDRESS)), **tags}
         self.presets.refresh(s, (self.output_name(),) + self.output[1:], self.session.slots, ready,
-                             self.session.operation(), self.slot_issues, editing, tags)
+                             self.session.operation(), self.slot_issues, editing, tags, self.session.unread,
+                             self.session.read_at)
         self.source.copy(self.presets.rows.get(s.get((left, P.EQ_PRESET_SELECT))) if ready and not editing else None,
                          bool(self.session.stale(out)))
-        self.refresh_preview()
+        self.refresh_hovered()
 
     def refresh_slots(self):
         """The slots show only in the presets panel."""
@@ -1456,17 +1661,19 @@ class MainWindow(QMainWindow):
         bypassed = ready and eq.bypassed()
         dsd = DSD_BYPASS if bypassed else None
         eq_bypass = dsd or (input_eq_bypass(eq) if ready and eq.eq_bypassed(out) else None)
+        response = not self.loudness_shown()             # on the stage: pointing at a switch shows there
+        pointed, loudness_pointed = ("\n" + POINTED, "\n" + LOUDNESS_POINTED) if response else ("", "")
         for side, name in enumerate(("left", "right")):
             switch = self.eq_switches[side]
             switch.name = EQ_OWN[side] if dual else EQ_SHARED[side]           # its own channel first
             switch.color = side_color(side, dual)
             if editing:
-                switch.show_title("EQ of the %s channel in this preset" % name if dual else
-                                  "Dual EQ off: one EQ for both channels in this preset")
+                switch.show_title(("EQ of the %s channel in this preset" % name if dual else
+                                   "Dual EQ off: one EQ for both channels in this preset") + pointed)
             else:
-                switch.show_state(eq_on[side], ready, switch_tip("EQ of the %s channel" % name, eq_on[side]) if dual
-                                  else "Dual EQ off: one EQ for both channels\n" + switch_tip("EQ", eq_on[side]),
-                                  eq_bypass)
+                switch.show_state(eq_on[side], ready, (switch_tip("EQ of the %s channel" % name, eq_on[side]) if dual
+                                  else "Dual EQ off: one EQ for both channels\n" + switch_tip("EQ", eq_on[side]))
+                                  + pointed, eq_bypass)
             self.band_delegates[side].color = side_color(side, dual)
             act = self.dual_actions[side]
             act.setEnabled(ready and self.editable())
@@ -1481,12 +1688,13 @@ class MainWindow(QMainWindow):
         live = self.session.ready()
         load_bt = live and self.session.state.get(self.session.at((left, P.LOAD_BT))) == 1
         if editing:
-            self.bt_switch.show_title(BT_IN_PRESET)
+            self.bt_switch.show_title(BT_IN_PRESET + pointed)
         else:
             self.bt_switch.show_state(bt_on, ready, switch_tip("Bass/Treble, both channels", bt_on) + "\n" + (
                 "Loaded with a preset: Load Bass/Treble with preset is on." if load_bt else
-                "Not loaded with a preset: Load Bass/Treble with preset is off."), dsd)
-        self.loudness_switch.show_state(loudness_on, ready, switch_tip("Loudness, both channels", loudness_on), dsd)
+                "Not loaded with a preset: Load Bass/Treble with preset is off.") + pointed, dsd)
+        self.loudness_switch.show_state(loudness_on, ready, switch_tip("Loudness, both channels", loudness_on)
+                                        + loudness_pointed, dsd)
         tip = ("Load Bass/Treble with preset: %s\n"
                "On: selecting a preset brings its Bass/Treble too, and changing Bass/Treble on a\n"
                "preset makes it Temp.%s" % ("on" if load_bt else "off", "" if self.model.id != models.DAC.id else
@@ -1502,6 +1710,8 @@ class MainWindow(QMainWindow):
         self.refresh_edit()
         self.input_panel.refresh()
         self.output_panel.refresh()
+        self.volume_section.setVisible(has_bt)
+        self.volume_section.refresh()
         self.device_panel.refresh()
         for m in self.band_models + [self.bt_model, self.loudness_model]:
             m.refresh()
@@ -1510,6 +1720,7 @@ class MainWindow(QMainWindow):
         self.graph.update_from(self.output)
         self.loudness_graph.update_from(s if ready else {}, out, fs=self.graph.fs, bypassed=bypassed,
                                         draw=self.loudness_shown())     # drawn when it takes the stage
+        self.show_handles()
         self.legend.refresh()
         self.graph_head.legend.setVisible(ready)
         self.graph_note.setText("No %s at %g kHz" % ("Loudness" if self.loudness_shown() else "Bass/Treble",

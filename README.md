@@ -40,13 +40,14 @@ A personal project, shared as is.
 - MIDI Control set to ON on the device: in Remap Keys/Diag on the ADI-2 DAC FS, in Device Mode on the ADI-2 Pro
   and ADI-2/4 Pro.
 - Up-to-date firmware on the device.
-- Windows' built-in USB MIDI class driver, or RME's MADIface driver (tested with 1.015).
+- Windows' built-in USB MIDI class driver, or RME's MADIface driver (tested with 1.031).
 - A 1920×1080 screen at up to 150% scaling (1280×720).
 
 ## Install
 
-Download `ADI-2-Commander-0.2.0-setup.exe` from [Releases](../../releases) and run it. Windows may warn about an
-unknown publisher: choose More info, then Run anyway.
+Download `ADI-2-Commander-0.3.0-setup.exe` from [Releases](../../releases) and run it. Windows may warn about an
+unknown publisher: choose More info, then Run anyway. Updates keep the choice between Install for all users
+and Install for me only. To change it, uninstall Commander first.
 
 Commander makes no internet connections and collects no data.
 
@@ -74,7 +75,7 @@ then run `.venv\Scripts\python tools\build.py`.
 ## Tested with
 
 - ADI-2 DAC FS, firmware DSP 62, USB 81
-- RME MADIface driver 1.015, and Windows' built-in USB MIDI class driver
+- RME MADIface driver 1.031, and Windows' built-in USB MIDI class driver
 - Windows 11 Pro 26H2 (build 26300)
 
 The ADI-2 Pro and ADI-2/4 Pro have not been tested with an actual device. Their support is built on RME's MIDI

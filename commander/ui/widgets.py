@@ -98,7 +98,7 @@ class MoreButton(QPushButton):
     """Three dots one above the other: the menu of the app's own commands. Neutral grey as the status bar, lighter
     under the mouse. Drawn, as the dots on the tabs are. Sized and placed by the font of the tab bar beside it: Windows
     pairs 9 pt text with 16 px icons, and draws its signs within 14 of them; the dots are centred on the tabs'
-    capitals, as an icon beside text is."""
+    capitals, as an icon beside text is. Each dot on whole pixels, as heavy as the tabs' text: 3 px, 5 apart."""
 
     def __init__(self, tabs):
         super().__init__()
@@ -119,11 +119,15 @@ class MoreButton(QPushButton):
         c = theme.TEXT if self.underMouse() else theme.SECONDARY
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        d = self.box
+        size, step = round(self.box * 0.2), round(self.box * 0.33)     # 3 and 5 in a box of 14
+        half = size % 2 / 2                              # an odd dot is centred on a pixel, an even one between two
+        x = math.floor(self.width() / 2) + half
+        y = round(self.middle - half) + half
+        r = size / 2 + 0.1                               # a touch over half: the pixels at its edges fill
         p.setPen(Qt.NoPen)
         p.setBrush(c)
         for k in (-1, 0, 1):
-            p.drawEllipse(QPointF(self.width() / 2, self.middle + k * d * 0.33), d * 0.09, d * 0.09)
+            p.drawEllipse(QPointF(x, y + k * step), r, r)
         p.end()
 
 
@@ -151,12 +155,22 @@ class Switch(QPushButton):
     """A channel's setting that is on or off: its name, after a dot that is filled when on and a ring when off. A
     rounded outline in the channel's colour, as in the graph."""
 
+    pointed = Signal(bool)                       # the mouse came onto it, or left it
+
     def __init__(self, name, color=theme.LEFT):
         super().__init__()
         self.name, self.color, self.on = name, color, False
         self.setCursor(Qt.PointingHandCursor)
         self.setIconSize(QSize(DOT + DOT_GAP, DOT))
         self.setFixedHeight(SWITCH_HEIGHT)
+
+    def enterEvent(self, e):
+        super().enterEvent(e)
+        self.pointed.emit(True)
+
+    def leaveEvent(self, e):
+        super().leaveEvent(e)
+        self.pointed.emit(False)
 
     def show_state(self, on, enabled, tip, bypassed=None):
         """bypassed: why what it switches is bypassed (DSD_BYPASS, input_eq_bypass()), or None."""
@@ -219,9 +233,11 @@ class Action(QPushButton):
         self.setCursor(Qt.PointingHandCursor)
         self.plain = ACTION_STYLE.replace("padding: 2px 10px", "padding: 1px 6px") if compact else ACTION_STYLE
         self.setStyleSheet(self.plain)
+        self.warns = False                       # a click does more than it seems (warn)
 
     def warn(self, on):
         """Its name in amber, under the mouse too, when a click does more than it seems; its tooltip says what."""
+        self.warns = on
         sheet = self.plain
         if on:
             sheet = sheet.replace("{ color: %s;" % theme.BUTTON_TEXT.name(), "{ color: %s;" % theme.WARN.name())
@@ -303,12 +319,13 @@ class Option(QWidget):
 class Segmented(QWidget):
     """A choice between ways of doing one thing, side by side as one control: the chosen one raised and lit, the
     others flat. Neutral grey, as an Option: it is no part of the sound. A click on another emits changed with its
-    index; set_current does not."""
+    index; set_current does not. padding: of each name, as in a style sheet."""
 
     changed = Signal(int)
 
-    def __init__(self, names):
+    def __init__(self, names, padding="2px 14px"):
         super().__init__()
+        self.padding = padding
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
@@ -348,12 +365,12 @@ class Segmented(QWidget):
             right = "3px" if i == last else "0"
             color = theme.TEXT if on else theme.SECONDARY if b.isEnabled() else theme.DISABLED
             b.setStyleSheet(
-                "QPushButton { color: %s; background: %s; border: 1px solid %s; padding: 2px 14px; font-size: 9pt;"
+                "QPushButton { color: %s; background: %s; border: 1px solid %s; padding: %s; font-size: 9pt;"
                 " border-top-left-radius: %s; border-bottom-left-radius: %s; border-top-right-radius: %s;"
                 " border-bottom-right-radius: %s; %s }"
                 " QPushButton:hover { background: %s; }"
                 % (color.name(), (theme.RAISED if on else theme.PANEL).name(),
-                   (theme.ACCENT if on else theme.BORDER).name(), left, left, right, right,
+                   (theme.ACCENT if on else theme.BORDER).name(), self.padding, left, left, right, right,
                    "font-weight: bold;" if on else "", theme.RAISED.name()))
 
 
@@ -438,7 +455,8 @@ class Stepper(QWidget):
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton or not self.isEnabled() or self.value is None:
             return
-        self.setFocus()
+        if self.focusPolicy() & Qt.ClickFocus:
+            self.setFocus()
         zone = self._zone(e.position().x())
         if zone:
             self.step(zone, bool(e.modifiers() & Qt.ControlModifier))

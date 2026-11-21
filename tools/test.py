@@ -58,6 +58,7 @@ def run_tests(ids):
 
 def worker(ids):
     env = dict(os.environ, OPENBLAS_NUM_THREADS="1")  # the processes share the cores; numpy's own threads would not
+    env["PYTHONIOENCODING"] = "utf-8"                 # as the output is read below
     proc = subprocess.run([sys.executable, __file__, "--run", *ids], cwd=ROOT, capture_output=True, text=True,
                           encoding="utf-8", errors="replace", env=env)
     try:
@@ -81,6 +82,7 @@ def deal(units, times, n):
 
 
 def main(names):
+    sys.stdout.reconfigure(errors="replace")          # the console may lack a character of a test's output
     modules = names or sorted(f[:-3] for f in os.listdir(TESTS) if f.startswith("test_") and f.endswith(".py"))
     for m in modules:
         if not os.path.exists(os.path.join(TESTS, m + ".py")):

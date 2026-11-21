@@ -112,11 +112,13 @@ SPDIF_IN, SRC, SRC_GAIN, OPTICAL_OUT = 40, 41, 42, 43
 Setting = namedtuple("Setting", "index name names")
 # Remap Keys: where the keys have the functions chosen for them; the keys, VOL (1) .. SETUP (4) and IR 5 .. IR 7
 REMAP_KEYS = 25
+REMAP_REMOTE = 2                                 # Remap Keys Remote, as from the factory
 KEYS = (26, 27, 28, 29, 22, 23, 24)
 # the functions a key can have, per value: names, None where the name depends on the device revision (revised: per
 # value its name per revision; a revision not in it has none). groups: the menu after Default (0), (group, (value,
-# ...)) each, None for a line between values. dac_mode: the values that take effect in Basic Mode DAC only
-Keys = namedtuple("Keys", "names groups revised dac_mode")
+# ...)) each, None for a line between values. dac_mode: the values that take effect in Basic Mode DAC only. factory:
+# the value of each key (KEYS) as from the factory
+Keys = namedtuple("Keys", "names groups revised dac_mode factory")
 
 # ADI-2 Pro and ADI-2/4 Pro: the settings of the analog input, on its own address. Each is a list of names
 # (Choices); these are the same on both models, models.Model.input has the others

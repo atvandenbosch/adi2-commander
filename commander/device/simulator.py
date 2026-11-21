@@ -205,6 +205,7 @@ DUMP_FIRST, DUMP_SPACING = 0.08, 0.028
 
 class SimulatedAdi2:
     """The device: parameter state, the rules that change it, and the messages it sends back."""
+    serial = None                                # the serial number its port gives
 
     def __init__(self, state, layout, names, clock=time.monotonic, slots=None, slot_layout=None, model=models.DAC,
                  revision=None):
@@ -1005,9 +1006,10 @@ class SimPort:
         if not present or not device.powered:
             raise DeviceNotFound("no ADI-2 MIDI port found (simulated: device off)")
         if busy:
-            raise PortBusy("midiInOpen: the ADI-2 MIDI port is in use by another program (simulated)")
+            raise PortBusy("midiInOpen failed (winmm 4, simulated)")
         self.device = device
         self.names = ("%s Midi Port 1 (simulated)" % device.model.port,) * 2
+        self.serial = device.serial
         self.open = True
 
     def send(self, msg):

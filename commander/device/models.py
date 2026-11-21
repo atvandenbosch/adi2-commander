@@ -72,12 +72,12 @@ _EQ_PRESETS = ["EQ Preset %d" % n for n in range(1, 10)]
 _CROSSFEEDS = ["Crossfeed %d" % n for n in range(1, 6)]
 
 
-def _keys(names, groups, revised=None, dac_mode=()):
-    """A params.Keys whose groups and dac_mode name their values, or give a value whose name is revised."""
+def _keys(names, groups, factory, revised=None, dac_mode=()):
+    """A params.Keys whose groups, factory and dac_mode name their values, or give a value whose name is revised."""
     at = {name: v for v, name in enumerate(names) if name is not None}
     value = lambda x: None if x is None else at.get(x, x)                      # noqa: E731
     return P.Keys(names, tuple((g, tuple(map(value, xs))) for g, xs in groups), revised or {},
-                  frozenset(map(value, dac_mode)))
+                  frozenset(map(value, dac_mode)), tuple(at[x] for x in factory))
 
 
 def _keys_group(keys, settings):
@@ -97,6 +97,7 @@ _DAC_KEYS = _keys(["Default"] + _SETUPS
                    ("Crossfeed", _CROSSFEEDS),
                    ("DA Filter", ("DA SD Sharp", "DA SD Slow", "DA Sharp", "DA Slow", "DA NOS", _DAC_FILTER_KEY)),
                    ("Setup", _SETUPS), ("EQ Preset", _EQ_PRESETS), ("Display", ("Toggle View", "AutoDark"))),
+                  ("Mono", "Loudness", "AutoDark", "Dim"),
                   revised={_DAC_FILTER_KEY: {1: "DA SD LD", 2: "DA Brickwall"}})
 _DAC_KEY_SETTINGS = ((26, "VOL (1)"), (27, "I/O (2)"), (28, "EQ (3)"), (29, "SETUP (4)"))
 DAC =Model(0x71, MODEL, "ADI-2 DAC", True, True, ("Line Out", "Phones 1/2", "Phones 3/4 · IEM"), ("L", "P", "I"),
@@ -148,6 +149,8 @@ def _pro_keys(filters, riaa=()):
                   ("DA Filter", ("DA SD Sharp", "DA SD Slow", "DA Sharp", "DA Slow", *filters)),
                   ("Source", _PRO_SOURCES)) + ((("RIAA", riaa),) if riaa else ())
                  + (("Setup", _SETUPS), ("EQ Preset", _EQ_PRESETS), ("Display", ("Toggle View", "AutoDark"))),
+                 ("Source Analog", "Source AES", "AutoDark", "DIM", "Source SPDIF coax", "Source Optical",
+                  "Source USB 1/2"),
                  dac_mode=_PRO_SOURCES)
 
 

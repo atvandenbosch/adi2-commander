@@ -1,6 +1,6 @@
 """The presets panel against the simulator: closed until its tab opens it, its groups, the slots as the device has them,
-(free) and (lin), Select, Store and Edit in a row's preview, Load B/T, and where else a slot is selected. The preview
-itself: test_preview; the edit stand: test_edit."""
+(free) and (lin), Select, Store and Edit in a row under the mouse, Load B/T, and where else a slot is selected. The
+actions and the preview themselves: test_preview; the edit stand: test_edit."""
 
 import unittest
 
@@ -9,9 +9,8 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from commander.ui import theme
-from commander.ui.presets import CLEAR, MANUAL, STALE_TIP, mark
+from commander.ui.presets import CLEAR, EDIT_FREE_TIP, EDIT_TIP, MANUAL, STALE_TIP, mark
 from commander.ui.widgets import Dot
-from commander.ui.preview import EDIT_FREE_TIP, EDIT_TIP
 from tests.gui import WindowTest, hover, tab, tooltip_color
 
 
@@ -35,12 +34,12 @@ class PresetPanel(WindowTest):
     def name(self, slot):
         return bytes(self.sim.slots[slot]["name"]).split(b"\0")[0].decode()
 
-    def preview(self, value):
-        """The preview of this row, open."""
+    def hovered(self, value):
+        """This row under the mouse: its actions shown."""
         hover(self.win, self.row(value))
         self.spin(20)
-        self.assertIs(self.win.preview_row, self.row(value))
-        return self.win.preview
+        self.assertIs(self.win.hovered_row, self.row(value))
+        return self.row(value)
 
     def test_closed_until_its_tab_opens_it(self):
         self.win.presets_tab.set_open(False)
@@ -86,8 +85,8 @@ class PresetPanel(WindowTest):
         self.assertEqual(changed((13, 16), 2), "")                            # band 5 High Cut
         self.assertEqual(mark(None), "")                                      # not read yet
 
-    def test_select_in_the_preview(self):
-        QTest.mouseClick(self.preview(3).select, Qt.LeftButton)               # Preset 2
+    def test_select_in_the_row(self):
+        QTest.mouseClick(self.hovered(3).select, Qt.LeftButton)               # Preset 2
         self.settle()
         self.assertEqual(self.sim.state[(4, 28)], 3)
         self.assertEqual((self.row(3).dot.on, self.row(MANUAL).dot.on), (True, False))
@@ -106,9 +105,9 @@ class PresetPanel(WindowTest):
         self.settle()
         self.assertEqual((self.sim.state[(4, 27)], option.on), (0, False))
 
-    def test_store_from_the_preview(self):
+    def test_store_from_the_row(self):
         row = self.row(8)                                                     # Preset 7, unused
-        QTest.mouseClick(self.preview(8).store, Qt.LeftButton)
+        QTest.mouseClick(self.hovered(8).store, Qt.LeftButton)
         self.assertFalse(self.row(3).isEnabled())                             # nothing to select meanwhile
         self.wait(lambda: not self.session.operating())
         self.assertEqual(self.win.file_note.text(), "Stored in Preset 7")
@@ -116,20 +115,20 @@ class PresetPanel(WindowTest):
         self.assertEqual(self.sim.state[(4, 28)], 8)                          # selected on Line Out now
         self.assertEqual((row.mark.text(), row.dot.on, self.row(3).isEnabled()), ("", True, True))
 
-    def test_edit_from_the_preview(self):
+    def test_edit_from_the_row(self):
         row = self.row(3)                                                     # Preset 2
-        QTest.mouseClick(self.preview(3).edit, Qt.LeftButton)
+        QTest.mouseClick(self.hovered(3).edit, Qt.LeftButton)
         self.assertEqual(self.win.draft.slot, 2)
         self.assertEqual((row.name.text(), row.isEnabled(), row.ok.isVisible()), ("EQ Preset 2", True, True))
         self.assertFalse(self.row(4).isEnabled())                             # nothing else to select meanwhile
-        hover(self.win, self.row(4))                                          # no preview meanwhile
+        hover(self.win, self.row(4))                                          # no actions meanwhile
         self.spin(20)
-        self.assertIsNone(self.win.preview_row)
+        self.assertIsNone(self.win.hovered_row)
         self.assertEqual(self.sim.state[(4, 28)], 0)
 
     def test_edit_says_what_it_does_to_an_unused_slot(self):
-        self.assertIn(EDIT_FREE_TIP, self.preview(6).edit.toolTip())         # Preset 5, (free)
-        self.assertEqual(self.preview(3).edit.toolTip(), EDIT_TIP)
+        self.assertIn(EDIT_FREE_TIP, self.hovered(6).edit.toolTip())         # Preset 5, (free)
+        self.assertEqual(self.hovered(3).edit.toolTip(), EDIT_TIP)
 
     def test_a_written_row_shows_its_new_name_at_once(self):
         row = self.row(3)
@@ -148,7 +147,7 @@ class PresetPanel(WindowTest):
 
     def test_a_stored_row_says_storing(self):
         row = self.row(8)                                                     # Preset 7, (free)
-        QTest.mouseClick(self.preview(8).store, Qt.LeftButton)
+        QTest.mouseClick(self.hovered(8).store, Qt.LeftButton)
         self.assertEqual((row.name.text(), row.mark.text()), ("EQ Preset 7", "storing…"))
         self.assertEqual((row.dot.on, self.row(MANUAL).dot.on), (False, True))       # one selected row, still
         self.wait(lambda: not self.session.operating())
@@ -163,7 +162,7 @@ class PresetPanel(WindowTest):
 
         self.sim._commit = commit_wrong
         row = self.row(8)
-        QTest.mouseClick(self.preview(8).store, Qt.LeftButton)
+        QTest.mouseClick(self.hovered(8).store, Qt.LeftButton)
         self.wait(lambda: not self.session.operating(), 15000)
         gain = self.sim.state[(4, 4)]
         self.assertEqual(row.mark.text(), "not as sent")
@@ -171,7 +170,7 @@ class PresetPanel(WindowTest):
         self.assertEqual(tooltip_color(row.mark), theme.TEXT.name())                  # red only the mark
         self.assertIn("reads back otherwise", self.win.file_note.text())
         self.sim._commit = commit
-        QTest.mouseClick(self.preview(8).select, Qt.LeftButton)               # the next action on it: Select
+        QTest.mouseClick(self.hovered(8).select, Qt.LeftButton)               # the next action on it: Select
         self.settle()
         self.assertEqual(row.mark.text(), "")
 
@@ -185,7 +184,7 @@ class PresetPanel(WindowTest):
         self.assertIn(theme.WARN.name(), source.name.styleSheet())
         self.assertEqual(source.toolTip(), STALE_TIP)
         self.assertNotIn(theme.WARN.name(), row.name.styleSheet())            # the slot itself is as it should be
-        QTest.mouseClick(self.preview(3).select, Qt.LeftButton)               # selected again
+        QTest.mouseClick(self.hovered(3).select, Qt.LeftButton)               # selected again
         self.settle()
         self.assertNotIn(theme.WARN.name(), source.name.styleSheet())
         self.assertEqual(source.toolTip(), "")
@@ -194,9 +193,56 @@ class PresetPanel(WindowTest):
         self.session.set((7, 28), 3)                                          # Phones: Preset 2
         self.settle()
         self.assertEqual(self.row(3).tags.text(), "P")
+        self.assertEqual(self.row(3).tags.toolTip(), "Selected on Phones 1/2")
+        self.session.set((10, 28), 3)                                         # Phones 3/4: Preset 2 too
+        self.settle()
+        self.assertEqual(self.row(3).tags.text(), "P I")
+        self.assertEqual(self.row(3).tags.toolTip(), "Selected on Phones 1/2 and Phones 3/4 · IEM")
+        self.session.set((4, 28), 3)                                          # Line Out: Preset 2 as well
+        self.settle()
+        self.assertEqual(self.row(3).tags.toolTip(), "Also selected on Phones 1/2 and Phones 3/4 · IEM")
         self.session.set((7, 28), 0)                                          # Phones: Manual
         self.settle()
         self.assertEqual(self.row(MANUAL).tags.text(), "")                    # Manual is each output's own
+
+    def losing(self, slot, which):
+        """The answers for slot lose the messages which(message) picks, until which is None."""
+        answer = self.sim._answer_preset
+        self.lose = {slot: which}
+
+        def lossy(n):
+            before = len(self.sim.outbox)
+            answer(n)
+            if self.lose.get(n):
+                self.sim.outbox[before:] = [(t, m) for t, m in self.sim.outbox[before:] if not self.lose[n](m)]
+        self.sim._answer_preset = lossy
+
+    def test_a_slot_not_read_says_so_and_keeps_its_last_reading(self):
+        row = self.row(3)                                                     # Preset 2
+        self.losing(2, lambda m: m[5] == 0x05)                                # its name
+        self.wait(lambda: 2 in self.session.unread)
+        self.spin(20)
+        self.assertEqual((row.name.text(), row.mark.text()), ("EQ Preset 2", "not read"))
+        self.assertIn(theme.WARN.name(), row.mark.styleSheet())
+        tip = row.mark.toolTip().splitlines()
+        self.assertEqual(tip[0], "The device's reply was incomplete: no name")
+        self.assertRegex(tip[1], r"^Shown as read at \d\d:\d\d:\d\d$")
+        self.assertEqual(self.session.status, "ready")
+        self.lose = {}
+        self.wait(lambda: 2 not in self.session.unread, 70000)                # asked again after a minute
+        self.spin(20)
+        self.assertEqual(row.mark.text(), "")
+
+    def test_store_into_a_slot_that_cannot_be_read_is_not_done(self):
+        row = self.row(8)                                                     # Preset 7
+        self.losing(7, lambda m: True)
+        QTest.mouseClick(self.hovered(8).store, Qt.LeftButton)
+        self.wait(lambda: not self.session.operating(), 15000)
+        self.assertEqual(self.win.file_note.text(), "Not done: Preset 7 could not be read (see the preset)")
+        self.assertEqual(row.mark.text(), "not read")
+        tip = row.mark.toolTip().splitlines()
+        self.assertEqual(tip[0], "No reply from the device")
+        self.assertRegex(tip[1], r"^Shown as read at \d\d:\d\d:\d\d$")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
-"""Import by Fit: OK waits for the fit, Cancel and Close enough while it runs, converting again, the sum as the device
-makes it with the input moved onto it, garbage collection while it runs, and a curve."""
+"""Import by Fit: OK waits for the fit, Cancel and Stop while it runs, Restart (one button with Stop, as wide as
+either), what it tries, the sum as the device makes it with the input moved onto it, garbage collection while it runs,
+a curve, a fixed level, and left and right of their own."""
 
 import gc
 import time
@@ -8,6 +9,7 @@ import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
+from commander.conversion import curvefile as C
 from commander.conversion import eqfile as E
 from commander.conversion import eqfit as X
 from commander.conversion import eqimport as I
@@ -20,6 +22,27 @@ from tests.test_importexport import OUT, THREE, ImportTest, wait_for_fit
 
 FREQS = F.FREQS
 PEAK = X.response([X.Setting("3", "PK", 1000, 4.0, 0.7)], 48000.0)    # one the device makes: a quick fit
+LEFT_RIGHT = """Channel: L
+Filter: ON LSC Fc 90 Hz Gain 5.0 dB Q 0.70
+Filter: ON PK Fc 220 Hz Gain -2.5 dB Q 1.20
+Filter: ON PK Fc 2900 Hz Gain 3.0 dB Q 2.00
+Filter: ON PK Fc 5200 Hz Gain -4.0 dB Q 4.00
+Filter: ON PK Fc 11000 Hz Gain -3.0 dB Q 2.50
+Filter: ON HSC Fc 12000 Hz Gain -2.0 dB Q 0.70
+Channel: R
+Filter: ON LSC Fc 120 Hz Gain 3.0 dB Q 0.70
+Filter: ON PK Fc 450 Hz Gain -3.0 dB Q 1.40
+Filter: ON PK Fc 3600 Hz Gain 4.5 dB Q 2.20
+Filter: ON PK Fc 6400 Hz Gain -5.0 dB Q 5.00
+Filter: ON PK Fc 9000 Hz Gain 3.5 dB Q 2.00
+Filter: ON HSC Fc 10000 Hz Gain 1.5 dB Q 0.70
+"""                                              # each channel more filters than bands: a fit
+
+
+def past_guard():
+    """Real time past the convert button's last change: a click is taken again."""
+    time.sleep(D.GUARD_MS / 1000 + 0.05)
+    QApplication.processEvents()
 
 
 def table(columns, freqs=FREQS):
@@ -66,36 +89,58 @@ class ImportFit(ImportTest):
         self.spin(300)
         self.assertEqual(self.sim.state, before)
 
+    def test_what_a_fit_tries_white_dots_over_its_sum(self):
+        path = self.file("ten.txt", TEN_FILTERS)
+        dialog = D.ImportDialog(E.load(path), path, self.session, OUT, None, 48000.0, self.win)
+        self.addCleanup(dialog.done, 0)
+        items = dialog.graph.items[0]
+        drawn = lambda: items["candidate"].yData is not None and len(items["candidate"].yData) > 0   # noqa: E731
+        t0 = time.monotonic()
+        while dialog.fitting and not drawn() and time.monotonic() - t0 < 60:
+            time.sleep(0.02)
+            QApplication.processEvents()
+        self.assertTrue(drawn())
+        pen = items["candidate"].opts["pen"]
+        self.assertEqual((pen.color().rgba(), pen.widthF(), pen.capStyle()), (theme.TEXT.rgba(), D.SUM_W, Qt.RoundCap))
+        self.assertGreater(items["candidate"].zValue(), items["sum"].zValue())
+        self.assertEqual(dialog.legend.marks()["candidate"][0], "dots")      # as in the graph
+
     def test_good_enough_takes_the_best_so_far_on_the_grid(self):
         path = self.file("ten.txt", TEN_FILTERS)
         dialog = D.ImportDialog(E.load(path), path, self.session, OUT, None, 48000.0, self.win)
         self.addCleanup(dialog.done, 0)
+        self.assertEqual((dialog.convert.text(), dialog.convert.toolTip()),     # while it fits
+                         (D.CONVERT_TEXTS["stop"], D.CONVERT_TIPS["stop"]))
+        width = dialog.convert.width()
         t0 = time.monotonic()
-        while not dialog.enough.isEnabled() and time.monotonic() - t0 < 60:
+        while not dialog.convert.isEnabled() and time.monotonic() - t0 < 60:
             time.sleep(0.02)
             QApplication.processEvents()
         self.assertTrue(dialog.fitting)
         self.assertTrue(dialog.legend.items["candidate"].isVisibleTo(dialog))   # what it tries: while it fits
         bar = dialog.progress.parentWidget()
         self.assertEqual(bar.minimumHeight(), bar.maximumHeight())             # as high while fitting as not
-        self.assertIs(dialog.enough.parentWidget(), dialog.again.parentWidget())    # beside convert again
-        dialog.enough.click()
+        past_guard()
+        dialog.convert.click()
         self.assertFalse(dialog.fitting)
         self.assertTrue(dialog.ok.isEnabled())
-        self.assertTrue(dialog.enough.isVisibleTo(dialog))                      # stays, so the row stays put
-        self.assertFalse(dialog.enough.isEnabled())
+        self.assertEqual((dialog.convert.isEnabled(), dialog.convert.text(), dialog.convert.toolTip()),
+                         (True, D.CONVERT_TEXTS["restart"], D.CONVERT_TIPS["restart"]))
+        self.assertEqual(dialog.convert.width(), width)
         self.assertFalse(dialog.legend.items["candidate"].isVisibleTo(dialog))
         freqs = {k: v for k, v in dialog.values.items() if k[1] in (5, 8, 11, 14, 18)}
         self.assertEqual({k: P.snap_freq(v, k[1]) for k, v in freqs.items()}, freqs)
 
-    def test_convert_again(self):
+    def test_restart(self):
         dialog = self.open(self.file("three.txt", THREE))
-        before = dict(dialog.values)
-        dialog.again.click()                                     # Map: the same plan again
-        self.assertEqual(dialog.values, before)
+        self.assertFalse(dialog.convert.isVisibleTo(dialog))     # Map: the same plan every time
         dialog.way.buttons[D.FIT].click()
+        self.assertTrue(dialog.convert.isVisibleTo(dialog))
         wait_for_fit(dialog)
-        dialog.again.click()                                     # Fit: it fits again, to the same end
+        dialog.convert.click()                                   # just changed: meant for Stop, not taken
+        self.assertFalse(dialog.fitting)
+        past_guard()
+        dialog.convert.click()                                   # Fit: it fits again, to the same end
         self.assertTrue(dialog.fitting)
         wait_for_fit(dialog)
         self.assertTrue(dialog.ok.isEnabled())
@@ -118,7 +163,8 @@ class ImportFit(ImportTest):
         s = dialog.summary
         self.assertIs(dialog.input_stack.currentWidget(), s)
         self.assertFalse(dialog.way.buttons[D.MAP].isEnabled())  # no filters to map
-        self.assertTrue(dialog.origin_group.isHidden())
+        self.assertEqual((dialog.origin_box.isEnabled(), dialog.origin_box.currentIndex()), (False, -1))   # '—'
+        self.assertEqual(dialog.origin_box.placeholderText(), D.UNDEFINED)
         self.assertEqual([s.values[r].text() for r in ("Points", "Frequency", "Gain", "Comments")],
                          ["241", "20 Hz – 20 kHz", "-4.0 … +0.0 dB", "None"])
         self.assertEqual((s.choice.currentText(), dialog.column), ("eq", 2))     # the name starting with "eq"
@@ -152,11 +198,11 @@ class ImportFit(ImportTest):
         self.drop_on(dialog, curve)
         self.assertEqual((dialog.mode, dialog.file_label.text()), (D.FIT, "curve.csv"))
         self.assertIs(dialog.input_stack.currentWidget(), dialog.summary)
-        self.assertTrue(dialog.origin_group.isHidden())
+        self.assertEqual((dialog.origin_box.isEnabled(), dialog.origin_box.currentIndex()), (False, -1))
         self.drop_on(dialog, three)                              # during the fit
         self.assertEqual((dialog.mode, dialog.fitting), (D.MAP, False))
         self.assertIs(dialog.input_stack.currentWidget(), dialog.input)
-        self.assertFalse(dialog.origin_group.isHidden())
+        self.assertEqual((dialog.origin_box.isEnabled(), dialog.origin_box.currentText()), (True, I.EXTERNAL))
         self.assertTrue(dialog.way.buttons[D.MAP].isEnabled())
         self.assertIn("Mapped", dialog.status.text())
 
@@ -175,9 +221,86 @@ class ImportFit(ImportTest):
         block = dialog.eq_blocks()[0]
         level = dialog.levels[block]
         given = dialog.summed(dialog.groups[block] + I.tone_items(dialog.chosen), dialog.graph.freqs())
-        np.testing.assert_allclose(total, sum(b[0] for b in bands))
+        np.testing.assert_allclose(total, sum(bands + dialog.graph.bt))
         np.testing.assert_allclose(shown, given + level)
         self.assertEqual(dialog.legend.items["input"].name.text(), D._adjusted({key: level})[0])
+
+    def test_left_and_right_of_their_own_each_fit_to_its_own(self):
+        dialog = self.open(self.file("lr.txt", LEFT_RIGHT))
+        self.assertEqual(dialog.mode, D.FIT)
+        self.assertEqual([blocks for blocks, _, _ in dialog.jobs()], [("L",), ("R",)])
+        (_, _, left, left_sum, _, _), (_, _, right, right_sum, _, _) = dialog.graph.channels
+        self.assertGreater(np.abs(left - right).max(), 3.0)                  # two curves
+        for given, total in ((left, left_sum), (right, right_sum)):
+            self.assertLess(np.sqrt(np.mean((total - given) ** 2)), 0.5)       # each sum on its own input
+
+    def test_the_channel_a_fit_does_not_work_on_steps_back(self):
+        path = self.file("lr.txt", LEFT_RIGHT)
+        dialog = D.ImportDialog(E.load(path), path, self.session, OUT, None, 48000.0, self.win)
+        self.addCleanup(dialog.done, 0)
+        graph = dialog.graph
+        alpha = lambda item: round(item.opts["pen"].color().alphaF(), 3)          # noqa: E731
+        inputs = lambda: tuple(alpha(items["input"]) for items in graph.items)  # noqa: E731
+        rest, back = D.INPUT_ALPHA, round(D.INPUT_ALPHA * D.DIMMED, 3)
+        seen = []                                                              # (channel, inputs) as they change
+        t0 = time.monotonic()
+        while dialog.fitting and time.monotonic() - t0 < 120:
+            time.sleep(0.02)
+            QApplication.processEvents()
+            if graph.fitted is not None and (not seen or seen[-1] != (graph.fitted, inputs())):
+                seen.append((graph.fitted, inputs()))
+        self.assertEqual(seen, [("L", (rest, back)), ("R", (back, rest))])    # the left first, then the right
+        self.assertIsNone(graph.fitted)
+        self.assertEqual(inputs(), (rest, rest))
+        graph.draw(graph.channels, graph.bt, "R")                              # as while the right is fitted
+        dialog.legend.point("L", True)                                         # a legend item pointed at goes first
+        self.assertEqual(inputs(), (rest, back))
+
+    def test_a_fixed_level_centres_a_curve_and_stays_for_the_next(self):
+        self.addCleanup(setattr, D.ImportDialog, "fixed_level", False)
+        dialog = self.open(self.file("curve.csv", table({"eq": 2.0 + PEAK})))
+        self.assertFalse(dialog.fit_group.isHidden())
+        dialog.level_box.setCurrentIndex(1)
+        self.assertTrue(dialog.fitting)
+        wait_for_fit(dialog)
+        block = dialog.eq_blocks()[0]
+        self.assertEqual(dialog.levels[block], 0.0)
+        shown = dialog.graph.channels[0][2]
+        given = C.curve(dialog.cf, dialog.column, dialog.graph.freqs())
+        shift = -C.level(dialog.cf, dialog.column)
+        np.testing.assert_allclose(shown, given + shift)
+        self.assertEqual(dialog.legend.items["input"].name.text(), "Input (adj.)")
+        self.assertIn("centred on 0 dB", D._adjusted({"L": shift}, True)[1])
+        self.assertIn("Fitted", dialog.status.text())
+        self.assertNotIn("than the input", dialog.status.text())
+        dialog.done(0)
+        nxt = self.open(self.file("three.txt", THREE))
+        self.assertEqual((nxt.fixed, nxt.level_box.currentIndex()), (True, 1))
+        self.assertTrue(nxt.fit_group.isHidden())                 # Map: no level
+
+    def test_a_preamp_checked_sets_fit_at_a_fixed_level_and_counts_there_only(self):
+        self.addCleanup(setattr, D.ImportDialog, "fixed_level", False)
+        dialog = self.open(self.file("pre.txt", "Preamp: -3 dB\n" + THREE))
+        self.assertEqual((dialog.mode, dialog.selection()), (D.MAP, {2, 3, 4}))    # unchecked at first
+        self.assertEqual(dialog.input.item(0).toolTip(), D.PREAMP_OFF)
+        self.assertEqual(dialog.input_note.text(), "3 of 4 checked")
+        dialog.toggle_line(1)
+        self.assertEqual((dialog.mode, dialog.fixed, dialog.level_box.currentIndex()), (D.FIT, True, 1))
+        self.assertEqual(dialog.way.current, D.FIT)
+        wait_for_fit(dialog)
+        block = dialog.eq_blocks()[0]
+        filters = dialog.summed(dialog.groups[block], FREQS)
+        np.testing.assert_allclose(dialog.given(block, FREQS), filters - 3.0)
+        np.testing.assert_allclose(dialog.jobs()[0][1], I.target(dialog.groups[block], dialog.origin, dialog.fs) - 3.0)
+        self.assertEqual((dialog.input.item(0).data(D.WARN_ROLE), dialog.input.item(0).toolTip()), (False, ""))
+        dialog.level_box.setCurrentIndex(0)                      # Free: ignored, amber
+        self.assertEqual((dialog.input.item(0).data(D.WARN_ROLE), dialog.input.item(0).toolTip()),
+                         (True, D.PREAMP_FREE))
+        np.testing.assert_allclose(dialog.given(block, FREQS), filters)
+        dialog.way.buttons[D.MAP].click()                        # Map: unmappable
+        self.assertEqual((dialog.mode, dialog.input.item(0).data(D.WARN_ROLE), dialog.input.item(0).toolTip()),
+                         (D.MAP, True, D.PREAMP_MAP))
+        self.assertIn("Mapped", dialog.status.text())
 
     def test_the_input_named_when_a_fit_moved_it(self):
         self.assertEqual(D._adjusted({"L": 0.04, "R": -0.04}), ("Input", ""))

@@ -10,30 +10,43 @@ drawn once.
     wheel elsewhere     zoom; drag elsewhere: pan; double-click: back to the full view
     on an axis          the wheel and a drag zoom and pan that axis only
 
-What is shown (commander.ui.legend): the channels EQ Left, EQ Right and Bass/Treble, and the layers Sum, Compare (the
-sums at the rate the device runs at, dashed, when it is known and not the chosen one; off at first), Bands and Handles
-(the points); a point shows when both its channel and Handles are on. The band labels show with their channel; with
-Handles off they only inform and take no mouse. The curves are computed at a chosen sample rate. Visibility never
-changes the sums: they are what the device runs.
+In the corner where the axes meet, the aspect ratio of the view: how many dB of gain are as long as one decade of
+frequency (RatioCorner), about where the lines of the axis titles cross. Under the mouse a flag in its place offers
+10, 25 and 50 dB per decade (IEC 60263) and the ratio the view had; one out of reach is grey, with the nearest in
+reach beside it. The gain scales around 0 dB.
 
-The lines: colour is the channel; weight is rank, the sum strongest and none so thick that one looks for its middle;
-the line style is the layer, solid for what the device runs, dashed for the comparison. Out of the path (EQ or
-Bass/Treble off) a band is grey, as a switch that is off; on but bypassed (DSD) faded. A band shows where it does
-something and fades out in its tails. Nothing grows to stand out: the rest steps back.
+What is shown (commander.ui.legend): the channels, Left and Right (Left = Right with Dual EQ off), and the layers Sum,
+what the device does to the channel, its EQ and Bass/Treble together; Sections, what each EQ and Bass/Treble adds (off
+at first); Bands; Handles (the points); and Compare, the sums at the rate the device runs at, when it is known and not
+the chosen one (off at first). Bass/Treble belongs to every channel: its bands and points show while a channel does.
+A point shows when both its channel and Handles are on. The band labels show with their channel; with Handles off they
+only inform and take no mouse. The curves are computed at a chosen sample rate. Visibility never changes the sums:
+they are what the device runs.
 
-Two marks per band, each with one meaning. Chosen (1.5 px, full, a fill to 0 dB): the row one works in, shared with
+Pointing at a section's switch (the window's point_section) shows what that section adds; all else steps back but its
+bands, which stay as they are. Loudness follows the volume and is in no sum but while its switch is pointed at: then
+the sums include it, at the output's volume, and stay lit. A preset being edited has no Loudness.
+
+The lines: weight is the level, the sums strongest (SUM_W), a section between (SECTION_W), a band thinnest; none so
+thick that one looks for its middle. A sum and an EQ in their channel's colour, Bass/Treble and Loudness in their own.
+Solid for what runs at the chosen rate, round dots for the compared sums. Out of the path (EQ or Bass/Treble off) a
+band is grey, as a switch that is off; on but bypassed (DSD) faded. A band shows where it does something and fades out
+in its tails. Nothing grows to stand out: the rest steps back.
+
+Two marks per band, each with one meaning. Chosen (full, a fill to 0 dB): the row one works in, shared with
 the table; set by pressing a point or its label, by any edit from the graph (drag, wheel), or by a cell. Attention
 (all but its band steps back): only in the graph, while the mouse is on a point or its label or its button is down.
-Pointing at a legend item sets back what does not belong to it.
+Pointing at a legend item sets back what does not belong to it: a channel keeps its sum, its sections and its bands;
+a layer keeps itself.
 """
 
 import math
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QPointF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QCursor, QLinearGradient, QPen
-from PySide6.QtWidgets import QToolTip
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, QTimer, QVariantAnimation, Signal
+from PySide6.QtGui import QBrush, QColor, QCursor, QFont, QFontMetricsF, QLinearGradient, QPainter, QPen
+from PySide6.QtWidgets import QToolTip, QWidget
 
 from ..device import filters as F
 from ..device import models
@@ -57,8 +70,11 @@ DOT = 3                                          # pixels: that centre dot
 DOT_PEN = QPen(Qt.NoPen)
 DOT_PEN.setWidthF(2)
 # the lines, in pixels at 100 % scaling: the sum the strongest, none so thick that one looks for its middle to read
-SUM_W, CHOSEN_W, BAND_W, COMPARE_W = 2.0, 1.5, 1.0, 1.5     # bands: Qt draws exactly 1 px three times as fast
-INPUT_W, INPUT_ALPHA = 3 * SUM_W, 0.5           # a curve fitted to (Import): wide and see-through, under the sum
+SUM_W, CHOSEN_W, BAND_W = 2.5, 1.0, 1.0         # bands: Qt draws exactly 1 px three times as fast
+COMPARE_DOTS = 5.0                               # px from dot to dot: the sums at the rate the device runs at, as
+                                                 # thick as the sums; round, they look lighter
+SECTION_W = 1.5                                  # what one section adds: between the sum and a band
+INPUT_W, INPUT_ALPHA = 6.0, 0.5                  # a curve fitted to (Import): wide and see-through, under the sum
 BAND_ALPHA = 0.6                                 # a band beside the sum
 DEVIATION_W, DEVIATION_FILL = 1.0, 0.2           # how far the sum is off the input (Import): a thin edge to an area
 BAND_FLOOR, BAND_FULL = 0.02, 0.5               # dB: in its tails a band fades in from this much to this much:
@@ -70,7 +86,8 @@ CHANNEL = [theme.LEFT, theme.RIGHT]
 pg.setConfigOptions(antialias=True)
 
 SAMPLE_RATES = P.SAMPLE_RATES
-CHANNEL_KEY = {0: "L", 1: "R", None: "BT"}
+CHANNEL_KEY = {0: "L", 1: "R"}
+SECTION = {0: "eqL", 1: "eqR", None: "BT"}       # the section a band of this side belongs to
 
 
 def _ticks():
@@ -91,6 +108,27 @@ TITLE_ROOM = 3, 1                                # pixels pyqtgraph leaves left 
 LEGEND_GAP = 8                                   # a graph's legend line over it: part of the graph
 AXIS_TIPS = {"bottom": "Frequency: wheel to zoom, drag to pan",
              "left": "Gain: wheel to zoom, drag to pan"}
+ICON = 20                                        # pixels: the square the aspect ratio's icon fills
+ICON_NEAR = 5                                    # pixels from where the axis titles cross towards the plot
+                                                 # area: near them, its ink within the graph
+TITLE_INK = 1                                    # pixels: an axis title's ink below the middle of its line, as it
+                                                 # looks (descenders, brackets); the dB axis's, turned, right of it
+ICON_HEAD = 2                                    # pixels: its arrowheads, back and to the side
+ICON_REST = 0.55                                 # its opacity: in the background
+ICON_PT = 7                                      # points: the ratio in it
+FLAG_HIGH = 16                                   # pixels: the flag in the icon's place
+FLAG_LIFT = 1                                    # pixels from the bottom of the icon's square to the flag's: with
+                                                 # the icon against the graph's edge, on the line of its ink
+FLAG_PT = 8                                      # points: the ratios in it, as the values along the axes
+FLAG_CELL = 6                                    # pixels left and right of a ratio in the flag
+RATIO_LOW, RATIO_HIGH = "<1", "∞"                # the aspect ratio rounded below 1, or above 99
+INFINITY = 9, 5                                  # pixels: RATIO_HIGH as the icon draws it, wide and high
+RATIOS = 10, 25, 50                              # dB per decade to choose: those of IEC 60263
+RATIO_UNIT = "dB/dec"
+RATIO_HINT = "10, 25 and 50 dB/dec as in IEC 60263, around 0 dB; grey: out of reach in this view"
+RATIO_CONFIRM = 3000                             # ms after the last click: the ratio set is the one to come back to;
+                                                 # the icon flashes then
+FLASH_HOLD, FLASH_FADE = 100, 250                # ms: that flash, at once full, then back
 
 
 def title_axes(plot_item, y_title):
@@ -120,6 +158,17 @@ def _pen(color, width=1.0, alpha=1.0, style=Qt.SolidLine):
     p.setStyle(style)
     p.setCosmetic(True)
     return p
+
+
+def round_dots(pen, pitch):
+    """The pen drawing round dots as wide as itself, pitch px apart: dashes of next to nothing with round caps. A pen
+    of 1 px or less Qt draws pixel by pixel, without caps: there a dot is a dash of one pixel, so that each falls on
+    a pixel."""
+    width = pen.widthF()
+    dot = 1 / width if width <= 1 else 1e-3     # in pen widths, as the rest of the pattern
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setDashPattern([dot, pitch / width - dot])
+    return pen
 
 
 def _tail_fade(y):
@@ -210,8 +259,7 @@ class _View(pg.ViewBox):
         ev.accept()
         mods = ev.modifiers()
         size = "large" if mods & Qt.ShiftModifier else "finest" if mods & Qt.ControlModifier else "small"
-        if pt.key != self.graph.current:
-            self.graph.pick(pt)                  # who edits, has chosen
+        self.graph.pick(pt)                      # who edits, has chosen: on each step, also on the current band
         self.graph.step_q(pt, 1 if ev.delta() > 0 else -1, size)
 
     def mouseClickEvent(self, ev):
@@ -237,9 +285,315 @@ class _View(pg.ViewBox):
         self.graph.hover(pt, bool(by_label))
 
 
+def ratio_text(ratio):
+    """An aspect ratio rounded to whole dB per decade, as the icon shows it: 1 to 99, else RATIO_LOW or RATIO_HIGH."""
+    n = math.floor(ratio + 0.5)
+    return RATIO_LOW if n < 1 else RATIO_HIGH if n > 99 else "%d" % n
+
+
+def infinity(mid, steps=48):
+    """RATIO_HIGH as a line around mid: a lemniscate of Gerono INFINITY wide and high, whose loops cross clearly
+    even this small."""
+    w, h = INFINITY
+    return [QPointF(mid.x() + w / 2 * math.sin(t), mid.y() + h * math.sin(t) * math.cos(t))   # sin cos: at most 1/2
+            for t in (2 * math.pi * i / steps for i in range(steps + 1))]
+
+
+class RatioIcon(QWidget):
+    """The aspect ratio of the view, small, as an icon of the axes: an arrow right and an arrow up from a corner, the
+    ratio between them (ratio_text); in the background. Its tooltip gives one decimal. With a hint one chooses a ratio
+    with it: under the mouse a flag takes its place with the ratios to choose (choices), the one in view bold, one
+    out of reach grey; a click on one in reach emits chosen with its dB range. Its tooltip adds the hint; it flashes
+    in ACCENT when a ratio is confirmed."""
+
+    PAD = 2                                      # pixels around the icon where its tooltip shows as well
+    SIDE = ICON + 2 * PAD                        # the widget without its flag
+    chosen = Signal(object)
+
+    def __init__(self, parent, hint=None):
+        super().__init__(parent)
+        self.setFixedSize(self.SIDE, self.SIDE)
+        self.ratio = None
+        self.hint = hint
+        self.choices = lambda: []                # (ratio, its dB range or None out of reach, in view) each
+        self.cells = []                          # the open flag: (box, ratio, dB range or None, in view) each
+        self.flag = None                         # ... and its outline
+        self._hover = None                       # the index of the cell under the mouse
+        if hint:
+            self.setMouseTracking(True)
+        self.glow = 0.0                          # 0 .. 1: how far it flashes from its own colour to ACCENT
+        self.flashing = QVariantAnimation(self, duration=FLASH_HOLD + FLASH_FADE, startValue=1.0, endValue=0.0)
+        self.flashing.setKeyValueAt(FLASH_HOLD / (FLASH_HOLD + FLASH_FADE), 1.0)
+        self.flashing.valueChanged.connect(self._glow)
+
+    def flash(self):
+        self.flashing.stop()
+        self.flashing.start()
+        self._glow(1.0)                          # at once: the animation tells only a change of its value
+
+    def _glow(self, value):
+        self.glow = value
+        self.update()
+
+    def show_ratio(self, ratio):
+        if ratio != self.ratio:
+            self.ratio = ratio
+            self.setToolTip("Aspect ratio: %.1f %s" % (ratio, RATIO_UNIT) + ("\n" + self.hint if self.hint else ""))
+            if self.flag is not None:
+                self.open_flag()
+            self.update()
+
+    def _fonts(self):
+        plain = theme.ui_font(FLAG_PT)
+        bold = QFont(plain)
+        bold.setBold(True)
+        return plain, bold
+
+    def open_flag(self):
+        """The flag with the choices as they are now, the widget as wide as it."""
+        plain, bold = self._fonts()
+        x, top = self.PAD, self.PAD + ICON - FLAG_LIFT - FLAG_HIGH
+        self.cells = []
+        for ratio, to, current in self.choices():
+            w = QFontMetricsF(bold if current else plain).horizontalAdvance(ratio_text(ratio)) + 2 * FLAG_CELL
+            self.cells.append((QRectF(x, top, w, FLAG_HIGH), ratio, to, current))
+            x += w
+        x += QFontMetricsF(plain).horizontalAdvance(RATIO_UNIT) + FLAG_CELL
+        self.flag = QRectF(self.PAD, top, x - self.PAD, FLAG_HIGH)
+        self.setFixedSize(math.ceil(self.flag.right()) + self.PAD, self.SIDE)
+        self.raise_()
+        self.update()
+
+    def close_flag(self):
+        self.cells, self.flag, self._hover = [], None, None
+        self.setFixedSize(self.SIDE, self.SIDE)
+        self.update()
+
+    def _cell_at(self, at):
+        return next((i for i, (box, *_) in enumerate(self.cells) if box.contains(at)), None)
+
+    def _point(self, at):
+        """The cell under the mouse at, its hand where a click chooses."""
+        i = self._cell_at(at)
+        self.setCursor(Qt.PointingHandCursor if i is not None and self.cells[i][2] is not None else Qt.ArrowCursor)
+        if i != self._hover:
+            self._hover = i
+            self.update()
+
+    def enterEvent(self, ev):
+        if self.hint:
+            self.open_flag()
+            self._point(ev.position())
+        super().enterEvent(ev)
+
+    def mouseMoveEvent(self, ev):
+        self._point(ev.position())
+
+    def leaveEvent(self, ev):
+        if self.hint:
+            self.close_flag()
+        super().leaveEvent(ev)
+
+    def mousePressEvent(self, ev):
+        ev.setAccepted(bool(self.hint) and ev.button() == Qt.LeftButton)     # the graph behind takes no pan
+
+    def mouseDoubleClickEvent(self, ev):
+        self.mousePressEvent(ev)                 # quick clicks: each its own choice
+
+    def mouseReleaseEvent(self, ev):
+        if not (self.hint and ev.button() == Qt.LeftButton):
+            return ev.ignore()
+        ev.accept()
+        i = self._cell_at(ev.position())
+        if i is not None and self.cells[i][2] is not None:
+            self.chosen.emit(self.cells[i][2])
+
+    def _paint_flag(self, p):
+        p.save()
+        plain, bold = self._fonts()
+        p.setPen(QPen(theme.BORDER, 1))
+        p.setBrush(theme.CELL)
+        p.drawRect(self.flag.adjusted(0.5, 0.5, -0.5, -0.5))
+        for i, (box, ratio, to, current) in enumerate(self.cells):
+            lit = i == self._hover and to is not None
+            if lit:
+                p.fillRect(box.adjusted(0, 1, 0, -1), theme.GRID)
+            p.setFont(bold if current else plain)
+            p.setPen(theme.OFF if to is None else theme.TEXT if lit or current else theme.LABEL)
+            p.drawText(box, Qt.AlignCenter, ratio_text(ratio))
+        p.setFont(plain)
+        p.setPen(theme.SECONDARY)
+        unit = QRectF(self.cells[-1][0].right(), self.flag.top(), self.flag.right() - self.cells[-1][0].right(),
+                      FLAG_HIGH)
+        p.drawText(unit.adjusted(0, 0, -FLAG_CELL, 0), Qt.AlignVCenter | Qt.AlignLeft, RATIO_UNIT)
+        p.restore()
+
+    def paintEvent(self, ev):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        if self.flag is not None:
+            self._paint_flag(p)
+            return
+        color = QColor(theme.SECONDARY)
+        color.setAlphaF(ICON_REST)
+        if self.glow:
+            g, to = self.glow, theme.ACCENT
+            color = QColor.fromRgbF(*(a + (b - a) * g for a, b in zip(color.getRgbF(), (*to.getRgbF()[:3], 1.0))))
+        # the lines whole pixels of the screen wide, on whole pixels of the screen: sharp at any display scaling,
+        # also where the icon itself starts within a pixel (at 125 %, say)
+        k = self.devicePixelRatioF()
+        width = max(1, int(k))
+        pen = QPen(color, width)
+        pen.setCosmetic(True)
+        p.setPen(pen)
+        at = QPointF(self.mapTo(self.window(), QPoint(0, 0))) * k
+
+        def snap(v, o):
+            return (round(v * k + o - width / 2) + width / 2 - o) / k
+
+        h = ICON_HEAD
+        top, y0 = snap(self.PAD + 0.5, at.y()), snap(self.PAD + ICON - h - 0.5, at.y())
+        x0, end = snap(self.PAD + h + 0.5, at.x()), snap(self.PAD + ICON - 0.5, at.x())   # both arrows as long
+        p.drawPolyline([QPointF(x0, top), QPointF(x0, y0), QPointF(end, y0)])
+        p.drawPolyline([QPointF(end - h, y0 - h), QPointF(end, y0), QPointF(end - h, y0 + h)])
+        p.drawPolyline([QPointF(x0 - h, top + h), QPointF(x0, top), QPointF(x0 + h, top + h)])
+        if self.ratio is not None:
+            text = ratio_text(self.ratio)
+            # the middle between the arrows within their heads, across only half a head off: centred to the eye
+            mid = QPointF((x0 + end - h / 2) / 2, (top + h + y0) / 2)
+            if text == RATIO_HIGH:
+                p.drawPolyline(infinity(mid))        # drawn as the arrows: the same whatever fonts there are
+            else:
+                font = theme.ui_font(ICON_PT)
+                box = QFontMetricsF(font).tightBoundingRect(text)      # the ink, from the start of the baseline
+                p.setFont(font)
+                p.drawText(mid - box.center(), text)
+
+
+class RatioCorner:
+    """The aspect ratio of a graph of dB over decades of frequency (a PlotWidget), as a RatioIcon where the lines of
+    its axis titles cross, ICON_NEAR from there towards the corner of the plot area; its ink within the graph whatever
+    the titles' font. db_title: the dB axis's title, where that is not the axis's own label.
+
+    choose: for a graph that zooms, the icon's flag offers RATIOS and the ratio the view had (choices); the gain
+    scales around 0 dB. RATIO_CONFIRM after the last choice, or any other change of the view, ends the round: the
+    ratio set is then the one to come back to. The time passing confirms it, and the icon flashes (time_up)."""
+
+    def __init__(self, graph, db_title=None, choose=False):
+        self.graph = graph
+        self.view = graph.getPlotItem().getViewBox()
+        self.db_title = db_title if db_title is not None else graph.getPlotItem().getAxis("left").label
+        self.icon = RatioIcon(graph, RATIO_HINT if choose else None)
+        self.round = None                        # the dB range at the start of a round of choices
+        self._choosing = False
+        self.timer = QTimer(self.icon, singleShot=True, interval=RATIO_CONFIRM, timeout=self.time_up)
+        self.icon.chosen.connect(self.choose)
+        self.icon.choices = self.choices
+        self.view.sigRangeChanged.connect(self.update)
+        self.view.sigResized.connect(self.update)
+        self.view.sigResized.connect(self.place)
+        self.view.sigRangeChanged.connect(self._changed)
+        self.view.sigResized.connect(self._changed)
+
+    def ratio_of(self, db):
+        """How many dB of gain are as long as one decade of frequency with the dB range db and the frequencies as
+        they are."""
+        x0, x1 = self.view.viewRange()[0]
+        return (db[1] - db[0]) / (x1 - x0) * self.view.width() / self.view.height()
+
+    def ratio(self):
+        """The aspect ratio as the view is now."""
+        return self.ratio_of(self.view.viewRange()[1])
+
+    def db_range(self, ratio):
+        """The dB range for ratio with the frequencies as they are: 0 dB where it is, as far as the view's limits
+        allow, else as close as they allow."""
+        (x0, x1), (y0, y1) = self.view.viewRange()
+        limits = self.view.state["limits"]
+        (lo, hi), (least, most) = limits["yLimits"], limits["yRange"]
+        span = min(ratio * (x1 - x0) * self.view.height() / self.view.width(), hi - lo)
+        span = max(span, least) if least is not None else span
+        span = min(span, most) if most is not None else span
+        bottom = y0 * span / (y1 - y0)
+        bottom = min(max(bottom, lo), hi - span)
+        return bottom, bottom + span
+
+    def choices(self):
+        """The ratios to choose, from small to large: (ratio, its dB range, whether in view) each. Each of RATIOS,
+        or where the view's limits keep it out of reach (ratio, None, False) and the nearest in reach; and the ratio
+        the view had at the start of the round. Ratios that look alike (ratio_text) count once: one of RATIOS before
+        the view's, the view's before a nearest."""
+        start = self.round if self.round is not None else tuple(self.view.viewRange()[1])
+        nearest, exact, grey = {}, {}, {}
+        for r in RATIOS:
+            to = self.db_range(r)
+            near = self.ratio_of(to)
+            if ratio_text(near) == ratio_text(r):
+                exact[ratio_text(r)] = r, to
+            else:
+                grey[ratio_text(r)] = r, None
+                nearest.setdefault(ratio_text(near), (near, to))
+        reach = {**nearest, ratio_text(self.ratio_of(start)): (self.ratio_of(start), start), **exact}
+        now = ratio_text(self.ratio())
+        return sorted([(r, to, text == now) for text, (r, to) in reach.items()] +
+                      [(r, None, False) for text, (r, _) in grey.items() if text not in reach], key=lambda c: c[0])
+
+    def choose(self, to):
+        """The dB range to, in a round that keeps the view as it was among the choices."""
+        if self.round is None:
+            self.round = tuple(self.view.viewRange()[1])
+        self._choosing = True
+        try:
+            self.view.setRange(yRange=to, padding=0)
+        finally:
+            self._choosing = False
+        self.timer.start()
+
+    def confirm(self):
+        self.timer.stop()
+        self.round = None
+
+    def time_up(self):
+        self.confirm()
+        self.icon.flash()
+
+    def _changed(self, *_):
+        if not self._choosing:
+            self.confirm()
+
+    def update(self, *_):
+        if self.view.width() > 0 and self.view.height() > 0:
+            self.icon.show_ratio(self.ratio())
+
+    def place(self, *_):
+        graph, icon = self.graph, self.icon
+        cross = QPointF(self.db_title.sceneBoundingRect().center().x() + TITLE_INK,
+                        graph.getPlotItem().getAxis("bottom").label.sceneBoundingRect().center().y() + TITLE_INK)
+        to = QPointF(self.view.sceneBoundingRect().bottomLeft()) - cross
+        half = QPoint(icon.SIDE // 2, icon.SIDE // 2)                  # the middle of its square
+        at = graph.mapFromScene(cross + to * (ICON_NEAR / math.hypot(to.x(), to.y()))) - half
+        icon.move(max(at.x(), -icon.PAD), min(at.y(), graph.height() - icon.height() + icon.PAD))
+
+
+def tab_direction(e):
+    """+1 for Tab, -1 for Shift+Tab, 0 for any other event, Ctrl+Tab included (it switches outputs)."""
+    if e.type() == QEvent.KeyPress and e.key() in (Qt.Key_Tab, Qt.Key_Backtab) \
+            and not e.modifiers() & Qt.ControlModifier:
+        return -1 if e.key() == Qt.Key_Backtab or e.modifiers() & Qt.ShiftModifier else 1
+    return 0
+
+
 class ResponseGraph(pg.PlotWidget):
     edited = Signal(object, int, bool)           # key, value, rounded: like the table delegates
     picked = Signal(object)                      # key of the point's frequency: select it in the table
+    tabbed = Signal(int)                         # Tab (+1) or Shift+Tab (-1): the window goes into a table
+
+    def event(self, e):
+        direction = tab_direction(e)
+        if direction:
+            self.tabbed.emit(direction)
+            return True
+        return super().event(e)
 
     def mouseReleaseEvent(self, ev):
         super().mouseReleaseEvent(ev)
@@ -257,8 +611,12 @@ class ResponseGraph(pg.PlotWidget):
         self.hovered_by_label = False            # ... through its label
         self.dual = True
         self.has_bt = True                       # the output shown has Bass/Treble; the input has none
-        self.visible = {"L": True, "R": True, "BT": True, "sum": True, "compare": False, "bands": True, "handles": True}
-        self.emphasis = None                     # a legend item under the mouse: its curves light up
+        self.visible = {"L": True, "R": True, "sum": True, "sections": False, "compare": False, "bands": True,
+                        "handles": True}
+        self._channels = ()                      # the keys of the channels drawn
+        self.emphasis = None                     # a legend item or a section's switch under the mouse: its curves
+                                                 # light up; "LD": Loudness
+        self.loudness = True                     # whether there is Loudness to point at: not in a preset being edited
         self.held = None                         # the key of a point while the mouse button is down on it
         self._off = set()                        # (side, filter name) set but out of the path: EQ or B/T off
         self.fs = 48000
@@ -297,7 +655,9 @@ class ResponseGraph(pg.PlotWidget):
             self.band_items[(None, name)] = self.plot(x, np.zeros_like(x))
         self.sum_items = [self.plot(x, np.zeros_like(x)) for _ in (0, 1)]
         self.compare_items = [self.plot(x, np.zeros_like(x)) for _ in (0, 1)]
-        for item in list(self.band_items.values()) + self.sum_items + self.compare_items:
+        self.section_items = {k: self.plot(x, np.zeros_like(x)) for k in ("eqL", "eqR", "BT", "LD")}
+        for item in (list(self.band_items.values()) + self.sum_items + self.compare_items
+                     + list(self.section_items.values())):
             item.setVisible(False)
         self.scatter = pg.ScatterPlotItem(pxMode=True)
         self.scatter.sigClicked.connect(self._scatter_clicked)   # the scatter takes clicks on its spots itself
@@ -318,6 +678,7 @@ class ResponseGraph(pg.PlotWidget):
             t.setZValue(11)
             self.addItem(t)
             self.labels.append(t)
+        self.ratio = RatioCorner(self, choose=True)
         self.view.sigRangeChanged.connect(self._resample)
         self.view.sigResized.connect(self._resample)
         self.view.sigRangeChanged.connect(self._place_labels)
@@ -350,6 +711,38 @@ class ResponseGraph(pg.PlotWidget):
     def _bt_at(self, bt, fs):
         """Bass/Treble as the device runs it at this sample rate: not at all from no_bt_from on."""
         return [f._replace(active=False) for f in bt] if fs >= self.no_bt_from else bt
+
+    def _loudness(self, s, out, fs):
+        """Loudness as the device runs it at this sample rate and the output's volume: not in the preset being edited,
+        and not at all from no_bt_from on."""
+        if not self.loudness or fs >= self.no_bt_from:
+            return []
+        shelves = F.loudness_filters(s, out)
+        return [f._replace(active=False) for f in shelves] if self.session.bypassed() else shelves
+
+    def _owners(self, side):
+        """The keys a band of this side belongs to: its channel and its section; Bass/Treble belongs to every
+        channel."""
+        return (*self._channels, "BT") if side is None else (CHANNEL_KEY[side], SECTION[side])
+
+    def _section_curve(self, key, filters, run, color, bypassed, channels):
+        """What one section (an EQ, Bass/Treble, Loudness) adds: while it is pointed at, and with Sections on for
+        those in the sums whose channel is shown. filters as set, run as the device runs them. Off, or out of the path
+        at this rate: grey, showing what it would add; bypassed: faded."""
+        item = self.section_items[key]
+        pinned = self.visible["sections"] and key != "LD" and any(self.visible[c] for c in channels)
+        if not filters or not (self.emphasis == key or pinned):
+            item.setVisible(False)
+            return
+        dimmed = self.emphasis != key and self._dimmed(key, "sections", *channels)
+        if not all(f.active for f in filters) or not bypassed and not any(f.active for f in run):
+            color = theme.OFF
+        elif bypassed:
+            color = theme.faded(color)
+        item.setData(self.x, F.total_db([f._replace(active=True) for f in filters], self.freqs, self.fs))
+        item.setPen(_pen(color, SECTION_W, DIMMED if dimmed else 1.0))
+        item.setZValue(4.5)                      # over the compared sums, under the own
+        item.setVisible(True)
 
     def _lit(self, *keys):
         return self.emphasis is not None and self.emphasis in keys
@@ -391,46 +784,61 @@ class ResponseGraph(pg.PlotWidget):
         bypassed = ready and self.session.bypassed()
         bt = [f._replace(active=False) for f in bt] if bypassed else bt
         bands_bypassed = bypassed or ready and self.session.eq_bypassed(out)
+        loudness = self._loudness(s, out, self.fs) if ready and sides else []
+        with_loudness = loudness if self.emphasis == "LD" else []       # in the sums only while pointed at
         shown = set()
         self.points = []
+        self._channels = tuple(CHANNEL_KEY[side] for side, _ in sides)
+        bt_shown = any(self.visible[c] for c in self._channels)
+        if sides:
+            self._section_curve("BT", F.bt_filters(s, left), bt, theme.BT, bypassed, self._channels)
+            self._section_curve("LD", F.loudness_filters(s, out) if self.loudness else [], loudness, theme.LOUDNESS,
+                              bypassed, self._channels)
         for side, address in sides:
-            bands = F.band_filters(s, address, left)
+            as_set = bands = F.band_filters(s, address, left)
             if not bands:
                 continue
             self._off |= {(side, f.name) for f in bands if not f.active}
             bands = [f._replace(active=False) for f in bands] if bands_bypassed else bands
             ch = CHANNEL_KEY[side]
             color = side_color(side, dual)
+            self._section_curve(SECTION[side], as_set, bands, color, bands_bypassed, (ch,))
             for flt in bands:
                 if self.visible[ch] and self.visible["bands"]:
                     self._band_curve((side, flt.name), flt, color, (address, flt.name) == self.current,
-                                     (ch, "bands"))
+                                     ("bands", *self._owners(side)))
                     shown.add((side, flt.name))
                 if self.visible[ch]:
                     self.points.append(Point(flt, side, math.log10(flt.freq), self._point_y(flt)))
             item = self.sum_items[side]
-            item.setData(self.x, F.total_db(bands + bt, self.freqs, self.fs))
-            item.setPen(_pen(color, SUM_W, DIMMED if self._dimmed(ch, "sum") else 1.0))
+            item.setData(self.x, F.total_db(bands + bt + with_loudness, self.freqs, self.fs))
+            item.setPen(_pen(color, SUM_W, DIMMED if self._dimmed(ch, "sum", "LD") else 1.0))
             item.setVisible(self.visible[ch] and self.visible["sum"])
             item.setZValue(5)
             cmp = self.compare_items[side]
             if self.fs_compare is not None:
                 bt2 = self._bt_at(F.bt_filters(s, left), self.fs_compare)
-                cmp.setData(self.x, F.total_db(bands + bt2, self.freqs, self.fs_compare))
-                cmp.setPen(_pen(color, COMPARE_W, DIMMED if self._dimmed(ch, "compare") else 0.9, Qt.DashLine))
+                ld2 = self._loudness(s, out, self.fs_compare) if with_loudness else []    # as its sum
+                cmp.setData(self.x, F.total_db(bands + bt2 + ld2, self.freqs, self.fs_compare))
+                pen = _pen(color, SUM_W, DIMMED if self._dimmed(ch, "compare", "LD") else 1.0)
+                cmp.setPen(round_dots(pen, COMPARE_DOTS))
             cmp.setVisible(self.fs_compare is not None and self.visible[ch] and self.visible["compare"])
-            cmp.setZValue(4)
+            cmp.setZValue(4.8)                   # a sum: over the sections, under the own
         for flt in bt if sides else []:
-            if self.visible["BT"] and self.visible["bands"]:
+            if bt_shown and self.visible["bands"]:
                 self._band_curve((None, flt.name), flt, theme.BT, (left, flt.name) == self.current,
-                                 ("BT", "bands"))
+                                 ("bands", *self._owners(None)))
                 shown.add((None, flt.name))
-            if self.visible["BT"]:
+            if bt_shown:
                 self.points.append(Point(flt, None, math.log10(flt.freq), self._point_y(flt)))
         for side in (0, 1):
             if not any(sd == side for sd, _ in sides):
                 self.sum_items[side].setVisible(False)
                 self.compare_items[side].setVisible(False)
+                self.section_items[SECTION[side]].setVisible(False)
+        if not sides:
+            self.section_items["BT"].setVisible(False)
+            self.section_items["LD"].setVisible(False)
         for key, item in self.band_items.items():
             if key not in shown:
                 item.setVisible(False)
@@ -455,7 +863,7 @@ class ResponseGraph(pg.PlotWidget):
         color = self._color(key, flt, color)
         band = (flt.address, flt.name)
         dimmed = self._dimmed(*keys, band=band)
-        alpha = DIMMED if dimmed else 1.0 if current or band == self._attention() or self._lit(*keys) else BAND_ALPHA
+        alpha = self._band_alpha(band, current, dimmed, self._lit("bands"))
         item.setPen(_fading_pen(color, CHOSEN_W if current else BAND_W, alpha, self.x, y))
         if current:
             fill = QColor(color)
@@ -468,6 +876,12 @@ class ResponseGraph(pg.PlotWidget):
         item.setZValue(3 if current else 1)
         item.setVisible(True)
 
+    def _band_alpha(self, band, current, dimmed, lit):
+        """The opacity of each of a band's marks (its curve, its ring, its label): full when chosen, when it has the
+        attention, or when the layer it is drawn in is pointed at (lit); stepping back: DIMMED; else BAND_ALPHA.
+        Pointing at a section leaves its bands as they are: the section's own curve is what it shows."""
+        return DIMMED if dimmed else 1.0 if current or band == self._attention() or lit else BAND_ALPHA
+
     @staticmethod
     def _point_y(flt):
         """At the gain. A High Pass or High Cut has no gain: its point sits on the 0 dB line, independent of Q."""
@@ -475,14 +889,14 @@ class ResponseGraph(pg.PlotWidget):
 
     def _draw_points(self):
         """A ring per point, open so the curve shows through; its number in the label lane below, at f0.
-        Pointing at Handles in the legend lights them all: thicker rings, labels at full colour."""
+        Pointing at Handles in the legend lights them all: rings and labels at full colour."""
         rings, dots = [], []
         all_lit = self._lit("handles")
         for pt in self.points if self.visible["handles"] else []:
             c = QColor(self._color((pt.side, pt.flt.name), pt.flt, side_color(pt.side, self.dual)))
-            if self._dimmed("handles", CHANNEL_KEY[pt.side], band=pt.key):
-                c.setAlphaF(DIMMED)
             chosen, hovered = pt.key == self.current, pt.key == self.hovered
+            c.setAlphaF(self._band_alpha(pt.key, chosen, self._dimmed("handles", *self._owners(pt.side), band=pt.key),
+                                         all_lit))
             rings.append({"pos": (pt.x, pt.y), "size": RING + 2 if hovered else RING, "brush": QColor(0, 0, 0, 0),
                           "pen": _pen(c, 2.0 if chosen else 1.5, c.alphaF())})
             if chosen and abs(F.response_db(pt.flt, [pt.flt.freq], self.fs)[0] - pt.y) > OFF_CURVE_DB:
@@ -494,10 +908,8 @@ class ResponseGraph(pg.PlotWidget):
                 pt = self.points[i]
                 lit = pt.key in (self.current, self.hovered)
                 c = QColor(self._color((pt.side, pt.flt.name), pt.flt, side_color(pt.side, self.dual)))
-                if self._dimmed("handles", CHANNEL_KEY[pt.side], band=pt.key):
-                    c.setAlphaF(DIMMED)
-                elif not lit and not all_lit:
-                    c.setAlphaF(0.75)
+                c.setAlphaF(self._band_alpha(pt.key, pt.key == self.current,
+                                             self._dimmed("handles", *self._owners(pt.side), band=pt.key), all_lit))
                 t.setText(pt.flt.name)
                 t.setColor(c)
                 t.setFont(self._label_font_lit if lit else self._label_font)
@@ -576,10 +988,12 @@ class ResponseGraph(pg.PlotWidget):
                 self.pick(pt)
 
     def pick(self, pt):
+        before = (self.current, self.prefer_side)
         if pt.side is not None and self.dual:            # with Dual EQ off the point is of both channels
             self.prefer_side = pt.side
         self.current = pt.key
-        self.redraw()
+        if (self.current, self.prefer_side) != before:   # taken again (the wheel, each step): drawn as it is
+            self.redraw()
         self.picked.emit((pt.flt.address, pt.flt.indices[2]))
 
     def drag_to(self, pt, x, y):

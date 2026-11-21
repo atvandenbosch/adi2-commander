@@ -1,8 +1,12 @@
-"""From a curve to a device setting: the bands, a setting found back from its own curve, the level, the same setting
-at any level, the best on the grid, random starts, Bass and Treble, a start that is not lost, the grid, progress, what
-is tried and cancelling."""
+"""From a curve to a device setting: the bands and those a further filter can take, a setting found back from its own
+curve, the level, the same setting at any level, a fixed level, the best on the grid, a start like an earlier one
+searched once, random starts, Bass and Treble, a start that is not lost, the grid, progress, what is tried and
+cancelling."""
 
 import unittest
+from unittest import mock
+
+import numpy as np
 
 from commander.conversion import eqfit as X
 from commander.device import filters as F
@@ -41,6 +45,14 @@ class Bands(unittest.TestCase):
         self.assertEqual((sl["4"].flo, sl["4"].qhi), (200, 5.0))
         self.assertEqual((sl["B"].kinds, sl["B"].fhi, sl["T"].flo), (("LS",), 150, 3000))
         self.assertEqual([s.name for s in X.slots(False)], ["1", "2", "3", "4", "5"])
+
+    def test_the_bands_a_further_filter_can_take(self):
+        sl = X.slots(False)
+        # a Low Shelf only band 1 takes, Peaks below 200 Hz only bands 1 to 3
+        kinds, vals = ["LS", "PK", "PK"], [(100, 3.0, 1.0), (50, 3.0, 1.0), (60, -3.0, 2.0)]
+        self.assertEqual(X.available(sl, kinds, vals), [3, 4])
+        self.assertEqual(X.available(sl, kinds[:2], vals[:2]), [1, 2, 3, 4])
+        self.assertEqual(X.available(sl, [], []), [0, 1, 2, 3, 4])
 
 
 class FoundBack(unittest.TestCase):
@@ -87,6 +99,28 @@ class Level(unittest.TestCase):
         self.assertAlmostEqual(up.level, r.level - 8.0, places=6)
         self.assertGreater(r.rms, 0.01)
 
+    def test_fixed_found_back_at_its_own_level(self):
+        r = X.fit(X.response(FIVE), free_level=False)
+        self.assertLess(r.rms, 0.01)
+        self.assertEqual(r.level, 0.0)
+        on_device(self, r.settings, False)
+
+    def test_fixed_a_constant_counts(self):
+        # five bands 3 dB up: a free level takes the five back and leaves 3 dB, a fixed one makes the 3 dB too
+        target = X.response(FIVE) + 3.0
+
+        def absolute(r):
+            return float(np.sqrt(((X.response(r.settings) - target) ** 2).mean()))
+
+        r, free = X.fit(target, free_level=False), X.fit(target)
+        self.assertEqual(r.level, 0.0)
+        self.assertAlmostEqual(r.rms, absolute(r))
+        self.assertAlmostEqual(absolute(free), 3.0, places=2)
+        self.assertLess(r.rms, 1.0)
+        grid = X.to_grid(r.settings, target, free_level=False)
+        self.assertEqual(grid.level, 0.0)
+        self.assertLessEqual(grid.rms, r.rms + 1e-9)
+
 
 class Grid(unittest.TestCase):
     def test_the_best_on_the_grid(self):
@@ -102,14 +136,45 @@ class Grid(unittest.TestCase):
         on_device(self, r.settings, False)
 
 
+class FixedStarts(unittest.TestCase):
+    def test_a_start_like_an_earlier_one_is_searched_once(self):
+        fill, fills = X.fill, []
+
+        def recorded(*a, **k):
+            fills.append(fill(*a, **k))
+            return fills[-1]
+
+        with mock.patch.object(X, "fill", recorded), mock.patch.object(X, "backfit", wraps=X.backfit) as backfit:
+            r = X.fit(X.response(FIVE))                         # found back at once: no random starts
+        distinct = [x for i, x in enumerate(fills) if x not in fills[:i]]
+        self.assertLess(len(distinct), len(fills))
+        self.assertEqual(backfit.call_count, len(distinct))
+        self.assertLess(r.rms, 0.01)
+
+
 class RandomStarts(unittest.TestCase):
     def test_found_where_the_fixed_starts_end_beside_it(self):
-        # a resonant High Pass under peaks and a shelf
-        given = [S("1", "HP", 403, 0.0, 3.6), S("2", "PK", 152, 5.5, 1.7), S("3", "PK", 71, 4.5, 2.1),
-                 S("4", "PK", 5370, 11.0, 1.5), S("5", "HS", 5720, 2.5, 4.5)]
+        # a Low Shelf and peaks under a resonant High Cut
+        given = [S("1", "LS", 24, 2.0, 2.8), S("2", "PK", 3310, -1.0, 1.5), S("3", "PK", 128, -10.5, 4.5),
+                 S("4", "PK", 14630, 9.5, 3.2), S("5", "LP", 11700, 0.0, 4.1)]
         r = X.fit(X.response(given))
         self.assertLess(r.rms, 0.01)
         on_device(self, r.settings, False)
+
+    def test_a_greedy_start_picks_among_different_candidates(self):
+        class Rng:
+            def __init__(self):
+                self.options = []
+
+            def choice(self, seq):
+                self.options.append(seq)
+                return seq[0]
+
+        rng, model, sl = Rng(), X.Model(X.FS), X.slots(False)
+        X.random_fill(rng, model, X.Candidates(model, sl), sl, X.response(FIVE))
+        self.assertEqual(len(rng.options), 5)
+        for options in rng.options:
+            self.assertEqual(len({o[1:] for o in options}), X.TOP)
 
 
 class Tone(unittest.TestCase):

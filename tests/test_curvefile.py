@@ -139,6 +139,14 @@ class Curve(unittest.TestCase):
         self.assertTrue(np.all(y[F.FREQS >= 1000] == 3.0))
         self.assertEqual(len(y), len(F.FREQS))
 
+    def test_centred_on_0_db_where_the_table_spans(self):
+        cf = C.read(table({"a": lambda f: 5.0 + np.log10(f)}, freqs=np.logspace(2, 3, 11)))
+        inside = (F.FREQS >= 100) & (F.FREQS <= 1000)
+        self.assertAlmostEqual(C.level(cf, 0), float(C.curve(cf, 0)[inside].mean()))
+        y = C.centred(cf, 0)
+        self.assertAlmostEqual(float(y[inside].mean()), 0.0)
+        np.testing.assert_allclose(y, C.curve(cf, 0) - C.level(cf, 0))
+
 
 if __name__ == "__main__":
     unittest.main()
