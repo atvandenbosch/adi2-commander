@@ -45,7 +45,7 @@ A personal project, shared as is.
 
 ## Install
 
-Download `ADI-2-Commander-0.2.0-setup.exe` from [Releases](../../releases) and run it. Windows may warn about an
+Download `ADI-2-Commander-0.3.0-setup.exe` from [Releases](../../releases) and run it. Windows may warn about an
 unknown publisher: choose More info, then Run anyway. Updates keep the choice between Install for all users
 and Install for me only. To change it, uninstall Commander first.
 

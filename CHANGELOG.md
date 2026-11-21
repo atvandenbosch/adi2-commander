@@ -6,6 +6,8 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-21
+
 ### Added
 
 - The window opens where and as large as it was when it last closed.
@@ -76,6 +78,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 - First release: control of the ADI-2 DAC FS over USB MIDI, filter set and curve conversion, and Simulated mode.
   See the [README](README.md).
 
-[Unreleased]: https://github.com/atvandenbosch/adi2-commander/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/atvandenbosch/adi2-commander/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/atvandenbosch/adi2-commander/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/atvandenbosch/adi2-commander/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/atvandenbosch/adi2-commander/releases/tag/v0.1.0
