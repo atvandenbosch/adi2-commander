@@ -531,8 +531,8 @@ class VolumeSection(WindowTest):
         self.settle()
         self.assertEqual(slider.value, 30)
         buttons = {b.text(): b for b in pop.findChildren(Action)}
-        self.assertEqual(sorted(buttons), ["C", "L 100", "R 100"])
-        QTest.mouseClick(buttons["R 100"], Qt.LeftButton)                       # a named point: chosen, and done
+        self.assertEqual(sorted(buttons), ["C", "L", "R"])
+        QTest.mouseClick(buttons["R"], Qt.LeftButton)                           # a named point: chosen, and done
         self.spin(50)
         self.assertIsNone(s.popup)
         self.settle()

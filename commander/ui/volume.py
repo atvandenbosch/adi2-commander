@@ -8,7 +8,7 @@ narrower still, Volume, the switches and Balance each on a line of its own.
                 step, as fast as the remote control, while the button is held, a ring marking where it is going. A
                 drag with the right button follows the mouse up as well as down, from its first move. The arrows step 0.5 dB; held, they
                 repeat as the remote control. The wheel over it steps 0.5 dB a notch.
-    Balance     ‹ value ›, as in the output panel: L 100 .. C .. R 100; the arrows and the wheel step 5, with
+    Balance     ‹ value ›, as in the output panel: L .. C .. R; the arrows and the wheel step 5, with
                 Ctrl 1, a held arrow again and again; the value opens a slider.
     Lock | Mute | Dim, EQ | B/T | LD (Bass/Treble, Loudness)
                 segments, each on or off. EQ shows the switch of each channel, L and R in their colour when on;
@@ -357,13 +357,13 @@ class BalanceControl(RangeStepper):
     """Balance as in the output panel: ‹ value ›, the value opening a slider. A held arrow repeats its step, on the
     session's clock (tick). The wheel steps without the focus."""
 
-    WIDTH, HEIGHT = 92, SEGMENT_H                # in line with the segments beside it
+    HEIGHT = SEGMENT_H                           # in line with the segments beside it
     REPEAT_DELAY, REPEAT_INTERVAL = 0.5, 0.1     # s from the press to the first repeat, and between repeats
 
     def __init__(self):
-        super().__init__(P.BALANCE, [("L 100", -100), ("C", 0), ("R 100", 100)], anchor=0)
+        super().__init__(P.BALANCE, [(n, v) for v, n in P.BALANCE_NAMES.items()], anchor=0)
         self.setFocusPolicy(Qt.TabFocus)
-        self.setFixedWidth(self.WIDTH)
+        self.setFixedWidth(self.sizeHint().width())
         self.notch = Notches()
         self._hold, self._fine = None, False     # the arrow held, and with Ctrl
         self._due = self._now = 0.0

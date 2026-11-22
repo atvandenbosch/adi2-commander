@@ -48,9 +48,10 @@ class Output(unittest.TestCase):
                          ["Stereo", "0.75", "Mono", "-0.05", "Swapped"])
         self.assertEqual(p.spec((4, p.WIDTH)), p.WIDTH)                         # band 1 Freq on an EQ address
 
-    def test_balance_as_the_device_shows_it(self):
+    def test_balance_as_the_device_shows_it_with_its_names(self):
         b = p.spec((3, p.BALANCE))
-        self.assertEqual([p.to_text(b, v) for v in (-100, -7, 0, 30)], ["L 100", "L 7", "C", "R 30"])
+        self.assertEqual([p.to_text(b, v) for v in (-100, -99, -7, 0, 30, 100)],
+                         ["L", "L 99", "L 7", "C", "R 30", "R"])
 
     def test_what_is_written_on_an_output_address(self):
         for i in list(p.CHOICES) + [p.WIDTH, p.BALANCE, p.LOCK_VOLUME, p.VOLUME, p.REF_LEVEL, p.AUTO_REF_LEVEL,

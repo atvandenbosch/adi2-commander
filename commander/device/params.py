@@ -89,9 +89,9 @@ def choices(index, model=None):
     return CHOICES[index] if model is None else model.choices.get(index, CHOICES[index])
 
 
-# Width and Balance -100 .. 100, in hundredths; shown -1.00 .. 1.00 with its three points by name, and
-# L 100 .. C .. R 100
+# Width and Balance -100 .. 100, in hundredths; shown -1.00 .. 1.00, and L 99 .. R 99, their three points by name
 WIDTH_NAMES = {-100: "Swapped", 0: "Mono", 100: "Stereo"}
+BALANCE_NAMES = {-100: "L", 0: "C", 100: "R"}
 OUTPUT_ADDRESSES = tuple(out for _, out, _, _ in OUTPUTS)
 # the rates the device runs at, in the order of their index (Sample Rate, 12/16, and the status message)
 SAMPLE_RATES = [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000]
@@ -359,7 +359,7 @@ def to_text(index, value, band=None):
     if k == "width":
         return WIDTH_NAMES.get(value, "%.2f" % (value / 100))
     if k == "balance":
-        return "C" if value == 0 else "%s %d" % ("L" if value < 0 else "R", abs(value))
+        return BALANCE_NAMES.get(value, "%s %d" % ("L" if value < 0 else "R", abs(value)))
     if k == "type":
         return TYPE_ABBR[band][value]
     return "on" if value else "off"

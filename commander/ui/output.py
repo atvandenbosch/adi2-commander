@@ -38,7 +38,7 @@ TIPS = {P.REF_LEVEL: "The output level at full scale",
                            "or Phones 3/4 with all its settings, Ref Level included",
         P.LOOPBACK: "This output's signal back to the computer over USB:\n"
                     "before the processing (FX), after it, or after it 6 dB lower",
-        P.BALANCE: "L 100 left only, C centre, R 100 right only\nSteps of 5; with Ctrl of 1\n"
+        P.BALANCE: "L left only, C centre, R right only\nSteps of 5; with Ctrl of 1\n"
                    "Click the value for a slider by 1.",
         P.WIDTH: "Stereo 1.00, Mono 0.00, Swapped -1.00: left and right exchanged\n"
                  "Steps of 0.05; with Ctrl of 0.01\nClick the value for a slider by 0.01."}
@@ -213,8 +213,8 @@ class RangePopup(QFrame):
 
 
 class RangeStepper(Stepper):
-    """Width or Balance, in hundredths, as the device shows them. The arrows step to the next multiple of 5, with
-    Ctrl by 1; the value opens a slider by 1 (RangePopup) instead of a list.
+    """Width or Balance, in hundredths, as the device shows them, but for the named points. The arrows step to the next
+    multiple of 5, with Ctrl by 1; the value opens a slider by 1 (RangePopup) instead of a list.
 
     points: the named points, left to right, as (name, value): the buttons under the slider. anchor: the value that
     leaves the sound as it is (Stereo, C): grey, as off, and where the slider's fill starts."""
@@ -240,7 +240,8 @@ class RangeStepper(Stepper):
         return v if lo <= v <= hi else None
 
     def widest(self):
-        return [self.text(v) for _, v in self.points]
+        lo, hi = P.OUTPUT_RANGES[self.index]
+        return [self.text(v) for v in range(lo, hi + 1)]
 
     def slider(self):
         return RangeSlider(self.index, self.anchor, [v for _, v in self.points[1:-1]])
@@ -365,7 +366,7 @@ class OutputPanel(QWidget):
         if i == P.WIDTH:
             s = RangeStepper(i, [(n, v) for v, n in P.WIDTH_NAMES.items()], anchor=100)   # full stereo
         elif i == P.BALANCE:
-            s = RangeStepper(i, [("L 100", -100), ("C", 0), ("R 100", 100)], anchor=0)
+            s = RangeStepper(i, [(n, v) for v, n in P.BALANCE_NAMES.items()], anchor=0)
         elif i == P.REF_LEVEL:
             s = Stepper(P.REF_LEVELS[P.OUTPUTS[0][1]])                       # its names follow the output
         elif i == P.DA_FILTER:

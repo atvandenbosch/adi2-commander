@@ -6,6 +6,10 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 
 ## [Unreleased]
 
+### Changed
+
+- Balance names its ends L and R.
+
 ## [0.3.0] - 2026-11-21
 
 ### Added
