@@ -6,8 +6,14 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 
 ## [Unreleased]
 
+### Added
+
+- More options has MIDI traffic, to open the MIDI traffic panel.
+
 ### Changed
 
+- Ctrl+Shift+T opens the MIDI traffic panel, also when it is open already, and puts the cursor in its filter. Its
+  tab closes it.
 - The window opens with the panels that were open when it last closed, the MIDI traffic included.
 - On each device, the window opens on the output last chosen on it.
 - Balance names its ends L and R.

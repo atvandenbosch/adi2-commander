@@ -42,9 +42,10 @@ class Window(WindowTest):
         self.win.ask = lambda dialog: opened.append(dialog) or True
         self.assertEqual(self.win.more.toolTip(), "More options")
         menu = self.win.more_menu()
-        self.assertEqual([a.text() for a in menu.actions()], ["View backups", "", "About ADI-2 Commander"])
+        self.assertEqual([a.text() for a in menu.actions()],
+                         ["View backups", "MIDI traffic\tCtrl+Shift+T", "", "About ADI-2 Commander"])
         self.assertFalse(menu.actions()[0].isEnabled())                       # no folder given
-        menu.actions()[2].trigger()
+        menu.actions()[3].trigger()
         QTest.keyClick(self.win, Qt.Key_F1)
         self.assertEqual([d.windowTitle() for d in opened], ["About ADI-2 Commander"] * 2)
         text = " ".join(label.text() for label in opened[0].findChildren(QLabel))
@@ -1217,7 +1218,7 @@ class AsBefore(unittest.TestCase):
         win.show_as_before(self.screen)
         win.presets_tab.set_open(True)
         win.input_tab.set_open(True)
-        win.show_traffic(True)
+        win.show_traffic()
         QApplication.processEvents()
         size = win.size()
         win.close()
@@ -1245,8 +1246,8 @@ class AsBefore(unittest.TestCase):
     def test_closed_panels_stay_closed(self):
         win = self.window()
         win.show_as_before(self.screen)
-        win.show_traffic(True)
-        win.show_traffic(False)
+        win.show_traffic()
+        win.traffic_tab.set_open(False)
         win.close()
         win = self.window()
         win.show_as_before(self.screen)
@@ -1429,7 +1430,8 @@ class SimulatedModel(unittest.TestCase):
         self.assertEqual(win.windowTitle(), "ADI-2 Commander – SIMULATED ADI-2 DAC FS")
         menu = win.more_menu()
         self.assertEqual([a.text() for a in menu.actions()],
-                         ["Simulated device…", "View backups", "", "About ADI-2 Commander"])
+                         ["Simulated device…", "View backups", "MIDI traffic\tCtrl+Shift+T", "",
+                          "About ADI-2 Commander"])
         win.ask = lambda d: d.group.button(3).click() or False                  # Cancel: as it was
         menu.actions()[0].trigger()
         run_for(1)

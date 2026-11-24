@@ -79,7 +79,7 @@ class OutputSettings(WindowTest):
         self.assertEqual(shown(), [False, False, False, True])                  # Input, Device
         QTest.mouseClick(self.win.input_tab, Qt.LeftButton)
         self.assertEqual(shown(), [False, False, False, False])                 # Device
-        self.win.show_traffic(True)
+        self.win.show_traffic()
         self.assertEqual(shown(), [False, False, False, True])                  # MIDI, Device
         QTest.mouseClick(self.win.input_tab, Qt.LeftButton)
         self.assertEqual(shown(), [True, False, False, True])                   # MIDI, Input, Device

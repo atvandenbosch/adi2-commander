@@ -52,6 +52,7 @@ class Panel(WindowTest):
         self.assertTrue(self.win.traffic_tab.isHidden() and self.win.traffic_area.isHidden())
         self.open()
         self.assertFalse(self.win.traffic_tab.isHidden() or self.win.traffic_area.isHidden())
+        self.assertIs(self.win.focusWidget(), self.panel.filter)
         self.assertLess(left(self.panel), left(self.win.presets_area))
 
     def test_the_first_open_panel_as_far_from_the_tabs_with_it_or_without(self):
@@ -72,11 +73,21 @@ class Panel(WindowTest):
         QTest.mouseClick(self.win.traffic_tab, Qt.LeftButton)
         self.assertTrue(self.win.traffic_tab.isHidden() and self.win.traffic_area.isHidden())
 
-    def test_ctrl_shift_t_opens_and_closes(self):
-        QTest.keyClick(self.win, Qt.Key_T, Qt.ControlModifier | Qt.ShiftModifier)
-        self.assertFalse(self.win.traffic_area.isHidden())
-        QTest.keyClick(self.win, Qt.Key_T, Qt.ControlModifier | Qt.ShiftModifier)
-        self.assertTrue(self.win.traffic_tab.isHidden() and self.win.traffic_area.isHidden())
+    def test_ctrl_shift_t_opens_it_and_focuses_its_filter(self):
+        for _ in range(2):                                                  # open already: it stays
+            QTest.keyClick(self.win, Qt.Key_T, Qt.ControlModifier | Qt.ShiftModifier)
+            self.assertFalse(self.win.traffic_tab.isHidden() or self.win.traffic_area.isHidden())
+            self.assertIs(self.win.focusWidget(), self.panel.filter)
+            self.win.sound.setFocus()
+
+    def test_from_the_menu_open_and_its_filter_focused(self):
+        traffic = self.win.more_menu().actions()[1]
+        self.assertEqual(traffic.text(), "MIDI traffic\tCtrl+Shift+T")
+        for _ in range(2):                                                  # open already: it stays
+            traffic.trigger()
+            self.assertFalse(self.win.traffic_tab.isHidden() or self.win.traffic_area.isHidden())
+            self.assertIs(self.win.focusWidget(), self.panel.filter)
+            self.win.sound.setFocus()
 
     def test_everything_recorded_also_before_it_opened(self):
         self.open()

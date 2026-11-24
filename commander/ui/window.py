@@ -70,6 +70,7 @@ MAXIMIZED = "window/maximized"                  # and whether it was maximized
 PANELS = "window/panels"                        # and the panels open then, in the order they were opened
 OUTPUT = "output/%s"                            # the channel of the tab last chosen on a device: see device_key
 TRAFFIC_WIDTH = "traffic/width"                 # how wide the MIDI traffic was made
+TRAFFIC_KEYS = "Ctrl+Shift+T"                   # open the MIDI traffic
 FS_TIP = "Sample rate the curves are computed at"
 ACTIVE_TIP = "Active on the device: its display and volume knob are on this output."
 ACTIVE = "Active on the device"                 # the ADI-2 Pro and ADI-2/4 Pro
@@ -548,8 +549,8 @@ class MainWindow(QMainWindow):
         self.traffic_tab.setToolTip("Hide the MIDI traffic.")
         self.traffic_tab.hide()
         self.traffic_tab.toggled.connect(self.traffic_tab.setVisible)
-        self.lamp.ctrl_clicked.connect(lambda: self.show_traffic(True))
-        QShortcut(QKeySequence("Ctrl+Shift+T"), self, lambda: self.show_traffic(not self.traffic_tab.open))
+        self.lamp.ctrl_clicked.connect(self.to_traffic)
+        QShortcut(QKeySequence(TRAFFIC_KEYS), self, self.to_traffic)
         QShortcut(QKeySequence("Ctrl+Shift+M"), self, self.toggle_mute)
         # a line between two open panels: they stand on the same ground
         self.panel_lines = []
@@ -682,7 +683,7 @@ class MainWindow(QMainWindow):
         for name in self.settings.value(PANELS, "", type=str).split(","):
             tab = tabs.get(name)
             if tab is self.traffic_tab:
-                self.show_traffic(True)
+                self.show_traffic()
             elif tab is not None:
                 tab.set_open(True)
 
@@ -1182,6 +1183,8 @@ class MainWindow(QMainWindow):
         folder = m.addAction("View backups")
         folder.setEnabled(self.backups is not None)
         folder.triggered.connect(self.open_backups)
+        # the keys shown beside it, as the window has them
+        m.addAction("MIDI traffic\t" + TRAFFIC_KEYS).triggered.connect(self.to_traffic)
         m.addSeparator()
         m.addAction("About ADI-2 Commander").triggered.connect(self.show_about)
         return m
@@ -1635,14 +1638,17 @@ class MainWindow(QMainWindow):
         if frame.right() > room.right():
             self.move(max(room.left(), frame.left() - (frame.right() - room.right())), frame.top())
 
-    def show_traffic(self, on):
-        """Open the MIDI traffic, its tab with it, or close both."""
-        if on:
-            self.traffic_tab.show()
-        if self.traffic_tab.open != on:
-            self.traffic_tab.set_open(on)
-        if on:
-            QTimer.singleShot(0, self.fit_traffic)       # once it is laid out
+    def show_traffic(self):
+        """Open the MIDI traffic, its tab with it."""
+        self.traffic_tab.show()
+        if not self.traffic_tab.open:
+            self.traffic_tab.set_open(True)
+        QTimer.singleShot(0, self.fit_traffic)           # once it is laid out
+
+    def to_traffic(self):
+        """The MIDI traffic open, its filter focused: from the menu, by its keys or Ctrl+click on the light."""
+        self.show_traffic()
+        self.traffic_panel.filter.setFocus()
 
     def show_panel_lines(self):
         """A line before each open panel that has an open panel before it."""
