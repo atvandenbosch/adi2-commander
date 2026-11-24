@@ -25,10 +25,9 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QLayout, QVBoxLayout, QWidget
 from ..device import params as P
 from . import theme
 from .graph import side_color
-from .legend import segment_path
 from .output import TIPS, RangeStepper, shared_tip
 from .tables import band_address
-from .widgets import DSD_BYPASS, switch_tip
+from .widgets import DSD_BYPASS, segment_path, switch_tip
 
 NOTCH = 120                                      # angleDelta of one wheel notch
 ARROW_KEYS = (Qt.Key_Left, Qt.Key_Down, Qt.Key_Right, Qt.Key_Up)

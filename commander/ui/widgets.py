@@ -1,13 +1,14 @@
 """Small widgets shared by the window and its panels: switches (a part of the sound in or out of the path),
-options (a setting that decides how something behaves), a choice between ways (Segmented), steppers (one of a few
-values), one of many values in groups, actions (something done once), a list whose chosen value can stand out,
-dots, a row of them, the style of a title, the file dropped on a window, and where a window opens on the screen."""
+options (a setting that decides how something behaves), a choice between ways (Segmented) and the outline of a
+segment (segment_path), steppers (one of a few values), one of many values in groups, actions (something done
+once), a list whose chosen value can stand out, dots, a row of them, the style of a title, the file dropped on a
+window, and where a window opens on the screen."""
 
 import math
 import os
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFontMetricsF, QIcon, QPainter, QPalette, QPen, QPixmap
+from PySide6.QtGui import QColor, QFontMetricsF, QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QMenu, QPushButton, QStyle, QStyleOptionComboBox,
                                QStylePainter, QWidget)
 
@@ -314,6 +315,23 @@ class Option(QWidget):
         p.setPen((theme.TEXT if self.on else theme.LABEL) if self.isEnabled() else off)
         p.drawText(QRectF(left + self.TRACK_W + self.GAP, 0, self.width(), self.height()),
                    Qt.AlignVCenter | Qt.AlignLeft, self.name)
+
+
+def segment_path(rect, radius, left, right):
+    """A rectangle with its left corners rounded or not, and its right ones."""
+    path = QPainterPath()
+    x0, y0, x1, y1 = rect.left(), rect.top(), rect.right(), rect.bottom()
+    rl, rr = (radius if left else 0), (radius if right else 0)
+    path.moveTo(x0 + rl, y0)
+    path.lineTo(x1 - rr, y0)
+    path.quadTo(x1, y0, x1, y0 + rr)
+    path.lineTo(x1, y1 - rr)
+    path.quadTo(x1, y1, x1 - rr, y1)
+    path.lineTo(x0 + rl, y1)
+    path.quadTo(x0, y1, x0, y1 - rl)
+    path.lineTo(x0, y0 + rl)
+    path.quadTo(x0, y0, x0 + rl, y0)
+    return path
 
 
 class Segmented(QWidget):

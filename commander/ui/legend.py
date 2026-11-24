@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QBoxLayout, QHBoxLayout, QLabel, QWidget
 from . import theme
 from .graph import (BAND_W, COMPARE_DOTS, DEVIATION_FILL, DEVIATION_W, INPUT_ALPHA, INPUT_W, SECTION_W, SUM_W,
                     round_dots, side_color)
+from .widgets import segment_path
 
 GROUPS = [["L", "R"], ["sum", "sections", "bands", "handles", "compare"]]
 CHANNEL_NAMES = "Left", "Right"
@@ -156,23 +157,6 @@ class _Item(QWidget):
         self._under_mouse = False
         self._repaint()
         self.pointed.emit(False)
-
-
-def segment_path(rect, radius, left, right):
-    """A rectangle with its left corners rounded or not, and its right ones."""
-    path = QPainterPath()
-    x0, y0, x1, y1 = rect.left(), rect.top(), rect.right(), rect.bottom()
-    rl, rr = (radius if left else 0), (radius if right else 0)
-    path.moveTo(x0 + rl, y0)
-    path.lineTo(x1 - rr, y0)
-    path.quadTo(x1, y0, x1, y0 + rr)
-    path.lineTo(x1, y1 - rr)
-    path.quadTo(x1, y1, x1 - rr, y1)
-    path.lineTo(x0 + rl, y1)
-    path.quadTo(x0, y1, x0, y1 - rl)
-    path.lineTo(x0, y0 + rl)
-    path.quadTo(x0, y0, x0 + rl, y0)
-    return path
 
 
 class Group(QWidget):
