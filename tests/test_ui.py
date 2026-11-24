@@ -30,7 +30,7 @@ from commander.ui import simulated, theme
 from commander.ui.tables import FLASH_TIME, KEY_ROLE
 from commander.ui.output import PHONES_REF
 from commander.ui.untested import UntestedBox
-from commander.ui.window import GEOMETRY, MAXIMIZED, PANELS, PHONES_1_2, MainWindow
+from commander.ui.window import GEOMETRY, MAXIMIZED, OUTPUT, PANELS, PHONES_1_2, MainWindow
 from commander.ui.widgets import FRAME, SIDE, label_color, placement
 from tests.gui import OUTPUT_TABS, Clock, WindowTest, assert_ratio_corner, hover, tab, tooltip_color
 from tests.support import DUMP, PRESETS
@@ -1252,6 +1252,87 @@ class AsBefore(unittest.TestCase):
         win.show_as_before(self.screen)
         self.assertEqual(win.opened, [])
         self.assertFalse(win.traffic_tab.isVisibleTo(win))
+
+
+class OutputAsBefore(unittest.TestCase):
+    """On a device, the window opens on the tab last chosen on it, where that can be opened; on a device not seen
+    before, on the first output that can be opened."""
+
+    LINE_OUT, PHONES_3_4 = tab(P.OUTPUT_ADDRESSES[0]), tab(P.OUTPUT_ADDRESSES[2])
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.settings = QSettings(os.path.join(folder.name, "settings.ini"), QSettings.IniFormat)
+        self.clock = Clock()
+
+    def device(self, serial, model=None):
+        """The device of the dump, an ADI-2 DAC FS, or one of model as from the factory."""
+        sim = (SimulatedAdi2.from_dump(DUMP, presets=PRESETS, clock=self.clock) if model is None else
+               SimulatedAdi2.factory(model, None, presets=PRESETS, clock=self.clock))
+        sim.serial = serial
+        return sim
+
+    def connect(self, sims):
+        """A window on the device sims[0] is when it connects."""
+        session = Session(lambda: SimPort(sims[0]), clock=self.clock)
+        win = MainWindow(session, settings=self.settings)
+        win.ask = lambda dialog: True                   # the notice on a model not yet tested: OK
+        win.timer.setInterval(24 * 3600 * 1000)
+        self.addCleanup(session.close)
+        self.addCleanup(win.close)
+        self.ready(win)
+        return win
+
+    def ready(self, win):
+        """Ticks until the window's session is ready."""
+        for _ in range(3000):
+            self.clock.t += 0.02
+            win.tick()
+            QApplication.processEvents()
+            if win.session.ready():
+                return
+        self.fail("not connected")
+
+    def test_the_tab_last_chosen_on_the_device(self):
+        win = self.connect([self.device("A1")])
+        self.assertEqual(win.tabs.currentIndex(), self.LINE_OUT)
+        win.tabs.setCurrentIndex(self.PHONES_3_4)
+        win.close()
+        win = self.connect([self.device("A1")])
+        self.assertEqual(win.tabs.currentIndex(), self.PHONES_3_4)
+
+    def test_another_device_on_its_own(self):
+        win = self.connect([self.device("A1")])
+        win.tabs.setCurrentIndex(self.PHONES_3_4)
+        win.close()
+        win = self.connect([self.device("B2")])
+        self.assertEqual(win.tabs.currentIndex(), self.LINE_OUT)
+
+    def test_a_device_not_seen_before_on_its_first_output(self):
+        win = self.connect([self.device("C3", PRO)])                    # with Analog In, the first tab
+        self.assertTrue(win.open_tab(tab(P.INPUT_CHANNEL[1])))
+        self.assertEqual(win.tabs.currentIndex(), self.LINE_OUT)
+
+    def test_another_device_in_the_same_run(self):
+        sims = [self.device("A1")]
+        win = self.connect(sims)
+        win.tabs.setCurrentIndex(self.PHONES_3_4)
+        sims[0] = self.device("B2")
+        win.session.reconnect("another device")
+        self.ready(win)
+        win.tabs.setCurrentIndex(self.LINE_OUT)
+        sims[0] = self.device("A1")
+        win.session.reconnect("the first device again")
+        self.ready(win)
+        self.assertEqual(win.tabs.currentIndex(), self.PHONES_3_4)
+
+    def test_a_tab_that_cannot_be_opened_gives_way(self):
+        win = self.connect([self.device("A1")])
+        win.close()
+        self.settings.setValue(OUTPUT % win.device, P.INPUT_CHANNEL[1])   # this model has no analog input
+        win = self.connect([self.device("A1")])
+        self.assertEqual(win.tabs.currentIndex(), self.LINE_OUT)
 
 
 class SimulatedModel(unittest.TestCase):

@@ -68,6 +68,7 @@ from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, DSD_BYPASS, FRAME, INNER_GAP, 
 GEOMETRY = "window/geometry"                    # the setting: where the window was when it closed, and how large
 MAXIMIZED = "window/maximized"                  # and whether it was maximized
 PANELS = "window/panels"                        # and the panels open then, in the order they were opened
+OUTPUT = "output/%s"                            # the channel of the tab last chosen on a device: see device_key
 TRAFFIC_WIDTH = "traffic/width"                 # how wide the MIDI traffic was made
 FS_TIP = "Sample rate the curves are computed at"
 ACTIVE_TIP = "Active on the device: its display and volume knob are on this output."
@@ -261,6 +262,7 @@ class MainWindow(QMainWindow):
         self.simulated = simulated or simulation is not None
         self.backups = backups
         self.taken = None                            # the state as connected, (state, model, serial), until saved
+        self.device = None                           # the device_key of the device last connected
         self.backup_waits = None                     # the note that the backup waits for slots not read
         self.settings = settings if settings is not None else QSettings(untested.ORGANIZATION, untested.APPLICATION)
         self.warned = set()                          # the untested models the notice was shown for in this run
@@ -652,6 +654,7 @@ class MainWindow(QMainWindow):
         self.settings.setValue(GEOMETRY, self.saveGeometry())
         self.settings.setValue(MAXIMIZED, self.isMaximized())
         self.settings.setValue(PANELS, ",".join(tab.text.lower() for tab in self.opened))
+        self.remember_output()
         super().closeEvent(e)
 
     def show_as_before(self, screen):
@@ -719,6 +722,11 @@ class MainWindow(QMainWindow):
         if status == "ready" and self.session.model != self.model:
             self.set_model(self.session.model)
         if status == "ready":
+            device = self.device_key()
+            if device != self.device:
+                self.remember_output()                   # for the device before it
+                self.device = device
+                self.choose_output()
             if self.backups is not None and not self.simulated:     # before anything can be written
                 self.taken = (dict(self.session.state), self.session.model, self.session.port.serial)
             QTimer.singleShot(0, self.warn_untested)    # after this event: the notice is modal
@@ -741,6 +749,26 @@ class MainWindow(QMainWindow):
         self.status_shown = status
         self.show_title()                                # the revision tells an ADI-2/4 Pro SE from the EX
         self.refresh()                                   # DSD bypasses the DSP: the switches, curves and cells follow
+
+    def device_key(self):
+        """The connected device, as the settings name it: its model's device ID and its serial number, if known."""
+        serial = getattr(self.session.port, "serial", None)
+        return "%02x" % self.session.model.id + ("-" + serial if serial else "")
+
+    def remember_output(self):
+        """The channel of the tab chosen now, for the device last connected."""
+        if self.device is not None:
+            self.settings.setValue(OUTPUT % self.device, self.output[1])
+
+    def choose_output(self):
+        """The tab last chosen on the device just connected; where that cannot be opened, show_tabs chooses. The edit
+        stand stays on its output."""
+        key = OUTPUT % self.device
+        if self.draft is not None or not self.settings.contains(key):
+            return
+        out, addresses = self.settings.value(key, type=int), [c[1] for c in P.CHANNELS]
+        if out in addresses:
+            self.tabs.setCurrentIndex(addresses.index(out))
 
     def show_title(self):
         """The title names the connected model and its serial number; in Simulated mode the simulated model."""
