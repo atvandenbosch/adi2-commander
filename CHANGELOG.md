@@ -9,6 +9,8 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 ### Changed
 
 - Balance names its ends L and R.
+- In a narrower window, the top bar shortens the names and narrows the switches, step by step, before Volume
+  takes a line of its own.
 
 ## [0.3.0] - 2026-11-21
 

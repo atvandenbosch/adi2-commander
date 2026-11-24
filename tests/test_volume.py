@@ -1,6 +1,7 @@
 """The volume section in the top bar against the simulator: Volume with its slider, Lock Volume, Mute, Dim, the
 switches of the EQ, Bass/Treble and Loudness, and Balance."""
 
+import math
 import unittest
 from unittest import mock
 
@@ -11,6 +12,9 @@ from PySide6.QtWidgets import QApplication
 
 from commander.device import codec
 from commander.device import params as P
+from commander.ui import theme
+from commander.ui.graph import side_color
+from commander.ui.volume import GROUP_GAP, ICONS, NAME_GAP, NARROW_GAP, NARROW_PAD
 from commander.ui.widgets import Action
 from tests.gui import WindowTest, tab
 
@@ -24,6 +28,9 @@ class VolumeSection(WindowTest):
         self.volume, self.balance = self.section.volume, self.section.balance
         self.lock, self.mute, self.dim = self.section.level.items
         self.eq, self.bt, self.loudness = self.section.sound.items
+        short = self.section.sizeHint().width() - self.section.width()        # on one line, not narrowed
+        if short > 0:
+            self.win.resize(self.win.width() + short, self.win.height())
         for _ in range(30):                                                     # which output is active: Dim
             if self.session.device_status is not None:
                 break
@@ -155,6 +162,22 @@ class VolumeSection(WindowTest):
         self.mouse(RELEASE, -1145)
         self.settle()
         self.assertEqual(self.sim.state[(3, P.VOLUME)], -965)                   # no lower than the dash
+
+    def test_every_step_above_the_knee_under_a_pixel(self):
+        s, hi = self.volume, P.OUTPUT_RANGES[P.VOLUME][1]
+        pixels = range(math.floor(s.x_of(s.KNEE)), math.ceil(s.x_of(hi)) + 1)
+        self.assertLessEqual(set(range(s.KNEE, hi + 1, P.VOLUME_STEP)), {s.value_at(x) for x in pixels})
+
+    def test_the_name_of_volume_abbreviated_is_in_full_in_the_tooltips(self):
+        name, s = self.section.volume_name, self.volume
+        name.set_stage(1)
+        self.assertEqual((name.text(), name.toolTip()), ("Vol", s.toolTip()))
+        self.assertTrue(s.toolTip().startswith("Volume\n"))
+        narrow, full = reversed(name.widths())
+        self.assertLess(narrow, full)
+        name.set_stage(0)
+        self.assertEqual((name.text(), name.toolTip()), ("Volume", ""))
+        self.assertFalse(s.toolTip().startswith("Volume\n"))
 
     def test_lower_on_the_slider_is_written_at_once(self):
         v, since = self.sim.state[(3, P.VOLUME)], len(self.sim.received)
@@ -405,6 +428,23 @@ class VolumeSection(WindowTest):
         self.assertTrue(dim.isEnabled())
         self.assertNotIn("active output only", dim.toolTip())
 
+    def test_lock_mute_and_dim_as_icons_of_one_width(self):
+        level = self.section.level
+        hints, tips = [], [s.toolTip() for s in level.items]
+        for stage in (0, 1):
+            level.set_stage(stage)
+            hints.append(level.sizeHint().width())
+        self.assertEqual(level.widths(), hints)
+        self.assertLess(hints[1], hints[0])
+        self.assertEqual(len({s.sizeHint().width() for s in level.items}), 1)
+        self.assertEqual(self.mute.runs, [(ICONS[P.MUTE], theme.OFF)])
+        self.assertEqual([s.toolTip() for s in level.items], tips)              # the names are there
+        QTest.mouseClick(self.mute, Qt.LeftButton)
+        self.settle()
+        self.assertEqual(self.mute.runs, [(ICONS[P.MUTE], theme.WARN)])
+        level.set_stage(0)
+        self.assertEqual([self.runs(s) for s in level.items], [["Lock"], ["Mute"], ["Dim"]])
+
     # -- EQ, B/T, LD ----------------------------------------------------------------------------------------------
 
     def runs(self, seg):
@@ -452,6 +492,35 @@ class VolumeSection(WindowTest):
             QTest.mouseClick(seg, Qt.LeftButton)
             self.settle()
             self.assertEqual((self.sim.state[key], seg.on), (0, False))
+
+    def test_narrower_the_eq_in_two_letters_one_for_each_channel(self):
+        left, right = (side_color(side, True) for side in (0, 1))
+        sound, hints = self.section.sound, []
+        for stage in (0, 1):
+            sound.set_stage(stage)
+            hints.append(sound.sizeHint().width())
+        self.assertEqual(sound.widths(), hints)
+        self.assertLess(hints[1], hints[0])
+        self.assertEqual([self.runs(s) for s in sound.items], [["E", "Q"], ["BT"], ["LD"]])
+        self.assertEqual(self.eq.runs, [("E", left), ("Q", right)])             # the left channel, the right
+        self.session.set((5, P.EQ_ENABLE), 0)
+        self.settle()
+        self.assertEqual(self.eq.runs, [("E", left), ("Q", theme.OFF)])
+        self.assertIn("EQ: left on, right off", self.eq.toolTip())
+        self.sim.front_panel([(*P.dual_eq_key(3), 0)])                          # Dual EQ off: one for both
+        self.spin(100)
+        self.settle()
+        self.assertEqual(self.eq.runs, [("E", theme.SHARED), ("Q", theme.SHARED)])
+        self.assertEqual(sound.sizeHint().width(), hints[1])
+        sound.set_stage(0)
+        self.assertEqual([self.runs(s) for s in sound.items], [["EQ", "L=R"], ["B/T"], ["LD"]])
+
+    def test_narrower_the_six_segments_of_one_width_each_name_with_room(self):
+        segments = self.section.level.items + self.section.sound.items
+        for group in (self.section.level, self.section.sound):
+            group.set_stage(1)
+        self.settle()
+        self.assertEqual({s.width() for s in segments}, {max(s.name_width(1) for s in segments) + 2 * NARROW_PAD})
 
     # -- Balance --------------------------------------------------------------------------------------------------
 
@@ -553,29 +622,64 @@ class VolumeSection(WindowTest):
         self.assertIsNone(s.popup)
         self.assertEqual(self.sim.state[(3, P.BALANCE)], 0)
 
+    def test_the_name_of_balance_abbreviated_is_in_full_in_the_tooltips(self):
+        name, s, hints = self.section.balance_name, self.balance, []
+        for stage, text in enumerate(("Balance", "Bal")):
+            name.set_stage(stage)
+            hints.append(name.sizeHint().width())
+            self.assertEqual(name.text(), text)
+            self.assertEqual(s.toolTip().startswith("Balance\n"), stage == 1)
+            self.assertEqual(name.toolTip(), s.toolTip() if stage else "")
+        self.assertEqual(name.widths(), hints)
+        self.assertLess(hints[1], hints[0])
+        name.set_stage(0)
+        self.assertEqual((name.text(), name.toolTip()), ("Balance", ""))
+
     # -- the bar --------------------------------------------------------------------------------------------------
 
-    def test_on_one_line_where_the_bar_is_wide_enough_else_on_two_or_three(self):
-        section, tabs = self.section, self.win.tabs
-        lines = lambda: [[line.itemAt(i).widget() for i in range(line.count())    # noqa: E731
-                          if line.itemAt(i).widget()] for line in section.lines]
-        wide, narrow = section.sizeHint().width(), section.minimumSizeHint().width()
-        two = max(section._width(line) for line in section._parts(2))
-        heights = []
-        for width, n, expected in (
-                (wide, 1, [[section.volume_name, section.volume, section.level, section.sound, section.balance_name,
-                            section.balance], [], []]),
-                (two, 2, [[section.volume_name, section.volume],
-                          [section.level, section.sound, section.balance_name, section.balance], []]),
-                (narrow, 3, [[section.volume_name, section.volume], [section.level, section.sound],
-                             [section.balance_name, section.balance]])):
-            section.resize(width, section.height())
-            self.assertEqual((section.n_lines, lines(), section.bar_height()), (n, expected, section.bar_height(n)))
-            heights.append(tabs.sizeHint().height())
-        self.assertLess(narrow, two)
-        self.assertTrue(heights[0] < heights[1] < heights[2])                   # the tabs as high
-        section.resize(wide, section.height())
-        self.assertEqual((section.n_lines, tabs.sizeHint().height()), (1, heights[0]))
+    def test_narrowed_step_by_step_before_it_takes_a_second_line(self):
+        s, tabs = self.section, self.win.tabs
+        widgets = lambda: [[line.itemAt(i).widget() for i in range(line.count())   # noqa: E731
+                            if line.itemAt(i).widget()] for line in s.lines]
+        gaps = lambda: [[line.itemAt(i).spacerItem().sizeHint().width() for i in range(line.count())   # noqa: E731
+                         if line.itemAt(i).spacerItem() and line.itemAt(i).spacerItem().sizeHint().width()]
+                        for line in s.lines]
+        one = [[s.volume_name, s.volume, s.level, s.sound, s.balance_name, s.balance], []]
+        two = [[s.volume_name, s.volume], [s.level, s.sound, s.balance_name, s.balance]]
+        staged = [s.volume_name, s.balance_name, s.sound, s.level]
+        name, wide, narrow = NAME_GAP, GROUP_GAP, NARROW_GAP
+        ways = [  # lines, steps, narrowed, the room between the parts
+            (1, 0, [], [[name, wide, wide, wide, name], []]),
+            (1, 1, [s.volume_name, s.balance_name], [[name, wide, wide, wide, name], []]),
+            (1, 2, [s.volume_name, s.balance_name, s.sound], [[name, wide, wide, narrow, name], []]),
+            (1, 3, staged, [[name, narrow, narrow, narrow, name], []]),
+            (2, 0, [], [[name], [wide, wide, name]]),
+            (2, 1, [s.volume_name, s.balance_name], [[name], [wide, wide, name]]),
+            (2, 2, [s.volume_name, s.balance_name, s.sound], [[name], [wide, narrow, name]]),
+            (2, 3, staged, [[name], [narrow, narrow, name]])]
+        needs = [s._needs(n, k) for n, k, _, _ in ways]
+        self.assertEqual(needs, sorted(needs, reverse=True))
+        self.assertEqual(len(set(needs)), len(needs))                           # each step narrower
+        self.assertEqual((needs[0], needs[-1]), (s.sizeHint().width(), s.minimumSizeHint().width()))
+        heights = {}
+        for (n, k, narrowed, room), need, after in zip(ways, needs, ways[1:] + ways[-1:]):
+            s.resize(need - 1, s.height())
+            self.assertEqual((s.n_lines, s.narrowed), after[:2])                # a pixel less: the next way
+            s.resize(need, s.height())
+            self.assertEqual((s.n_lines, s.narrowed), (n, k))
+            s.layout().activate()
+            self.assertEqual((widgets(), gaps()), (one if n == 1 else two, room))
+            self.assertEqual([p for p in staged if p.stage], narrowed)
+            for line in filter(None, widgets()):                                # it fits as reckoned
+                self.assertLessEqual(max(w.geometry().right() + 1 for w in line), need)
+            self.assertEqual(s.bar_height(), s.bar_height(n))
+            heights.setdefault(n, tabs.sizeHint().height())
+        self.assertLess(heights[1], heights[2])                                 # the tabs as high
+        s.resize(needs[-1] - 50, s.height())
+        self.assertEqual((s.n_lines, s.narrowed), (2, 3))                       # narrower than all: as narrow
+        s.resize(needs[0], s.height())
+        self.assertEqual((s.n_lines, s.narrowed, [p.stage for p in staged]), (1, 0, [0, 0, 0, 0]))
+        self.assertEqual(tabs.sizeHint().height(), heights[1])
 
 
 if __name__ == "__main__":
