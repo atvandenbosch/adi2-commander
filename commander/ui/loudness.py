@@ -42,7 +42,8 @@ from ..device import params as P
 from . import theme
 from .graph import (BAND_ALPHA, COMPARE_DOTS, DOT, DOT_PEN, GRAB, LANE_PX, OFF_CURVE_DB, RING, SECTION_W,
                     RatioCorner, X_HI, X_LO, X_PAD, Y_HI, Y_LO, _pen, _ticks, round_dots, tab_direction, title_axes)
-from .legend import GROUP_GAP, ITEM_PAD, ITEM_VPAD, MARK_H, MARK_W, mark_pixmap
+from .legend import ITEM_PAD, ITEM_VPAD, MARK_H, MARK_W, mark_pixmap
+from .widgets import GROUP_GAP
 
 FLAT_DB = 0.01                                   # dB: this close to its lowest, the full boost counts as flat
 FAMILY_STEP = 0.5                                # dB between the curves of the family, over the whole view: the

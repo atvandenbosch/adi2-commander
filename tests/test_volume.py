@@ -14,8 +14,8 @@ from commander.device import codec
 from commander.device import params as P
 from commander.ui import theme
 from commander.ui.graph import side_color
-from commander.ui.volume import GROUP_GAP, ICONS, NAME_GAP, NARROW_GAP, NARROW_PAD
-from commander.ui.widgets import Action
+from commander.ui.volume import ICONS, NAME_GAP, NARROW_GAP, NARROW_PAD
+from commander.ui.widgets import GROUP_GAP, Action
 from tests.gui import WindowTest, tab
 
 PRESS, MOVE, RELEASE = QMouseEvent.Type.MouseButtonPress, QMouseEvent.Type.MouseMove, QMouseEvent.Type.MouseButtonRelease

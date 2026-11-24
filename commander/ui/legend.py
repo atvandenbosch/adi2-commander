@@ -19,13 +19,11 @@ from PySide6.QtWidgets import QBoxLayout, QHBoxLayout, QLabel, QWidget
 from . import theme
 from .graph import (BAND_W, COMPARE_DOTS, DEVIATION_FILL, DEVIATION_W, INPUT_ALPHA, INPUT_W, SECTION_W, SUM_W,
                     round_dots, side_color)
-from .widgets import segment_path
+from .widgets import GROUP_GAP, ROW_GAP, segment_path
 
 GROUPS = [["L", "R"], ["sum", "sections", "bands", "handles", "compare"]]
 CHANNEL_NAMES = "Left", "Right"
 SHARED_NAME = "Left = Right"                     # the one EQ for both channels
-GROUP_GAP = 28                                   # pixels between the two groups side by side
-ROW_GAP = 4                                      # ... and one under the other
 ITEM_PAD = 10                                    # px: room in a segment beside its mark and name
 ITEM_VPAD = 3                                    # ... above and below the name
 NAME_ON = theme.LABEL                            # the name of an item that is shown

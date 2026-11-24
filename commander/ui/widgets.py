@@ -21,6 +21,8 @@ GROUP_STYLE = "color: %s; letter-spacing: 1px;" % theme.SECONDARY.name()     # a
 ATTACHED_GAP = 8                                 # what belongs to a table or list: Share above the bands, Load B/T
 INNER_GAP = 16                                   # the parts of a section: under a title line, the channels, a graph
 SECTION_GAP = 32                                 # between sections: the EQ, Bass/Treble and Loudness
+GROUP_GAP = 24                                   # px between groups side by side in a part: a legend's, the top bar's
+ROW_GAP = 8                                      # ... and one under the other
 SIDE = 18                                        # px from a window's left and right edge to what is in it
 ACTION_STYLE = ("QPushButton { color: %(text)s; background: %(raised)s; border: 1px solid %(border)s;"
                 " border-radius: 3px; padding: 2px 10px; font-size: 9pt; }"

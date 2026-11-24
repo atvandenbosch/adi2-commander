@@ -53,11 +53,10 @@ from . import theme
 from .graph import (BAND_ALPHA, BAND_W, COMPARE_DOTS, DEVIATION_FILL, DEVIATION_W, DIMMED, INPUT_ALPHA, INPUT_W,
                     LEGEND_GAP, MIN_POINTS, POINTS_PER_PIXEL, SECTION_W, SUM_W, TITLE_ROOM, X_HI, X_LO, X_PAD, Y_HI,
                     Y_LO, ZONE_INK, RatioCorner, _fading_pen, _ticks, round_dots, side_color, title_axes)
-from .legend import (CHANNEL_NAMES, GROUP_GAP, NAME_OFF, NAME_ON, SHARED_NAME, Group as LegendGroup,
-                     _Item as LegendItem)
+from .legend import (CHANNEL_NAMES, NAME_OFF, NAME_ON, SHARED_NAME, Group as LegendGroup, _Item as LegendItem)
 from .tables import (BAND_COLUMNS, BAND_WIDTHS, BT_COLUMNS, BT_WIDTHS, CellDelegate, Marks, ParamModel, ParamView,
                      band_rows, bt_rows)
-from .widgets import (ATTACHED_GAP, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE, Action, Choice, Segmented,
+from .widgets import (ATTACHED_GAP, GROUP_GAP, INNER_GAP, SECTION_GAP, SIDE, TITLE_STYLE, Action, Choice, Segmented,
                       dropped_file, head, placement)
 
 MAP, FIT = 0, 1

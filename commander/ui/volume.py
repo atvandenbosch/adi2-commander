@@ -29,20 +29,19 @@ from . import theme
 from .graph import side_color
 from .output import TIPS, RangeStepper, shared_tip
 from .tables import band_address
-from .widgets import DSD_BYPASS, segment_path, switch_tip
+from .widgets import DSD_BYPASS, GROUP_GAP, ROW_GAP, segment_path, switch_tip
 
 NOTCH = 120                                      # angleDelta of one wheel notch
 ARROW_KEYS = (Qt.Key_Left, Qt.Key_Down, Qt.Key_Right, Qt.Key_Up)
-GROUP_GAP = 24                                   # px between the parts of the section
 NARROW_GAP = 16                                  # px between two groups side by side, both narrowed
 NAME_GAP = 8                                     # px between a name and its control
-ROW_GAP = 6                                      # px between its rows, when it has two
 SEGMENT_H, SEGMENT_PAD, RUN_GAP = 24, 10, 4      # px: a segment's height, the room beside its name, between its runs
 NARROW_PAD = 6                                   # px: narrower, beside the widest name of the six, as above and below
 ICON, ICON_PEN = 14, 1.1                         # px: the box of a segment's icon, its lines: at 1 a diagonal is pale
 VALUE_PT = 14                                    # pt: Volume's value, larger than the rest
 UNIT_GAP = 4                                     # px between the value and its unit
-LINES_MARGIN = {1: 15, 2: 8}                     # px above and below its lines: on one, as two lines without margin
+# px above and below its lines: on one, as high as two lines without margin
+LINES_MARGIN = {1: (SEGMENT_H + ROW_GAP) // 2, 2: 8}
 LEVEL = {P.LOCK_VOLUME: ("Lock", "Lock Volume", "On: disables the device's VOLUME knob for this output;\n"
                                                 "Volume in the device's menu sets a fixed level."),
          P.MUTE: ("Mute", "Mute", "On: mutes this output."),
