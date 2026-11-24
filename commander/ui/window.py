@@ -67,6 +67,7 @@ from .widgets import (ATTACHED_GAP, DOT, DOT_GAP, DSD_BYPASS, FRAME, INNER_GAP, 
 
 GEOMETRY = "window/geometry"                    # the setting: where the window was when it closed, and how large
 MAXIMIZED = "window/maximized"                  # and whether it was maximized
+PANELS = "window/panels"                        # and the panels open then, in the order they were opened
 TRAFFIC_WIDTH = "traffic/width"                 # how wide the MIDI traffic was made
 FS_TIP = "Sample rate the curves are computed at"
 ACTIVE_TIP = "Active on the device: its display and volume knob are on this output."
@@ -650,19 +651,37 @@ class MainWindow(QMainWindow):
         self.timer.stop()                                # a closed window no longer talks to the device
         self.settings.setValue(GEOMETRY, self.saveGeometry())
         self.settings.setValue(MAXIMIZED, self.isMaximized())
+        self.settings.setValue(PANELS, ",".join(tab.text.lower() for tab in self.opened))
         super().closeEvent(e)
 
     def show_as_before(self, screen):
-        """Show the window where it was when it last closed, as large, maximized if it was. The first time, and where
-        Qt cannot restore it (a screen of another width): on screen, maximized if it was, else as show_on_screen."""
+        """Show the window where it was when it last closed, as large, maximized if it was, with the panels open then.
+        The first time, and where Qt cannot restore it (a screen of another width): on screen, maximized if it was,
+        else as show_on_screen."""
         geometry = self.settings.value(GEOMETRY)
-        if geometry is not None and self.restoreGeometry(geometry):
+        restored = geometry is not None and self.restoreGeometry(geometry)
+        if not restored:
+            self.move(screen.availableGeometry().topLeft())
+        # placed, the window is on its screen: as many panels as that has room for; before it shows, so it shows as
+        # wide as it was with them
+        self.reopen_panels()
+        if restored:
             self.show()
         elif self.settings.value(MAXIMIZED, False, type=bool):
-            self.move(screen.availableGeometry().topLeft())
             self.showMaximized()
         else:
             show_on_screen(self, self.sizeHint(), screen)
+
+    def reopen_panels(self):
+        """The panels that were open when the window last closed, opened again in the order they were opened then;
+        the MIDI traffic with its tab."""
+        tabs = {tab.text.lower(): tab for tab in self.areas}
+        for name in self.settings.value(PANELS, "", type=str).split(","):
+            tab = tabs.get(name)
+            if tab is self.traffic_tab:
+                self.show_traffic(True)
+            elif tab is not None:
+                tab.set_open(True)
 
     def discard_ok(self):
         """Closing while a changed preset is open: whether its changes may go."""

@@ -8,6 +8,7 @@ All notable changes to ADI-2 Commander are documented in this file. The format i
 
 ### Changed
 
+- The window opens with the panels that were open when it last closed, the MIDI traffic included.
 - Balance names its ends L and R.
 - In a narrower window, the top bar shortens the names and narrows the switches, step by step, before Volume
   takes a line of its own.

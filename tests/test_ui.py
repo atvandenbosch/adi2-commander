@@ -13,7 +13,7 @@ import numpy as np
 from PySide6.QtCore import QPoint, QPointF, QRect, QSettings, QSize, Qt
 from PySide6.QtGui import QPen
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLabel
+from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
 
 from commander import __version__
 from commander.device import models
@@ -30,7 +30,7 @@ from commander.ui import simulated, theme
 from commander.ui.tables import FLASH_TIME, KEY_ROLE
 from commander.ui.output import PHONES_REF
 from commander.ui.untested import UntestedBox
-from commander.ui.window import GEOMETRY, MAXIMIZED, PHONES_1_2, MainWindow
+from commander.ui.window import GEOMETRY, MAXIMIZED, PANELS, PHONES_1_2, MainWindow
 from commander.ui.widgets import FRAME, SIDE, label_color, placement
 from tests.gui import OUTPUT_TABS, Clock, WindowTest, assert_ratio_corner, hover, tab, tooltip_color
 from tests.support import DUMP, PRESETS
@@ -1161,6 +1161,7 @@ class AsBefore(unittest.TestCase):
         session = Session(lambda: SimPort(sim), clock=clock)
         win = MainWindow(session, settings=self.settings)
         win.timer.setInterval(24 * 3600 * 1000)
+        win.room = lambda: WindowTest.room
         self.addCleanup(session.close)
         self.addCleanup(win.close)
         return win
@@ -1210,6 +1211,47 @@ class AsBefore(unittest.TestCase):
                 QApplication.processEvents()
                 self.assertEqual(win.isMaximized(), maximized)
                 self.assertEqual(show.call_count, 0 if maximized else 1)
+
+    def test_with_the_panels_open_then_in_their_order(self):
+        win = self.window()
+        win.show_as_before(self.screen)
+        win.presets_tab.set_open(True)
+        win.input_tab.set_open(True)
+        win.show_traffic(True)
+        QApplication.processEvents()
+        size = win.size()
+        win.close()
+        self.assertEqual(self.settings.value(PANELS), "presets,input,midi")
+        win = self.window()
+        win.show_as_before(self.screen)
+        QApplication.processEvents()
+        self.assertEqual(win.opened, [win.presets_tab, win.input_tab, win.traffic_tab])
+        self.assertTrue(win.traffic_tab.isVisible())
+        for area in (win.presets_area, win.input_area, win.traffic_area):
+            self.assertTrue(area.isVisible())
+        self.assertEqual(win.size(), size)                 # as wide as it was with them
+
+    def test_the_panels_on_the_screen_the_window_opens_on(self):
+        """The panels open once the window is where it was: room is that of its screen."""
+        geometry = self.closed(maximized=False)
+        win = self.window()
+        placed = QMainWindow()
+        placed.restoreGeometry(geometry)
+        with mock.patch.object(win, "reopen_panels", side_effect=lambda: self.assertEqual(
+                win.geometry(), placed.geometry())) as reopen:
+            win.show_as_before(self.screen)
+        reopen.assert_called_once_with()
+
+    def test_closed_panels_stay_closed(self):
+        win = self.window()
+        win.show_as_before(self.screen)
+        win.show_traffic(True)
+        win.show_traffic(False)
+        win.close()
+        win = self.window()
+        win.show_as_before(self.screen)
+        self.assertEqual(win.opened, [])
+        self.assertFalse(win.traffic_tab.isVisibleTo(win))
 
 
 class SimulatedModel(unittest.TestCase):
